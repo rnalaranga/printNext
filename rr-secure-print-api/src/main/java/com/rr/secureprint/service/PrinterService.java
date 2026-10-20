@@ -12,8 +12,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
 @Service
 public class PrinterService {
@@ -406,5 +408,42 @@ public class PrinterService {
                 request.adminPassword(),
                 request.terminalUrl()
         );
+    }
+
+    @Transactional
+    public List<PrinterEntity> seedSamplePrinters(int count, String adminActor, String clientIp) {
+        String[] locations = {
+                "HQ - 1st Floor Reception", "HQ - 2nd Floor Finance", "HQ - 3rd Floor Engineering",
+                "HQ - 4th Floor Executive", "Building B - Operations", "Warehouse - Shipping",
+                "Building C - Legal", "Design Studio - Marketing"
+        };
+        String[] models = {
+                "Toshiba e-STUDIO 2518A", "Toshiba e-STUDIO 3518A", "Toshiba e-STUDIO 4508A",
+                "Toshiba e-STUDIO 5018A", "Toshiba e-STUDIO 2010AC (Color)", "Toshiba e-STUDIO 3015AC (Color)"
+        };
+
+        List<PrinterEntity> created = new ArrayList<>();
+        long existingCount = printerRepository.count();
+
+        for (int i = 1; i <= count; i++) {
+            long seq = existingCount + i;
+            String code = String.format("MFP-%04d", seq);
+            if (printerRepository.findByPrinterCode(code).isPresent()) {
+                code = String.format("MFP-%04d-%s", seq, UUID.randomUUID().toString().substring(0, 3).toUpperCase());
+            }
+            String loc = locations[(int) (seq % locations.length)];
+            String model = models[(int) (seq % models.length)];
+            boolean isColor = model.contains("(Color)");
+            String ip = String.format("192.168.1.%d", 20 + (int)(seq % 200));
+            String name = model.replace("Toshiba ", "") + " (" + loc.split(" - ")[1] + ")";
+
+            PrinterEntity printer = new PrinterEntity(code, name, ip, 9100, loc, model, isColor, true);
+            created.add(printerRepository.save(printer));
+        }
+
+        auditService.logEvent("PRINTERS_BATCH_SEEDED", null, adminActor, null, "FLEET", clientIp,
+                "Seeded " + created.size() + " sample Toshiba MFPs for large fleet testing.", "SUCCESS");
+
+        return created;
     }
 }

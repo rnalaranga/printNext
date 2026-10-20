@@ -1,4 +1,4 @@
-﻿/* ==========================================================================
+/* ==========================================================================
    nexPrint - Administration Console Application JS v20
    Clean Modern Architecture
    ========================================================================== */
@@ -43,9 +43,9 @@
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ username: 'admin', pin: '9999' })
     }).finally(function () {
-      // Determine page from URL hash (e.g. #printers, #users)
+      // Determine page from URL hash (e.g. #printers, #users, #virtual-queue)
       var hash = (window.location.hash || '').replace('#', '').toLowerCase();
-      var validPages = ['dashboard', 'printers', 'users', 'queue', 'audit'];
+      var validPages = ['dashboard', 'virtual-queue', 'printers', 'users', 'queue', 'audit'];
       var targetPage = validPages.indexOf(hash) !== -1 ? hash : 'dashboard';
       window.navigatePage(targetPage);
 
@@ -101,11 +101,14 @@
       topbarSub.textContent   = 'Enterprise Pull-Print Server & Hardware Monitor';
       loadStats();
       loadJobs();
-    } else if (pageId === 'printers') {
-      topbarTitle.textContent = 'Printer Device Management';
-      topbarSub.textContent   = 'Toshiba Multifunction Printers & Network JetDirect Queues';
-      loadPrinters();
+    } else if (pageId === 'virtual-queue') {
+      topbarTitle.textContent = 'Virtual Print Queue (PaperCut Find-Me)';
+      topbarSub.textContent   = 'Server Spool Quarantine, SMB Network Share & Release Stations Pool';
       loadVirtualQueueConfig();
+    } else if (pageId === 'printers') {
+      topbarTitle.textContent = 'Physical Printer Device Management';
+      topbarSub.textContent   = 'Toshiba Multifunction Printers & Network Port 9100 Terminals';
+      loadPrinters();
     } else if (pageId === 'users') {
       topbarTitle.textContent = 'User Identity Management';
       topbarSub.textContent   = 'Security Credentials, Touchscreen PINs, and Windows SIDs';
@@ -1174,114 +1177,743 @@
   };
 
   /* =========================================================================
-     SERVER VIRTUAL PRINT QUEUE CONFIGURATION
+     MULTI-VIRTUAL QUEUE & 100+ PHYSICAL PRINTER POOL MANAGEMENT
      ========================================================================= */
 
-  window.loadVirtualQueueConfig = function () {
-    var select = document.getElementById('selectServerVirtualPrinter');
-    fetch('/api/admin/virtual-queue')
-      .then(function (res) {
-        if (!res.ok) throw new Error('HTTP ' + res.status);
-        return res.json();
-      })
-      .then(function (cfg) {
-        state.virtualQueueConfig = cfg;
-        var selName = document.getElementById('vqSelectedPrinter');
-        var netShare = document.getElementById('vqNetworkShare');
-        var driver = document.getElementById('vqDriverName');
-        var hold = document.getElementById('vqHoldStatus');
-        var badge = document.getElementById('vqShareBadge');
-        var tagsContainer = document.getElementById('vqPhysicalPrintersTags');
-        var liveBtn = document.getElementById('vqLiveModeBtn');
+  state.virtualQueues = [];
+  state.selectedVirtualQueueId = null;
+  state.currentVirtualQueue = null;
+  state.vqPrintersSearchTerm = '';
+  state.vqPoolFilter = 'IN_POOL';
+  state.vqPage = 1;
+  state.vqPerPage = 25;
+  state.vqCheckedPrinterIds = new Set();
 
-        if (selName) selName.textContent = cfg.selectedPrinterName || 'None';
-        if (netShare) netShare.textContent = cfg.networkSharePath || ('\\\\SERVER\\' + (cfg.shareName || cfg.selectedPrinterName));
-        if (driver) driver.textContent = cfg.driverName || 'Universal Driver';
-        if (hold) {
-          hold.textContent = cfg.isPaused ? 'Active Hold (Quarantined in Windows Spooler)' : 'Normal Mode';
-          hold.style.color = cfg.isPaused ? '#059669' : '#D97706';
-        }
-        if (badge) {
-          badge.textContent = cfg.isShared ? '🟢 Shared on Network' : '🟡 Local Queue';
-          badge.style.background = cfg.isShared ? '#DCFCE7' : '#FEF3C7';
-          badge.style.color = cfg.isShared ? '#166534' : '#92400E';
-        }
+  window.loadVirtualQueueConfig = function (targetQueueId) {
+    // 1. First ensure all physical printers are loaded in state.printers
+    var loadPrintersPromise = (state.printers && state.printers.length > 0)
+      ? Promise.resolve(state.printers)
+      : fetch('/api/admin/printers', { headers: { 'X-Admin-Role': 'ADMIN' } })
+          .then(function (r) { return r.json(); })
+          .then(function (pList) {
+            state.printers = pList || [];
+            return state.printers;
+          })
+          .catch(function () { return []; });
 
-        if (liveBtn) {
-          if (cfg.livePrintingEnabled) {
-            liveBtn.innerHTML = '🟢 Hardware Printing: LIVE (Port 9100)';
-            liveBtn.style.background = '#DCFCE7';
-            liveBtn.style.color = '#166534';
-            liveBtn.style.borderColor = '#86EFAC';
-          } else {
-            liveBtn.innerHTML = '🟡 Simulation Guard Mode (No Paper)';
-            liveBtn.style.background = '#FEF3C7';
-            liveBtn.style.color = '#92400E';
-            liveBtn.style.borderColor = '#FCD34D';
+    loadPrintersPromise.then(function () {
+      var url = targetQueueId ? ('/api/admin/virtual-queue/' + targetQueueId) : '/api/admin/virtual-queue';
+      return fetch(url);
+    })
+    .then(function (res) {
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      return res.json();
+    })
+    .then(function (cfg) {
+      state.virtualQueueConfig = cfg;
+      state.currentVirtualQueue = cfg;
+      state.selectedVirtualQueueId = cfg.id;
+
+      // Update Top Queues summary tabs
+      var allQueues = cfg.allQueues || [];
+      state.virtualQueues = allQueues;
+      var tabsContainer = document.getElementById('vqQueuesTabsContainer');
+      var totalQueuesBadge = document.getElementById('vqTotalQueuesBadge');
+
+      if (totalQueuesBadge) {
+        totalQueuesBadge.textContent = allQueues.length + (allQueues.length === 1 ? ' Virtual Queue' : ' Virtual Queues');
+      }
+
+      if (tabsContainer) {
+        tabsContainer.innerHTML = '';
+        if (allQueues.length === 0) {
+          tabsContainer.innerHTML = '<span style="font-size:12px; color:#64748B;">No Virtual Queues configured.</span>';
+        } else {
+          for (var i = 0; i < allQueues.length; i++) {
+            var q = allQueues[i];
+            var isSel = (q.id === cfg.id);
+            var tab = document.createElement('div');
+            tab.className = 'vq-queue-tab';
+            tab.style.cssText = 'cursor:pointer; padding:10px 14px; border-radius:2px; font-size:12.5px; transition:all 0.15s ease; border:1px solid ' +
+              (isSel ? '#1D4ED8' : '#CBD5E1') + '; background:' + (isSel ? '#EFF6FF' : '#FFFFFF') + '; min-width:210px; flex:1; max-width:280px; box-shadow:0 1px 2px rgba(0,0,0,0.03);';
+            tab.setAttribute('onclick', 'window.switchVirtualQueue(' + q.id + ')');
+
+            var badges = '';
+            if (q.isDefault) {
+              badges += '<span class="badge" style="background:#DCFCE7; color:#166534; font-size:10px; margin-left:6px;">⭐ Primary Default</span>';
+            }
+            var count = q.physicalPrinterCount !== undefined ? q.physicalPrinterCount : 0;
+
+            tab.innerHTML = '<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">' +
+              '<strong style="color:' + (isSel ? '#1D4ED8' : '#0F172A') + '; font-size:13px;">' + q.name + '</strong>' +
+              '</div>' +
+              '<div style="font-size:11px; color:#475569; margin-bottom:4px;">Code: <code style="font-size:11px; color:#1E40AF; font-weight:700;">' + q.queueCode + '</code> &nbsp;|&nbsp; 🖨️ <strong>' + count + '</strong> MFPs</div>' +
+              '<div style="font-size:11px; color:#64748B; font-family:monospace; word-break:break-all;">\\\\' + (cfg.serverHost || 'SERVER') + '\\' + (q.shareName || q.windowsPrinterName) + '</div>' +
+              badges;
+
+            tabsContainer.appendChild(tab);
           }
         }
+      }
 
-        if (tagsContainer) {
-          tagsContainer.innerHTML = '';
-          var phys = cfg.physicalPrinters || state.printers || [];
-          if (phys.length === 0) {
-            tagsContainer.innerHTML = '<span style="font-size:12px; color:#94A3B8; font-style:italic;">No physical printers linked yet. Click "Add Physical Printer to Virtual Pool" to connect your Toshiba MFP!</span>';
-          } else {
-            for (var p = 0; p < phys.length; p++) {
-              var pr = phys[p];
-              var pill = document.createElement('div');
-              pill.style.cssText = 'background:#FFFFFF; border:1px solid #CBD5E1; border-radius:6px; padding:4px 10px; font-size:12px; display:inline-flex; align-items:center; gap:6px; box-shadow:0 1px 2px rgba(0,0,0,0.04);';
-              var defBadge = '';
-              pill.innerHTML = '🖨️ <strong>' + (pr.name || pr.printerCode) + '</strong> <code style="font-size:11px; color:#475569;">' + pr.ipAddress + ':' + pr.rawPort + '</code>' + defBadge + ' <span style="color:#059669; font-size:10px;">● Online</span>';
-              tagsContainer.appendChild(pill);
+      // Update Overview Stats
+      var selName    = document.getElementById('vqSelectedPrinter');
+      var netShare   = document.getElementById('vqNetworkShare');
+      var driver     = document.getElementById('vqDriverName');
+      var hold       = document.getElementById('vqHoldStatus');
+      var badge      = document.getElementById('vqShareBadge');
+      var liveBtn    = document.getElementById('vqLiveModeBtn');
+      var statName   = document.getElementById('statVqName');
+      var statShare  = document.getElementById('statVqShare');
+      var statStatus = document.getElementById('statVqStatus');
+      var statMode   = document.getElementById('statVqMode');
+      var statPool   = document.getElementById('statVqPoolCount');
+      var psCmd      = document.getElementById('vqPowershellCmd');
+      var liveBtnTop = document.getElementById('vqLiveModeBtnTop');
+      var headerName = document.getElementById('vqCurrentDisplayName');
+      var poolTitle  = document.getElementById('poolTableTitle');
+      var btnDefault = document.getElementById('btnDefaultVq');
+      var btnDelete  = document.getElementById('btnDeleteVq');
+
+      var sharePath = cfg.networkSharePath || ('\\\\SERVER\\' + (cfg.shareName || cfg.selectedPrinterName));
+
+      if (headerName) headerName.textContent = cfg.name + ' (' + cfg.queueCode + ')';
+      if (poolTitle) poolTitle.textContent = 'Physical Release MFPs in Virtual Pool: ' + cfg.name;
+      if (selName) selName.textContent = cfg.selectedPrinterName || 'None';
+      if (netShare) netShare.textContent = sharePath;
+      if (statName) statName.textContent = cfg.name || cfg.selectedPrinterName;
+      if (statShare) statShare.textContent = sharePath;
+      if (statPool) statPool.textContent = (cfg.physicalPrinterCount || (cfg.physicalPrinters ? cfg.physicalPrinters.length : 0)) + ' MFPs';
+      if (psCmd) psCmd.textContent = 'Add-Printer -ConnectionName "' + sharePath + '"';
+
+      if (btnDefault) {
+        btnDefault.style.display = cfg.isDefault ? 'none' : 'inline-flex';
+      }
+      if (btnDelete) {
+        btnDelete.style.display = (cfg.isDefault || allQueues.length <= 1) ? 'none' : 'inline-flex';
+      }
+
+      if (driver) driver.textContent = cfg.driverName || 'Universal Driver';
+      if (hold) {
+        hold.textContent = cfg.isPaused ? 'Active Hold (Quarantined in Windows Spooler)' : 'Normal Mode';
+        hold.style.color = cfg.isPaused ? '#059669' : '#D97706';
+      }
+      if (statStatus) {
+        statStatus.textContent = cfg.isPaused ? 'Active Hold (Paused)' : 'Normal Spool';
+        statStatus.className = cfg.isPaused ? 'stat-val green' : 'stat-val amber';
+      }
+
+      if (badge) {
+        badge.textContent = cfg.isShared ? '🟢 Shared on Network' : '🟡 Local Queue';
+        badge.style.background = cfg.isShared ? '#DCFCE7' : '#FEF3C7';
+        badge.style.color = cfg.isShared ? '#166534' : '#92400E';
+      }
+
+      if (liveBtn) {
+        if (cfg.livePrintingEnabled) {
+          liveBtn.innerHTML = '🟢 Hardware Printing: LIVE (Port 9100)';
+          liveBtn.style.background = '#DCFCE7';
+          liveBtn.style.color = '#166534';
+          liveBtn.style.borderColor = '#86EFAC';
+        } else {
+          liveBtn.innerHTML = '🟡 Simulation Guard Mode (No Paper)';
+          liveBtn.style.background = '#FEF3C7';
+          liveBtn.style.color = '#92400E';
+          liveBtn.style.borderColor = '#FCD34D';
+        }
+      }
+      if (liveBtnTop) {
+        liveBtnTop.innerHTML = cfg.livePrintingEnabled ? '🟢 Mode: Hardware Live' : '🟡 Mode: Simulation Guard';
+      }
+      if (statMode) {
+        statMode.textContent = cfg.livePrintingEnabled ? 'Live (Port 9100)' : 'Simulation Guard';
+        statMode.style.color = cfg.livePrintingEnabled ? '#059669' : '#D97706';
+      }
+
+      // Populate server printer dropdown
+      var select = document.getElementById('selectServerVirtualPrinter');
+      if (select) {
+        select.innerHTML = '';
+        var printers = cfg.availableServerPrinters || [];
+        if (printers.length === 0) {
+          var optEmpty = document.createElement('option');
+          optEmpty.value = cfg.selectedPrinterName || 'QOA_Printer';
+          optEmpty.textContent = (cfg.selectedPrinterName || 'QOA_Printer') + ' (Designated Server Virtual Queue)';
+          optEmpty.selected = true;
+          select.appendChild(optEmpty);
+        } else {
+          var hasSelected = false;
+          for (var j = 0; j < printers.length; j++) {
+            var sp = printers[j];
+            var pName = sp.Name || sp.name || '';
+            if (!pName) continue;
+            var pDriver = sp.DriverName || sp.driverName || 'Driver';
+            var pShared = sp.Shared !== undefined ? sp.Shared : (sp.shared !== undefined ? sp.shared : false);
+            var pShareName = sp.ShareName || sp.shareName || pName;
+            var opt = document.createElement('option');
+            opt.value = pName;
+            var details = pName + ' [' + pDriver + ']' + (pShared ? ' (Shared: \\\\' + (cfg.serverHost || 'SERVER') + '\\' + pShareName + ')' : '');
+            opt.textContent = details;
+            if (pName.toLowerCase() === (cfg.selectedPrinterName || '').toLowerCase()) {
+              opt.selected = true;
+              hasSelected = true;
             }
+            select.appendChild(opt);
+          }
+          if (!hasSelected && cfg.selectedPrinterName) {
+            var optFallback = document.createElement('option');
+            optFallback.value = cfg.selectedPrinterName;
+            optFallback.textContent = cfg.selectedPrinterName + ' (Active Virtual Queue)';
+            optFallback.selected = true;
+            select.insertBefore(optFallback, select.firstChild);
           }
         }
+      }
 
-        if (select) {
-          select.innerHTML = '';
-          var printers = cfg.availableServerPrinters || [];
-          if (printers.length === 0) {
-            var optEmpty = document.createElement('option');
-            optEmpty.value = cfg.selectedPrinterName || 'QOA_Printer';
-            optEmpty.textContent = (cfg.selectedPrinterName || 'QOA_Printer') + ' (Designated Server Virtual Queue)';
-            optEmpty.selected = true;
-            select.appendChild(optEmpty);
-          } else {
-            var hasSelected = false;
-            for (var i = 0; i < printers.length; i++) {
-              var sp = printers[i];
-              var pName = sp.Name || sp.name || '';
-              if (!pName) continue;
-              var pDriver = sp.DriverName || sp.driverName || 'Driver';
-              var pShared = sp.Shared !== undefined ? sp.Shared : (sp.shared !== undefined ? sp.shared : false);
-              var pShareName = sp.ShareName || sp.shareName || pName;
-              var opt = document.createElement('option');
-              opt.value = pName;
-              var details = pName + ' [' + pDriver + ']' + (pShared ? ' (Shared: \\\\' + (cfg.serverHost || 'SERVER') + '\\' + pShareName + ')' : '');
-              opt.textContent = details;
-              if (pName.toLowerCase() === (cfg.selectedPrinterName || '').toLowerCase()) {
-                opt.selected = true;
-                hasSelected = true;
-              }
-              select.appendChild(opt);
-            }
-            if (!hasSelected && cfg.selectedPrinterName) {
-              var optFallback = document.createElement('option');
-              optFallback.value = cfg.selectedPrinterName;
-              optFallback.textContent = cfg.selectedPrinterName + ' (Active Virtual Queue)';
-              optFallback.selected = true;
-              select.insertBefore(optFallback, select.firstChild);
-            }
-          }
+      // Render 100+ Physical Printers Table
+      window.renderVirtualQueuePrintersTable();
+    })
+    .catch(function (err) {
+      console.warn('Could not load virtual queue config:', err);
+    });
+  };
+
+  window.switchVirtualQueue = function (queueId) {
+    if (!queueId) return;
+    state.selectedVirtualQueueId = queueId;
+    state.vqPage = 1;
+    state.vqCheckedPrinterIds.clear();
+    var checkAll = document.getElementById('vqCheckAllPrinters');
+    if (checkAll) checkAll.checked = false;
+    window.loadVirtualQueueConfig(queueId);
+  };
+
+  /* -------------------------------------------------------------------------
+     100+ PHYSICAL PRINTERS TABLE: SEARCH, FILTER, PAGINATION & POOL ASSIGNMENT
+     ------------------------------------------------------------------------- */
+  window.renderVirtualQueuePrintersTable = function () {
+    var tbody = document.getElementById('vqPrintersTableBody');
+    if (!tbody) return;
+
+    var allPhysical = state.printers || [];
+    var cfg = state.currentVirtualQueue || {};
+    var poolPrinters = cfg.physicalPrinters || [];
+    var poolIds = new Set(poolPrinters.map(function (p) { return p.id; }));
+
+    // 1. Filter by Pool status
+    var filtered = allPhysical.filter(function (p) {
+      if (p.printerCode === 'VIRTUAL-QUEUE') return false;
+      var inPool = poolIds.has(p.id);
+      if (state.vqPoolFilter === 'IN_POOL') return inPool;
+      if (state.vqPoolFilter === 'NOT_IN_POOL') return !inPool;
+      return true;
+    });
+
+    // 2. Filter by Search Query (Name, IP, Code, Model, Location)
+    if (state.vqPrintersSearchTerm && state.vqPrintersSearchTerm.trim()) {
+      var query = state.vqPrintersSearchTerm.trim().toLowerCase();
+      filtered = filtered.filter(function (p) {
+        return (p.name && p.name.toLowerCase().indexOf(query) !== -1) ||
+               (p.printerCode && p.printerCode.toLowerCase().indexOf(query) !== -1) ||
+               (p.ipAddress && p.ipAddress.toLowerCase().indexOf(query) !== -1) ||
+               (p.model && p.model.toLowerCase().indexOf(query) !== -1) ||
+               (p.location && p.location.toLowerCase().indexOf(query) !== -1);
+      });
+    }
+
+    // 3. Update summary counters
+    var poolSummaryInfo = document.getElementById('vqPoolSummaryInfo');
+    if (poolSummaryInfo) {
+      poolSummaryInfo.textContent = poolIds.size + ' of ' + allPhysical.length + ' registered MFPs linked to this pool';
+    }
+
+    if (filtered.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="9" style="text-align:center; padding:32px; color:#64748B;">' +
+        (allPhysical.length === 0
+          ? 'No physical printers registered in fleet. Click "+ Register New Physical MFP" or "⚡ Seed 20 Test MFPs" to add devices!'
+          : 'No physical printers matching current filters / search query.') +
+        '</td></tr>';
+
+      var pageInfoEl = document.getElementById('vqPaginationInfo');
+      if (pageInfoEl) pageInfoEl.textContent = 'Showing 0 of 0 printers';
+      return;
+    }
+
+    // 4. Pagination
+    var perPage = state.vqPerPage;
+    var totalPages = Math.ceil(filtered.length / perPage);
+    if (state.vqPage > totalPages) state.vqPage = Math.max(1, totalPages);
+    var startIndex = (state.vqPage - 1) * perPage;
+    var endIndex = Math.min(startIndex + perPage, filtered.length);
+    var pageItems = filtered.slice(startIndex, endIndex);
+
+    var pageInfo = document.getElementById('vqPaginationInfo');
+    if (pageInfo) {
+      pageInfo.textContent = 'Showing ' + (startIndex + 1) + '-' + endIndex + ' of ' + filtered.length + ' printers';
+    }
+
+    var pageIndicator = document.getElementById('vqPageIndicator');
+    if (pageIndicator) {
+      pageIndicator.textContent = 'Page ' + state.vqPage + ' of ' + totalPages;
+    }
+
+    var prevBtn = document.getElementById('vqPrevPageBtn');
+    var nextBtn = document.getElementById('vqNextPageBtn');
+    if (prevBtn) prevBtn.disabled = (state.vqPage <= 1);
+    if (nextBtn) nextBtn.disabled = (state.vqPage >= totalPages);
+
+    // 5. Render Table Rows
+    var html = '';
+    for (var k = 0; k < pageItems.length; k++) {
+      var printer = pageItems[k];
+      var inPool = poolIds.has(printer.id);
+      var isChecked = state.vqCheckedPrinterIds.has(printer.id);
+
+      var poolBadge = inPool
+        ? '<span class="badge" style="background:#DCFCE7; color:#166534; font-weight:700;">🟢 In Pool</span>'
+        : '<span class="badge" style="background:#F1F5F9; color:#64748B;">⚪ Not in Pool</span>';
+
+      var actionBtn = inPool
+        ? '<button type="button" class="btn btn-secondary btn-sm" onclick="window.togglePrinterPoolMembership(' + printer.id + ')" style="color:#DC2626;" title="Remove this MFP from virtual pool">Remove from Pool</button>'
+        : '<button type="button" class="btn btn-primary btn-sm" onclick="window.togglePrinterPoolMembership(' + printer.id + ')" title="Link this MFP to virtual pool">+ Add to Pool</button>';
+
+      var defaultBadge = printer.defaultHoldQueue
+        ? ' <span class="badge" style="background:#EFF6FF; color:#1D4ED8; font-size:10px;">⭐ Default MFP</span>'
+        : '';
+
+      html += '<tr style="' + (inPool ? 'background:#FAFDFB;' : '') + '">' +
+        '<td style="text-align:center;">' +
+          '<input type="checkbox" onchange="window.handleVqTogglePrinterCheck(' + printer.id + ', this.checked)" ' + (isChecked ? 'checked' : '') + '>' +
+        '</td>' +
+        '<td><strong>' + printer.name + '</strong>' + defaultBadge + '</td>' +
+        '<td><code style="font-size:11.5px; color:#1E40AF; font-weight:700;">' + printer.printerCode + '</code></td>' +
+        '<td><code style="font-size:12px; color:#334155;">' + printer.ipAddress + ':' + printer.rawPort + '</code></td>' +
+        '<td>' + (printer.location || 'HQ Office') + '</td>' +
+        '<td style="color:#475569;">' + (printer.model || 'Toshiba e-STUDIO') + '</td>' +
+        '<td>' + poolBadge + '</td>' +
+        '<td style="text-align:center;">' + actionBtn + '</td>' +
+        '<td><span style="color:#059669; font-weight:600; font-size:11px;">● Online</span></td>' +
+      '</tr>';
+    }
+
+    tbody.innerHTML = html;
+  };
+
+  // Filter & Search Handlers
+  window.handleVqPrinterSearch = function (val) {
+    state.vqPrintersSearchTerm = val || '';
+    state.vqPage = 1;
+    window.renderVirtualQueuePrintersTable();
+  };
+
+  window.handleVqPoolFilterChange = function (val) {
+    state.vqPoolFilter = val;
+    state.vqPage = 1;
+    window.renderVirtualQueuePrintersTable();
+  };
+
+  window.handleVqPerPageChange = function (val) {
+    state.vqPerPage = (val === 'ALL') ? 999999 : parseInt(val, 10);
+    state.vqPage = 1;
+    window.renderVirtualQueuePrintersTable();
+  };
+
+  window.handleVqPrevPage = function () {
+    if (state.vqPage > 1) {
+      state.vqPage--;
+      window.renderVirtualQueuePrintersTable();
+    }
+  };
+
+  window.handleVqNextPage = function () {
+    state.vqPage++;
+    window.renderVirtualQueuePrintersTable();
+  };
+
+  // Checkbox Selection
+  window.handleVqTogglePrinterCheck = function (printerId, isChecked) {
+    if (isChecked) {
+      state.vqCheckedPrinterIds.add(printerId);
+    } else {
+      state.vqCheckedPrinterIds.delete(printerId);
+    }
+  };
+
+  window.handleVqToggleCheckAll = function (isChecked) {
+    var allPhysical = state.printers || [];
+    if (isChecked) {
+      for (var i = 0; i < allPhysical.length; i++) {
+        state.vqCheckedPrinterIds.add(allPhysical[i].id);
+      }
+    } else {
+      state.vqCheckedPrinterIds.clear();
+    }
+    window.renderVirtualQueuePrintersTable();
+  };
+
+  window.handleVqSelectAllFiltered = function () {
+    var allPhysical = state.printers || [];
+    var cfg = state.currentVirtualQueue || {};
+    var poolPrinters = cfg.physicalPrinters || [];
+    var poolIds = new Set(poolPrinters.map(function (p) { return p.id; }));
+
+    for (var i = 0; i < allPhysical.length; i++) {
+      var p = allPhysical[i];
+      var inPool = poolIds.has(p.id);
+      if (state.vqPoolFilter === 'IN_POOL' && !inPool) continue;
+      if (state.vqPoolFilter === 'NOT_IN_POOL' && inPool) continue;
+      state.vqCheckedPrinterIds.add(p.id);
+    }
+    window.renderVirtualQueuePrintersTable();
+    showToast('Selected all filtered physical printers.', 'info');
+  };
+
+  // Bulk Pool Operations
+  window.handleVqBulkAddSelected = function () {
+    if (state.vqCheckedPrinterIds.size === 0) {
+      showToast('Please check at least one physical printer first.', 'error');
+      return;
+    }
+    var queueId = state.selectedVirtualQueueId;
+    if (!queueId) return;
+
+    var currentPool = (state.currentVirtualQueue && state.currentVirtualQueue.physicalPrinters)
+      ? state.currentVirtualQueue.physicalPrinters.map(function (p) { return p.id; })
+      : [];
+
+    var unionSet = new Set(currentPool);
+    state.vqCheckedPrinterIds.forEach(function (id) { unionSet.add(id); });
+    var targetList = Array.from(unionSet);
+
+    fetch('/api/admin/virtual-queue/' + queueId + '/assign-printers', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ physicalPrinterIds: targetList })
+    })
+    .then(function (r) { return r.json(); })
+    .then(function (data) {
+      if (data.success) {
+        showToast('Successfully added selected MFPs to pool! Total: ' + data.queue.physicalPrinterCount, 'success');
+        state.vqCheckedPrinterIds.clear();
+        var chkAll = document.getElementById('vqCheckAllPrinters');
+        if (chkAll) chkAll.checked = false;
+        window.loadVirtualQueueConfig(queueId);
+      } else {
+        showToast('Error: ' + data.error, 'error');
+      }
+    })
+    .catch(function (err) {
+      showToast('Bulk add failed: ' + err.message, 'error');
+    });
+  };
+
+  window.handleVqBulkRemoveSelected = function () {
+    if (state.vqCheckedPrinterIds.size === 0) {
+      showToast('Please check at least one physical printer first.', 'error');
+      return;
+    }
+    var queueId = state.selectedVirtualQueueId;
+    if (!queueId) return;
+
+    var currentPool = (state.currentVirtualQueue && state.currentVirtualQueue.physicalPrinters)
+      ? state.currentVirtualQueue.physicalPrinters.map(function (p) { return p.id; })
+      : [];
+
+    var filteredList = currentPool.filter(function (id) {
+      return !state.vqCheckedPrinterIds.has(id);
+    });
+
+    fetch('/api/admin/virtual-queue/' + queueId + '/assign-printers', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ physicalPrinterIds: filteredList })
+    })
+    .then(function (r) { return r.json(); })
+    .then(function (data) {
+      if (data.success) {
+        showToast('Removed selected MFPs from pool.', 'info');
+        state.vqCheckedPrinterIds.clear();
+        var chkAll = document.getElementById('vqCheckAllPrinters');
+        if (chkAll) chkAll.checked = false;
+        window.loadVirtualQueueConfig(queueId);
+      } else {
+        showToast('Error: ' + data.error, 'error');
+      }
+    })
+    .catch(function (err) {
+      showToast('Bulk remove failed: ' + err.message, 'error');
+    });
+  };
+
+  // Single Printer Toggle in Pool
+  window.togglePrinterPoolMembership = function (printerId) {
+    var queueId = state.selectedVirtualQueueId;
+    if (!queueId || !printerId) return;
+
+    fetch('/api/admin/virtual-queue/' + queueId + '/toggle-printer/' + printerId, {
+      method: 'POST'
+    })
+    .then(function (r) { return r.json(); })
+    .then(function (data) {
+      if (data.success) {
+        showToast(data.message || 'Printer pool updated!', 'success');
+        window.loadVirtualQueueConfig(queueId);
+      } else {
+        showToast('Error: ' + data.error, 'error');
+      }
+    })
+    .catch(function (err) {
+      showToast('Failed to update printer pool: ' + err.message, 'error');
+    });
+  };
+
+  /* -------------------------------------------------------------------------
+     MULTIPLE VIRTUAL QUEUE CRUD (Create, Edit, Delete, Set Default)
+     ------------------------------------------------------------------------- */
+  
+  // Direct DOM listeners fallback for virtual queue modals
+  document.addEventListener('DOMContentLoaded', function () {
+    var btn = document.getElementById('btnOpenCreateVq');
+    if (btn) {
+      btn.addEventListener('click', function (e) {
+        if (typeof window.openCreateVirtualQueueModal === 'function') {
+          window.openCreateVirtualQueueModal();
+        }
+      });
+    }
+  });
+
+  window.openCreateVirtualQueueModal = function () {
+    var modal = document.getElementById('modalCreateVirtualQueue');
+    if (!modal) return;
+
+    // Reset inputs
+    document.getElementById('newVqName').value = '';
+    document.getElementById('newVqCode').value = 'VQ-' + Math.floor(1000 + Math.random() * 9000);
+    document.getElementById('newVqWindowsPrinter').value = 'Toshiba_Pull_Print';
+    document.getElementById('newVqShareName').value = 'Toshiba_Pull_Print';
+    document.getElementById('newVqDriver').value = 'TOSHIBA Universal Printer 2';
+    document.getElementById('newVqDescription').value = '';
+    document.getElementById('newVqIsDefault').checked = false;
+
+    // Populate physical printers checklist
+    var container = document.getElementById('newVqPrintersList');
+    if (container) {
+      container.innerHTML = '';
+      var allPrinters = state.printers || [];
+      if (allPrinters.length === 0) {
+        container.innerHTML = '<span style="font-size:12px; color:#64748B;">No physical printers available.</span>';
+      } else {
+        for (var i = 0; i < allPrinters.length; i++) {
+          var pr = allPrinters[i];
+          var div = document.createElement('div');
+          div.className = 'modal-printer-item';
+          div.style.cssText = 'padding:4px 0; font-size:12px; display:flex; align-items:center; gap:8px; border-bottom:1px solid #EEF2F6;';
+          div.innerHTML = '<label class="checkbox-label" style="font-weight:500; cursor:pointer;">' +
+            '<input type="checkbox" name="newVqPrinterCheckbox" value="' + pr.id + '"> ' +
+            pr.name + ' (' + pr.printerCode + ') - <code style="font-size:11px; color:#475569;">' + pr.ipAddress + '</code>' +
+          '</label>';
+          container.appendChild(div);
+        }
+      }
+    }
+
+    modal.style.display = 'flex';
+  };
+
+  window.closeCreateVirtualQueueModal = function () {
+    var modal = document.getElementById('modalCreateVirtualQueue');
+    if (modal) modal.style.display = 'none';
+  };
+
+  window.filterModalPrinters = function (containerId, query) {
+    var container = document.getElementById(containerId);
+    if (!container) return;
+    var items = container.querySelectorAll('.modal-printer-item');
+    var q = (query || '').toLowerCase().trim();
+    for (var i = 0; i < items.length; i++) {
+      var text = items[i].textContent.toLowerCase();
+      items[i].style.display = (q === '' || text.indexOf(q) !== -1) ? 'flex' : 'none';
+    }
+  };
+
+  window.handleCreateVirtualQueueSubmit = function (event) {
+    event.preventDefault();
+    var name = document.getElementById('newVqName').value.trim();
+    var code = document.getElementById('newVqCode').value.trim();
+    var printer = document.getElementById('newVqWindowsPrinter').value.trim();
+    var share = document.getElementById('newVqShareName').value.trim();
+    var driver = document.getElementById('newVqDriver').value.trim();
+    var desc = document.getElementById('newVqDescription').value.trim();
+    var isDefault = document.getElementById('newVqIsDefault').checked;
+
+    var checkboxes = document.querySelectorAll('input[name="newVqPrinterCheckbox"]:checked');
+    var selectedPrinterIds = [];
+    for (var i = 0; i < checkboxes.length; i++) {
+      selectedPrinterIds.push(parseInt(checkboxes[i].value, 10));
+    }
+
+    var payload = {
+      name: name,
+      queueCode: code,
+      windowsPrinterName: printer,
+      shareName: share || printer,
+      driverName: driver || 'TOSHIBA Universal Printer 2',
+      description: desc,
+      isDefault: isDefault,
+      physicalPrinterIds: selectedPrinterIds
+    };
+
+    fetch('/api/admin/virtual-queue', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    })
+    .then(function (r) { return r.json(); })
+    .then(function (data) {
+      if (data.success) {
+        showToast(data.message, 'success');
+        window.closeCreateVirtualQueueModal();
+        window.loadVirtualQueueConfig(data.queue.id);
+      } else {
+        showToast('Error: ' + data.error, 'error');
+      }
+    })
+    .catch(function (err) {
+      showToast('Failed to create virtual queue: ' + err.message, 'error');
+    });
+  };
+
+  window.openEditCurrentVirtualQueueModal = function () {
+    var cfg = state.currentVirtualQueue;
+    if (!cfg) return;
+    var modal = document.getElementById('modalEditVirtualQueue');
+    if (!modal) return;
+
+    document.getElementById('editVqId').value = cfg.id;
+    document.getElementById('editVqName').value = cfg.name || '';
+    document.getElementById('editVqCode').value = cfg.queueCode || '';
+    document.getElementById('editVqWindowsPrinter').value = cfg.selectedPrinterName || '';
+    document.getElementById('editVqShareName').value = cfg.shareName || '';
+    document.getElementById('editVqDriver').value = cfg.driverName || 'TOSHIBA Universal Printer 2';
+    document.getElementById('editVqDescription').value = cfg.description || '';
+    document.getElementById('editVqIsDefault').checked = Boolean(cfg.isDefault);
+
+    modal.style.display = 'flex';
+  };
+
+  window.closeEditVirtualQueueModal = function () {
+    var modal = document.getElementById('modalEditVirtualQueue');
+    if (modal) modal.style.display = 'none';
+  };
+
+  window.handleEditVirtualQueueSubmit = function (event) {
+    event.preventDefault();
+    var id = document.getElementById('editVqId').value;
+    var name = document.getElementById('editVqName').value.trim();
+    var printer = document.getElementById('editVqWindowsPrinter').value.trim();
+    var share = document.getElementById('editVqShareName').value.trim();
+    var driver = document.getElementById('editVqDriver').value.trim();
+    var desc = document.getElementById('editVqDescription').value.trim();
+    var isDefault = document.getElementById('editVqIsDefault').checked;
+
+    var payload = {
+      name: name,
+      windowsPrinterName: printer,
+      shareName: share || printer,
+      driverName: driver,
+      description: desc,
+      isDefault: isDefault
+    };
+
+    fetch('/api/admin/virtual-queue/' + id, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    })
+    .then(function (r) { return r.json(); })
+    .then(function (data) {
+      if (data.success) {
+        showToast(data.message, 'success');
+        window.closeEditVirtualQueueModal();
+        window.loadVirtualQueueConfig(id);
+      } else {
+        showToast('Error: ' + data.error, 'error');
+      }
+    })
+    .catch(function (err) {
+      showToast('Failed to update virtual queue: ' + err.message, 'error');
+    });
+  };
+
+  window.handleSetDefaultVirtualQueue = function () {
+    var id = state.selectedVirtualQueueId;
+    if (!id) return;
+    fetch('/api/admin/virtual-queue/' + id + '/set-default', { method: 'POST' })
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        if (data.success) {
+          showToast(data.message, 'success');
+          window.loadVirtualQueueConfig(id);
+        } else {
+          showToast('Error: ' + data.error, 'error');
         }
       })
       .catch(function (err) {
-        console.warn('Could not load virtual queue config:', err);
-        if (select && select.options.length <= 1) {
-          select.innerHTML = '<option value="QOA_Printer" selected>QOA_Printer (Designated Virtual Queue)</option>';
-        }
+        showToast('Failed to set default: ' + err.message, 'error');
       });
+  };
+
+  window.handleDeleteVirtualQueue = function () {
+    var id = state.selectedVirtualQueueId;
+    if (!id) return;
+    var cfg = state.currentVirtualQueue || {};
+    openConfirmModal(
+      'Delete Virtual Queue',
+      'Are you sure you want to delete the Virtual Queue "' + (cfg.name || '') + '" (' + (cfg.queueCode || '') + ')?',
+      function () {
+        fetch('/api/admin/virtual-queue/' + id, { method: 'DELETE' })
+          .then(function (r) { return r.json(); })
+          .then(function (data) {
+            if (data.success) {
+              showToast(data.message, 'success');
+              window.loadVirtualQueueConfig();
+            } else {
+              showToast('Error: ' + data.error, 'error');
+            }
+          })
+          .catch(function (err) {
+            showToast('Delete failed: ' + err.message, 'error');
+          });
+      }
+    );
+  };
+
+  // Seed 20 Sample Printers (To easily demonstrate 20-100 printers)
+  window.handleSeedSamplePrinters = function () {
+    showToast('Generating 20 sample Toshiba MFPs across floors & departments...', 'info');
+    fetch('/api/admin/printers/seed-samples?count=20', {
+      method: 'POST',
+      headers: { 'X-Admin-Role': 'ADMIN' }
+    })
+    .then(function (r) { return r.json(); })
+    .then(function (data) {
+      if (data.success) {
+        showToast(data.message, 'success');
+        // Reload all printers in fleet
+        fetch('/api/admin/printers', { headers: { 'X-Admin-Role': 'ADMIN' } })
+          .then(function (r) { return r.json(); })
+          .then(function (pList) {
+            state.printers = pList || [];
+            window.loadVirtualQueueConfig(state.selectedVirtualQueueId);
+          });
+      } else {
+        showToast('Error: ' + data.error, 'error');
+      }
+    })
+    .catch(function (err) {
+      showToast('Seeding failed: ' + err.message, 'error');
+    });
   };
 
   window.refreshVirtualQueuePrinters = function () {
@@ -1292,11 +1924,11 @@
     showToast('Scanning server Windows printers via PowerShell...', 'info');
     fetch('/api/admin/virtual-queue/installed-printers?refresh=true')
       .then(function () {
-        window.loadVirtualQueueConfig();
+        window.loadVirtualQueueConfig(state.selectedVirtualQueueId);
         showToast('Server printer list updated!', 'success');
       })
       .catch(function (err) {
-        window.loadVirtualQueueConfig();
+        window.loadVirtualQueueConfig(state.selectedVirtualQueueId);
       });
   };
 
@@ -1307,23 +1939,45 @@
       return;
     }
     var chosen = select.value;
-    fetch('/api/admin/virtual-queue/select', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ printerName: chosen })
-    })
-    .then(function (res) { return res.json(); })
-    .then(function (data) {
-      if (data.success) {
-        showToast(data.message || 'Server Virtual Queue updated successfully!', 'success');
-        window.loadVirtualQueueConfig();
-      } else {
-        showToast('Error: ' + (data.error || data.message), 'error');
-      }
-    })
-    .catch(function (err) {
-      showToast('Failed to update virtual queue: ' + err.message, 'error');
-    });
+    var queueId = state.selectedVirtualQueueId;
+
+    if (queueId) {
+      fetch('/api/admin/virtual-queue/' + queueId, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ windowsPrinterName: chosen, shareName: chosen })
+      })
+      .then(function (res) { return res.json(); })
+      .then(function (data) {
+        if (data.success) {
+          showToast('Virtual Queue Windows printer updated to: ' + chosen, 'success');
+          window.loadVirtualQueueConfig(queueId);
+        } else {
+          showToast('Error: ' + (data.error || data.message), 'error');
+        }
+      })
+      .catch(function (err) {
+        showToast('Failed to update virtual queue: ' + err.message, 'error');
+      });
+    } else {
+      fetch('/api/admin/virtual-queue/select', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ printerName: chosen })
+      })
+      .then(function (res) { return res.json(); })
+      .then(function (data) {
+        if (data.success) {
+          showToast(data.message || 'Server Virtual Queue updated successfully!', 'success');
+          window.loadVirtualQueueConfig();
+        } else {
+          showToast('Error: ' + (data.error || data.message), 'error');
+        }
+      })
+      .catch(function (err) {
+        showToast('Failed to update virtual queue: ' + err.message, 'error');
+      });
+    }
   };
 
   window.toggleLivePrintingMode = function () {
@@ -1331,7 +1985,7 @@
       .then(function (res) { return res.json(); })
       .then(function (data) {
         showToast(data.message, data.livePrintingEnabled ? 'success' : 'info');
-        window.loadVirtualQueueConfig();
+        window.loadVirtualQueueConfig(state.selectedVirtualQueueId);
       })
       .catch(function (err) {
         showToast('Failed to toggle print mode: ' + err.message, 'error');

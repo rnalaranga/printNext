@@ -20,7 +20,7 @@ import static org.hamcrest.Matchers.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
-@SpringBootTest
+@SpringBootTest(properties = "app.printer.simulation-mode=true")
 @AutoConfigureMockMvc
 @ActiveProfiles("dev")
 class ApiControllerIntegrationTest {

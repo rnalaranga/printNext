@@ -67,7 +67,7 @@ public class JobService {
         List<PrintJob> allHeld = printJobRepository.findByStatusOrderBySubmittedAtDesc(JobStatus.HELD);
         for (PrintJob j : allHeld) {
             if (seen.contains(j.getId())) continue;
-            if ((j.getUser() != null && j.getUser().getId().equals(user.getId())) ||
+            if ((j.getUser() != null && j.getUser().getId() != null && j.getUser().getId().equals(user.getId())) ||
                 j.getUsername().equalsIgnoreCase(user.getUsername())) {
                 seen.add(j.getId());
                 result.add(j);
@@ -222,7 +222,7 @@ public class JobService {
         if (job.getUserSid().equalsIgnoreCase(user.getUserSid())) {
             return;
         }
-        if (job.getUser() != null && job.getUser().getId().equals(user.getId())) {
+        if (job.getUser() != null && job.getUser().getId() != null && job.getUser().getId().equals(user.getId())) {
             return;
         }
         if (job.getUsername().equalsIgnoreCase(user.getUsername())) {

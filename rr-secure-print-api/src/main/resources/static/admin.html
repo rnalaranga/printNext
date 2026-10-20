@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>nexPrint - Administration Console</title>
-  <link rel="stylesheet" href="/css/admin.css?v=13">
+  <link rel="stylesheet" href="/css/admin.css?v=20261020_50">
 </head>
 <body>
 
@@ -24,8 +24,11 @@
     <a class="sidebar-item active" data-page="dashboard" onclick="navigatePage('dashboard')">
       Dashboard
     </a>
+    <a class="sidebar-item" data-page="virtual-queue" onclick="navigatePage('virtual-queue')">
+      Virtual Print Queue
+    </a>
     <a class="sidebar-item" data-page="printers" onclick="navigatePage('printers')">
-      Printer Management
+      Printer Devices
     </a>
     <a class="sidebar-item" data-page="users" onclick="navigatePage('users')">
       User Management
@@ -147,80 +150,227 @@
     </div>
 
     <!-- =====================================================================
-         PAGE 2: PRINTER MANAGEMENT
+         PAGE 2: VIRTUAL PRINT QUEUE (PaperCut Find-Me Architecture)
+         ===================================================================== -->
+    <div id="page-virtual-queue" class="page-view" style="display:none;">
+      <div class="section-header">
+        <div>
+          <h2>Virtual Print Queue Management</h2>
+          <p>Multi-Queue PaperCut Find-Me Pull Print Architecture &amp; Physical MFP Pool Assignment</p>
+        </div>
+        <div style="display:flex; gap:8px; flex-wrap:wrap;">
+          <button type="button" id="btnOpenCreateVq" class="btn btn-primary" onclick="window.openCreateVirtualQueueModal()">➕ Create Virtual Queue</button>
+          <button type="button" class="btn btn-secondary" onclick="window.refreshVirtualQueuePrinters()">🔄 Scan Local Printers</button>
+          <button type="button" class="btn btn-secondary" onclick="window.sendSimulatedJobToVirtualQueue()">📄 Send Test Print</button>
+          <button type="button" id="vqLiveModeBtnTop" class="btn btn-primary" onclick="window.toggleLivePrintingMode()">Mode: Hardware Live</button>
+        </div>
+      </div>
+
+      <!-- VIRTUAL QUEUES SELECTOR ROW (Multiple Virtual Queues Support) -->
+      <div class="card" style="margin-bottom:20px; border-left:4px solid var(--primary); background:#FFFFFF;">
+        <div class="card-head" style="background:#F8FAFC;">
+          <div style="display:flex; align-items:center; gap:8px;">
+            <strong style="font-size:13px; color:#1E3A8A; text-transform:uppercase; letter-spacing:0.4px;">🌐 Active Virtual Queues</strong>
+            <span id="vqTotalQueuesBadge" class="badge" style="background:#EFF6FF; color:#1D4ED8; font-weight:700;">1 Queue</span>
+          </div>
+          <div style="display:flex; gap:6px;">
+            <button type="button" class="btn btn-secondary btn-sm" onclick="window.openEditCurrentVirtualQueueModal()" id="btnEditVq">✏️ Edit Queue</button>
+            <button type="button" class="btn btn-secondary btn-sm" onclick="window.handleSetDefaultVirtualQueue()" id="btnDefaultVq" style="color:#1D4ED8;">⭐ Set as Default</button>
+            <button type="button" class="btn btn-secondary btn-sm" onclick="window.handleDeleteVirtualQueue()" id="btnDeleteVq" style="color:#DC2626;">🗑️ Delete</button>
+          </div>
+        </div>
+        <div class="card-body-pad" style="padding:14px 18px;">
+          <div id="vqQueuesTabsContainer" style="display:flex; gap:10px; flex-wrap:wrap; width:100%;">
+            <!-- Rendered dynamically by admin-app.js -->
+          </div>
+        </div>
+      </div>
+
+      <!-- Current Virtual Queue Overview Stats Row -->
+      <div class="stats-row">
+        <div class="stat-card">
+          <div class="stat-label">Active Virtual Queue</div>
+          <div id="statVqName" class="stat-val" style="font-size:18px; color:#1D4ED8;">QOA_Printer</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Windows Spooler Share</div>
+          <div id="statVqShare" class="stat-val" style="font-size:13px; word-break:break-all; font-family:monospace; color:#0F172A;">\\SERVER\QOA_Printer</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Spool Quarantine</div>
+          <div id="statVqStatus" class="stat-val green" style="font-size:18px;">Active Hold</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Physical MFPs in Pool</div>
+          <div id="statVqPoolCount" class="stat-val" style="font-size:22px; color:#1E40AF;">0 MFPs</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Execution Mode</div>
+          <div id="statVqMode" class="stat-val" style="font-size:18px; color:#16A34A;">Live (Port 9100)</div>
+        </div>
+      </div>
+
+      <!-- Current Virtual Queue Configuration & Windows Binding Card -->
+      <div class="card" style="margin-bottom:20px; border-left:4px solid #2563EB;">
+        <div class="card-head">
+          <h2 id="vqDetailsHeader">Virtual Queue Details &amp; Windows Binding</h2>
+          <span id="vqShareBadge" class="badge" style="background:#DCFCE7; color:#166534; font-weight:700; padding:3px 10px; border-radius:2px; font-size:11px;">🟢 Shared on Network</span>
+        </div>
+        <div class="card-body-pad" style="flex-direction:column; gap:16px;">
+          <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:20px;">
+            <div style="flex:1; min-width:320px;">
+              <div style="font-size:13px; color:#334155; line-height:1.7;">
+                <div style="margin-bottom:6px;"><strong>Virtual Queue Display Name:</strong> <span id="vqCurrentDisplayName" style="font-weight:700; color:#1E3A8A;">General Find-Me Virtual Queue</span></div>
+                <div style="margin-bottom:6px;"><strong>Designated Windows Spooler Queue:</strong> <code id="vqSelectedPrinter" style="background:#E0E7FF; padding:3px 8px; border-radius:2px; font-weight:700; font-size:13px; color:#1D4ED8;">QOA_Printer</code></div>
+                <div style="margin-bottom:6px;"><strong>Network SMB Share Path:</strong> <code id="vqNetworkShare" style="background:#F1F5F9; padding:3px 8px; border-radius:2px; font-size:12px; color:#0F172A; font-family:monospace;">\\SERVER\QOA_Printer</code></div>
+                <div style="margin-bottom:6px;"><strong>Driver Name:</strong> <span id="vqDriverName" style="color:#0F172A; font-weight:600;">TOSHIBA Universal Printer 2</span></div>
+                <div><strong>Spool Interception:</strong> <span id="vqHoldStatus" style="color:#059669; font-weight:600;">Active Hold (Paused)</span></div>
+              </div>
+            </div>
+
+            <!-- Server Printer Re-bind Selector -->
+            <div style="background:#F8FAFC; border:1px solid #CBD5E1; border-radius:2px; padding:16px 18px; min-width:340px; flex:1; max-width:440px;">
+              <div style="font-size:11px; font-weight:700; color:#1E3A8A; margin-bottom:8px; text-transform:uppercase; letter-spacing:0.5px;">
+                🖨️ Re-bind this Queue to Local Windows Printer:
+              </div>
+              <div style="display:flex; gap:8px; align-items:center; margin-bottom:8px;">
+                <select id="selectServerVirtualPrinter" class="form-input" style="flex:1; height:36px; padding:4px 8px; font-size:12.5px;">
+                  <option value="QOA_Printer">QOA_Printer (Designated Virtual Queue)</option>
+                </select>
+                <button type="button" class="btn btn-primary" onclick="window.handleSaveVirtualQueuePrinter()" style="height:36px; white-space:nowrap; padding:0 14px; font-size:12px;">
+                  Save Queue
+                </button>
+              </div>
+              <div style="display:flex; justify-content:space-between; align-items:center;">
+                <span style="font-size:11px; color:#64748B;">Network users print to this Windows printer.</span>
+                <button type="button" class="btn btn-secondary btn-sm" onclick="window.refreshVirtualQueuePrinters()">🔄 Scan</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- =====================================================================
+           PHYSICAL RELEASE MFPS POOL MANAGEMENT (SCALABLE TO 100+ PRINTERS)
+           ===================================================================== -->
+      <div class="card" style="border-left:4px solid var(--primary); margin-bottom:20px;">
+        <div class="card-head" style="flex-wrap:wrap; gap:10px;">
+          <div>
+            <h2 id="poolTableTitle">Physical Release MFPs Linked to this Pool</h2>
+            <p id="poolTableSub" style="font-size:11.5px; color:#64748B; margin-top:2px;">Showing MFPs where users can walk up with PIN to release jobs from this virtual queue.</p>
+          </div>
+          <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+            <button type="button" class="btn btn-secondary btn-sm" onclick="window.handleSeedSamplePrinters()" title="Generate 20 test Toshiba MFPs across departments to test large fleet performance">
+              ⚡ Seed 20 Test MFPs
+            </button>
+            <button type="button" class="btn btn-primary btn-sm" onclick="openAddPrinterModal()">
+              ➕ Register New Physical MFP
+            </button>
+          </div>
+        </div>
+
+        <!-- SEARCH, FILTER & BULK CONTROLS (Handles 100+ Printers Effortlessly) -->
+        <div style="padding:14px 18px; background:#F8FAFC; border-bottom:1px solid #E2E8F0; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
+          <div style="display:flex; gap:10px; align-items:center; flex:1; min-width:320px; max-width:650px;">
+            <div style="position:relative; flex:1;">
+              <input type="text" id="vqPrinterSearchInput" class="form-input" placeholder="🔍 Search 100+ physical printers by name, IP, code, model, location..." oninput="window.handleVqPrinterSearch(this.value)" style="height:34px; padding-left:12px; font-size:12.5px;">
+            </div>
+            <select id="vqPoolFilterSelect" class="form-input" style="width:200px; height:34px; font-size:12px;" onchange="window.handleVqPoolFilterChange(this.value)">
+              <option value="ALL">All Physical MFPs</option>
+              <option value="IN_POOL" selected>In this Pool Only</option>
+              <option value="NOT_IN_POOL">Not in this Pool</option>
+            </select>
+          </div>
+
+          <!-- BULK SELECTION ACTION BUTTONS -->
+          <div style="display:flex; gap:8px; align-items:center;">
+            <button type="button" class="btn btn-secondary btn-sm" onclick="window.handleVqSelectAllFiltered()">
+              Select All
+            </button>
+            <button type="button" class="btn btn-primary btn-sm" onclick="window.handleVqBulkAddSelected()">
+              + Add Selected to Pool
+            </button>
+            <button type="button" class="btn btn-secondary btn-sm" onclick="window.handleVqBulkRemoveSelected()" style="color:#DC2626;">
+              Remove Selected
+            </button>
+          </div>
+        </div>
+
+        <!-- 100+ PRINTERS DATA TABLE -->
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th style="width:36px; text-align:center;">
+                  <input type="checkbox" id="vqCheckAllPrinters" onchange="window.handleVqToggleCheckAll(this.checked)">
+                </th>
+                <th>MFP Device Name</th>
+                <th>Device Code</th>
+                <th>Network IP : Port</th>
+                <th>Physical Location</th>
+                <th>Hardware Model</th>
+                <th>Pool Membership</th>
+                <th style="text-align:center;">Pool Action</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody id="vqPrintersTableBody">
+              <tr><td colspan="9" style="text-align:center;padding:30px;color:#64748B;">Loading physical printers pool...</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- PAGINATION BAR (Clean navigation for 100+ Printers) -->
+        <div style="padding:10px 18px; background:#F8FAFC; border-top:1px solid #E2E8F0; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+          <div style="font-size:12px; color:#64748B;">
+            <span id="vqPaginationInfo">Showing 0 of 0 printers</span> &nbsp;|&nbsp;
+            <span id="vqPoolSummaryInfo" style="font-weight:600; color:#1E3A8A;">0 MFPs currently in this pool</span>
+          </div>
+          <div style="display:flex; gap:8px; align-items:center;">
+            <span style="font-size:11.5px; color:#64748B;">Per Page:</span>
+            <select id="vqPerPageSelect" class="form-input" style="width:75px; height:28px; padding:2px 6px; font-size:12px;" onchange="window.handleVqPerPageChange(this.value)">
+              <option value="10">10</option>
+              <option value="25" selected>25</option>
+              <option value="50">50</option>
+              <option value="100">100</option>
+              <option value="ALL">All</option>
+            </select>
+            <button type="button" class="btn btn-secondary btn-sm" id="vqPrevPageBtn" onclick="window.handleVqPrevPage()">◀ Prev</button>
+            <span id="vqPageIndicator" style="font-size:12px; font-weight:600; padding:0 4px;">Page 1 of 1</span>
+            <button type="button" class="btn btn-secondary btn-sm" id="vqNextPageBtn" onclick="window.handleVqNextPage()">Next ▶</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Client Workstation Deployment Instructions Card -->
+      <div class="card" style="border-left:4px solid #3B82F6;">
+        <div class="card-head">
+          <h2>Client Workstation Connection &amp; Deployment Guide</h2>
+        </div>
+        <div class="card-body-pad" style="flex-direction:column; gap:12px;">
+          <p style="font-size:12.5px; color:#334155; line-height:1.6;">
+            Deploy this virtual queue to Windows workstations across your organization so users print to one unified destination:
+          </p>
+          <div style="background:#F8FAFC; border:1px solid #CBD5E1; border-radius:2px; padding:12px 16px; font-family:Consolas, monospace; font-size:12px; color:#0F172A; display:flex; justify-content:space-between; align-items:center;">
+            <code id="vqPowershellCmd">Add-Printer -ConnectionName "\\SERVER\QOA_Printer"</code>
+            <button type="button" class="btn btn-sm btn-secondary" onclick="navigator.clipboard.writeText(document.getElementById('vqPowershellCmd').textContent); showToast('Command copied to clipboard!', 'success');">Copy Command</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- =====================================================================
+         PAGE 3: PRINTER MANAGEMENT
          ===================================================================== -->
     <div id="page-printers" class="page-view" style="display:none;">
       <div class="section-header">
         <div>
-          <h2>Printer Device Management</h2>
-          <p>Register, monitor, and configure physical Toshiba MFPs and RAW/JetDirect print queues.</p>
+          <h2>Physical Printer Devices</h2>
+          <p>Register, monitor, and configure physical Toshiba MFPs and RAW/JetDirect Port 9100 devices.</p>
         </div>
         <div>
           <button class="btn btn-primary" onclick="openAddPrinterModal()">+ Register New Printer</button>
           <button class="btn btn-secondary" onclick="loadPrinters()">Refresh</button>
-        </div>
-      </div>
-
-            <!-- PAPERCUT-STYLE FIND-ME VIRTUAL PRINT QUEUE CARD -->
-      <div class="card" style="margin-bottom:20px; border-left:4px solid #3B82F6; background:#F8FAFC;">
-        <div class="card-body-pad">
-          <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:16px;">
-            <div style="flex:1; min-width:320px;">
-              <div style="display:flex; align-items:center; gap:8px;">
-                <span style="font-size:22px;">🌐</span>
-                <strong style="font-size:16px; color:#0F172A;">Server Virtual Print Queue (PaperCut Follow-Me)</strong>
-                <span id="vqShareBadge" class="badge" style="background:#DCFCE7; color:#166534; font-weight:700; padding:2px 8px; border-radius:12px; font-size:11px;">🟢 Shared on Network</span>
-              </div>
-              <div style="margin:8px 0 0 30px; font-size:12.5px; color:#475569; line-height:1.6;">
-                <div><strong>Selected Server Printer:</strong> <code id="vqSelectedPrinter" style="background:#E2E8F0; padding:2px 8px; border-radius:4px; font-weight:700; font-size:13px; color:#1E40AF;">QOA_Printer</code> &nbsp;|&nbsp; <strong>Network Share:</strong> <code id="vqNetworkShare" style="background:#E2E8F0; padding:2px 8px; border-radius:4px; font-size:12px; color:#0F172A;">\\SERVER\QOA_Printer</code></div>
-                <div><strong>Driver:</strong> <span id="vqDriverName" style="color:#0F172A;">TOSHIBA Universal Printer 2</span> &nbsp;|&nbsp; <strong>Spool Quarantine:</strong> <span id="vqHoldStatus" style="color:#059669; font-weight:600;">Active Hold (Paused)</span></div>
-                <div style="color:#64748B; font-size:11.5px; margin-top:2px;">Network users print to this queue. Prints stay securely held until the user enters their PIN at <strong>ANY physical Toshiba MFP below</strong>.</div>
-              </div>
-            </div>
-
-            <!-- SERVER PRINTER SELECTOR CONTROLS -->
-            <div style="background:#FFF; border:1px solid #CBD5E1; border-radius:8px; padding:12px 16px; min-width:340px;">
-              <div style="font-size:11px; font-weight:700; color:#475569; margin-bottom:6px; text-transform:uppercase; letter-spacing:0.5px;">
-                🖨️ Select Server Printer as Virtual Queue:
-              </div>
-              <div style="display:flex; gap:8px; align-items:center;">
-                <select id="selectServerVirtualPrinter" class="form-input" style="flex:1; height:36px; padding:4px 8px; font-size:12.5px;">
-                  <option value="QOA_Printer">QOA_Printer (Designated Virtual Queue)</option>
-                </select>
-                <button type="button" class="btn btn-primary" onclick="window.handleSaveVirtualQueuePrinter()" style="height:36px; white-space:nowrap; padding:0 12px; font-size:12px;">
-                  💾 Save Queue
-                </button>
-                <button type="button" class="btn btn-secondary" onclick="window.refreshVirtualQueuePrinters()" title="Refresh server printers" style="height:36px; padding:0 10px; font-size:13px;">
-                  🔄
-                </button>
-              </div>
-              <div style="margin-top:8px; text-align:right;">
-                <button type="button" class="btn btn-sm btn-secondary" onclick="window.sendSimulatedJobToVirtualQueue()" style="font-size:11px; padding:3px 10px;">
-                  📄 Send Test Print to Virtual Queue
-                </button>
-              </div>
-            </div>
-          </div>
-
-          <!-- PHYSICAL PRINTERS IN VIRTUAL POOL SUB-SECTION -->
-          <div style="margin-top:16px; padding-top:14px; border-top:1px dashed #CBD5E1; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
-            <div style="flex:1; min-width:300px;">
-              <div style="font-size:11px; font-weight:700; color:#334155; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:6px;">
-                🖨️ Physical Release Printers in this Virtual Pool:
-              </div>
-              <div id="vqPhysicalPrintersTags" style="display:flex; flex-wrap:wrap; gap:8px;">
-                <span style="font-size:12px; color:#94A3B8; font-style:italic;">Loading physical printers...</span>
-              </div>
-            </div>
-            <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
-              <button type="button" class="btn btn-sm btn-primary" onclick="openAddPrinterModal()" style="font-size:12px; padding:6px 14px; font-weight:600;">
-                ➕ Add Physical Printer to Virtual Pool
-              </button>
-              <button type="button" id="vqLiveModeBtn" class="btn btn-sm" onclick="window.toggleLivePrintingMode()" style="font-size:11.5px; padding:6px 12px; font-weight:600; background:#DCFCE7; color:#166534; border:1px solid #86EFAC;" title="Toggle physical hardware socket transmission vs safe simulation">
-                🟢 Hardware Printing: LIVE
-              </button>
-            </div>
-          </div>
         </div>
       </div>
 
@@ -642,10 +792,137 @@
 </div>
 
 <!-- =========================================================================
+     MODAL: CREATE VIRTUAL PRINT QUEUE
+     ========================================================================= -->
+<div id="modalCreateVirtualQueue" class="modal-backdrop" style="display:none; z-index:9999;">
+  <div class="modal-box" style="max-width:560px; border-radius:4px;">
+    <div class="modal-head">
+      <h3>➕ Create New Virtual Print Queue</h3>
+      <button class="modal-close-btn" onclick="window.closeCreateVirtualQueueModal()">X</button>
+    </div>
+    <form onsubmit="window.handleCreateVirtualQueueSubmit(event)">
+      <div class="modal-body">
+        <div class="form-row">
+          <div class="form-group flex-1">
+            <label class="form-label" for="newVqName">Queue Display Name *</label>
+            <input type="text" id="newVqName" class="form-input" placeholder="e.g. Executive Color Queue" required>
+          </div>
+          <div class="form-group flex-1">
+            <label class="form-label" for="newVqCode">Queue Code *</label>
+            <input type="text" id="newVqCode" class="form-input" placeholder="e.g. VQ-COLOR" required>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group flex-1">
+            <label class="form-label" for="newVqWindowsPrinter">Windows Spooler Printer *</label>
+            <input type="text" id="newVqWindowsPrinter" class="form-input" placeholder="e.g. Toshiba_Color_Queue" required>
+            <span class="form-hint">Name of Windows printer queue on server.</span>
+          </div>
+          <div class="form-group flex-1">
+            <label class="form-label" for="newVqShareName">SMB Share Name</label>
+            <input type="text" id="newVqShareName" class="form-input" placeholder="e.g. Toshiba_Color_Queue">
+            <span class="form-hint">Path: \\SERVER\&lt;ShareName&gt;</span>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="newVqDriver">Printer Driver</label>
+          <input type="text" id="newVqDriver" class="form-input" value="TOSHIBA Universal Printer 2">
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="newVqDescription">Description / Usage</label>
+          <input type="text" id="newVqDescription" class="form-input" placeholder="e.g. High-speed release pool for 2nd floor engineering">
+        </div>
+
+        <div class="form-group">
+          <label class="checkbox-label" style="font-weight:600; color:#1E3A8A;">
+            <input type="checkbox" id="newVqIsDefault"> Set as Primary Default Virtual Queue
+          </label>
+        </div>
+
+        <div class="form-group" style="margin-top:14px;">
+          <label class="form-label">Assign Initial Physical MFPs to this Pool (Select from Fleet)</label>
+          <div style="margin-bottom:6px;">
+            <input type="text" class="form-input" placeholder="Filter physical printers..." oninput="window.filterModalPrinters('newVqPrintersList', this.value)" style="height:30px; font-size:12px;">
+          </div>
+          <div id="newVqPrintersList" style="max-height:160px; overflow-y:auto; border:1px solid #CBD5E1; padding:8px 12px; background:#F8FAFC; border-radius:2px;">
+            <!-- Populated dynamically -->
+          </div>
+        </div>
+      </div>
+      <div class="modal-foot">
+        <button type="button" class="btn btn-secondary" onclick="window.closeCreateVirtualQueueModal()">Cancel</button>
+        <button type="submit" class="btn btn-primary">Create Virtual Queue</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- =========================================================================
+     MODAL: EDIT VIRTUAL PRINT QUEUE
+     ========================================================================= -->
+<div id="modalEditVirtualQueue" class="modal-backdrop" style="display:none; z-index:9999;">
+  <div class="modal-box" style="max-width:560px; border-radius:4px;">
+    <div class="modal-head">
+      <h3>✏️ Edit Virtual Print Queue</h3>
+      <button class="modal-close-btn" onclick="window.closeEditVirtualQueueModal()">X</button>
+    </div>
+    <form onsubmit="window.handleEditVirtualQueueSubmit(event)">
+      <input type="hidden" id="editVqId">
+      <div class="modal-body">
+        <div class="form-row">
+          <div class="form-group flex-1">
+            <label class="form-label" for="editVqName">Queue Display Name *</label>
+            <input type="text" id="editVqName" class="form-input" required>
+          </div>
+          <div class="form-group flex-1">
+            <label class="form-label" for="editVqCode">Queue Code</label>
+            <input type="text" id="editVqCode" class="form-input" readonly style="background:#F1F5F9;">
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group flex-1">
+            <label class="form-label" for="editVqWindowsPrinter">Windows Spooler Printer *</label>
+            <input type="text" id="editVqWindowsPrinter" class="form-input" required>
+          </div>
+          <div class="form-group flex-1">
+            <label class="form-label" for="editVqShareName">SMB Share Name</label>
+            <input type="text" id="editVqShareName" class="form-input">
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="editVqDriver">Printer Driver</label>
+          <input type="text" id="editVqDriver" class="form-input">
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="editVqDescription">Description</label>
+          <input type="text" id="editVqDescription" class="form-input">
+        </div>
+
+        <div class="form-group">
+          <label class="checkbox-label" style="font-weight:600; color:#1E3A8A;">
+            <input type="checkbox" id="editVqIsDefault"> Set as Primary Default Virtual Queue
+          </label>
+        </div>
+      </div>
+      <div class="modal-foot">
+        <button type="button" class="btn btn-secondary" onclick="window.closeEditVirtualQueueModal()">Cancel</button>
+        <button type="submit" class="btn btn-primary">Save Changes</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- =========================================================================
      MODAL 5: CUSTOM MODERN CONFIRMATION DIALOG (No Browser Popups)
      ========================================================================= -->
 <div id="confirmModal" class="modal-backdrop" style="display:none; z-index:99999;">
-  <div class="modal-box" style="max-width:420px; border-radius:10px;">
+  <div class="modal-box" style="max-width:420px; border-radius:4px;">
     <div class="modal-head">
       <h3 id="confirmModalTitle">Confirmation</h3>
       <button class="modal-close-btn" onclick="closeConfirmModal(false)">X</button>
@@ -660,6 +937,6 @@
   </div>
 </div>
 
-<script src="/js/admin-app.js?v=27"></script>
+<script src="/js/admin-app.js?v=20261020_50"></script>
 </body>
 </html>

@@ -12,11 +12,19 @@ public class WebMvcConfig implements WebMvcConfigurer {
 
     @Override
     public void addResourceHandlers(ResourceHandlerRegistry registry) {
-        // Cache terminal static files to allow instant offline/sleep wake rendering
+        // Javascript assets
+        registry.addResourceHandler("/js/**")
+                .addResourceLocations("classpath:/static/js/")
+                .setCacheControl(CacheControl.noCache().mustRevalidate());
+
+        // CSS assets
+        registry.addResourceHandler("/css/**")
+                .addResourceLocations("classpath:/static/css/")
+                .setCacheControl(CacheControl.noCache().mustRevalidate());
+
+        // Default static resources (HTML, icons, terminal)
         registry.addResourceHandler("/**")
                 .addResourceLocations("classpath:/static/")
-                .setCacheControl(CacheControl.maxAge(Duration.ofHours(2))
-                        .cachePublic()
-                        .staleWhileRevalidate(Duration.ofDays(7)));
+                .setCacheControl(CacheControl.noCache().mustRevalidate());
     }
 }

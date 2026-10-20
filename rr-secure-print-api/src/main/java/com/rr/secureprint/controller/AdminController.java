@@ -220,6 +220,26 @@ public class AdminController {
         }
     }
 
+    @PostMapping("/printers/seed-samples")
+    public ResponseEntity<?> seedSamplePrinters(
+            @RequestParam(value = "count", defaultValue = "20") int count,
+            HttpServletRequest httpRequest) {
+        if (!isAdmin(httpRequest)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("error", "Admin privileges required."));
+        }
+        try {
+            String adminUser = getAdminActorName(httpRequest);
+            List<PrinterEntity> seeded = printerService.seedSamplePrinters(Math.min(count, 100), adminUser, httpRequest.getRemoteAddr());
+            return ResponseEntity.ok(Map.of(
+                    "success", true,
+                    "message", "Successfully generated " + seeded.size() + " sample Toshiba MFPs for large fleet testing.",
+                    "count", seeded.size()
+            ));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of("error", e.getMessage()));
+        }
+    }
+
     /* =========================================================================
        USER MANAGEMENT ENDPOINTS
        ========================================================================= */
