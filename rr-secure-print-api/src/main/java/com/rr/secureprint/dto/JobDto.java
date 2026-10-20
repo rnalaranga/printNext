@@ -28,8 +28,8 @@ public record JobDto(
         boolean simulated
 ) {
     public static JobDto fromEntity(PrintJob job) {
-        String printerCode = job.getTargetPrinter() != null ? job.getTargetPrinter().getPrinterCode() : "ANY-TOSHIBA";
-        String printerName = job.getTargetPrinter() != null ? job.getTargetPrinter().getName() : "Toshiba Pull Queue";
+        String printerCode = job.getTargetPrinter() != null ? job.getTargetPrinter().getPrinterCode() : "VIRTUAL-QUEUE";
+        String printerName = job.getTargetPrinter() != null ? job.getTargetPrinter().getName() : "Follow-Me Virtual Queue";
         boolean isSimulated = job.getSpoolFilePath() != null && job.getSpoolFilePath().contains("simulated");
 
         return new JobDto(

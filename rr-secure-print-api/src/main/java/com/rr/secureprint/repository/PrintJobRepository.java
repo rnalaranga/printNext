@@ -21,6 +21,12 @@ public interface PrintJobRepository extends JpaRepository<PrintJob, UUID> {
 
     List<PrintJob> findByUserSidAndStatusInOrderBySubmittedAtDesc(String userSid, Collection<JobStatus> statuses);
 
+    List<PrintJob> findByStatus(JobStatus status);
+
+    List<PrintJob> findByStatusOrderBySubmittedAtDesc(JobStatus status);
+
+    long countByUserSidAndStatus(String userSid, JobStatus status);
+
     List<PrintJob> findAllByOrderBySubmittedAtDesc();
 
     List<PrintJob> findByStatusAndExpiresAtBefore(JobStatus status, Instant expirationThreshold);

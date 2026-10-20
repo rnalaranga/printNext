@@ -1,4 +1,4 @@
-/* ==========================================================================
+﻿/* ==========================================================================
    nexPrint - Administration Console Application JS v20
    Clean Modern Architecture
    ========================================================================== */
@@ -19,7 +19,7 @@
       printerCount: 0,
       userCount: 0
     },
-    serverTerminalUrl: 'http://192.168.1.4:8080/'
+    serverTerminalUrl: 'http://192.168.1.80:8080/'
   };
 
   /* =========================================================================
@@ -105,6 +105,7 @@
       topbarTitle.textContent = 'Printer Device Management';
       topbarSub.textContent   = 'Toshiba Multifunction Printers & Network JetDirect Queues';
       loadPrinters();
+      loadVirtualQueueConfig();
     } else if (pageId === 'users') {
       topbarTitle.textContent = 'User Identity Management';
       topbarSub.textContent   = 'Security Credentials, Touchscreen PINs, and Windows SIDs';
@@ -195,7 +196,7 @@
     }
     var host = window.location.hostname;
     if (!host || host === 'localhost' || host === '127.0.0.1') {
-      return 'http://192.168.1.4:8080/';
+      return 'http://192.168.1.80:8080/';
     }
     return 'http://' + host + ':8080/';
   }
@@ -219,7 +220,7 @@
     tbody.innerHTML = '';
 
     if (state.printers.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:30px;color:#6B7299;">No printers registered yet. Click "+ Register New Printer" to add one.</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;padding:30px;color:#6B7299;">No physical printers registered in the Follow-Me pool yet. Click "+ Register New Printer" to add one.</td></tr>';
       return;
     }
 
@@ -235,12 +236,15 @@
         ? '<span class="badge badge-ewb-ready" title="Terminal URL: ' + esc(p.ewbUrl || '') + '">EWB READY</span>'
         : '<span class="badge badge-ewb-none" title="Not pushed to device yet">NO EWB</span>';
 
+      var roleBadge = '<span class="badge" style="background:#EFF6FF; color:#1D4ED8; font-weight:600; border:1px solid #BFDBFE;">Follow-Me Station</span>';
+
       tr.innerHTML =
         '<td><strong>' + esc(p.name) + '</strong></td>' +
         '<td><code>' + esc(p.printerCode) + '</code></td>' +
         '<td>' + esc(p.ipAddress) + ':' + p.rawPort + '</td>' +
         '<td>' + esc(p.location || 'Office') + '</td>' +
         '<td>' + esc(p.model || 'Toshiba MFP') + '</td>' +
+        '<td>' + roleBadge + '</td>' +
         '<td>' + ewbBadge + '</td>' +
         '<td id="printer-status-' + p.id + '">' + statusBadge + '</td>' +
         '<td style="text-align:right; white-space:nowrap;">' +
@@ -1090,7 +1094,7 @@
       .replace(/"/g, '&quot;');
   }
 
-  function showToast(msg, type) {
+  window.showToast = function showToast(msg, type) {
     var toast = document.getElementById('toastNotification');
     if (!toast) return;
     toast.textContent = msg;
@@ -1139,6 +1143,199 @@
   // Override browser native alert to completely disable browser popup messages
   window.alert = function (msg) {
     showToast(msg, 'info');
+  };
+
+
+
+
+  window.sendSimulatedJobToVirtualQueue = function () {
+    var docName = 'Blueprint_' + Math.floor(Math.random() * 9000 + 1000) + '.pdf';
+    fetch('/api/simulation/submit-job', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        username: 'rr',
+        documentName: docName,
+        pageCount: 3,
+        color: false,
+        duplex: true,
+        copies: 1
+      })
+    })
+    .then(function (res) { return res.json(); })
+    .then(function (data) {
+      showToast('Document "' + docName + '" sent to Virtual Queue! Walk to any physical MFP to release.', 'success');
+      loadJobs();
+      loadDashboard();
+    })
+    .catch(function (err) {
+      showToast('Failed to submit test print: ' + err.message, 'error');
+    });
+  };
+
+  /* =========================================================================
+     SERVER VIRTUAL PRINT QUEUE CONFIGURATION
+     ========================================================================= */
+
+  window.loadVirtualQueueConfig = function () {
+    var select = document.getElementById('selectServerVirtualPrinter');
+    fetch('/api/admin/virtual-queue')
+      .then(function (res) {
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        return res.json();
+      })
+      .then(function (cfg) {
+        state.virtualQueueConfig = cfg;
+        var selName = document.getElementById('vqSelectedPrinter');
+        var netShare = document.getElementById('vqNetworkShare');
+        var driver = document.getElementById('vqDriverName');
+        var hold = document.getElementById('vqHoldStatus');
+        var badge = document.getElementById('vqShareBadge');
+        var tagsContainer = document.getElementById('vqPhysicalPrintersTags');
+        var liveBtn = document.getElementById('vqLiveModeBtn');
+
+        if (selName) selName.textContent = cfg.selectedPrinterName || 'None';
+        if (netShare) netShare.textContent = cfg.networkSharePath || ('\\\\SERVER\\' + (cfg.shareName || cfg.selectedPrinterName));
+        if (driver) driver.textContent = cfg.driverName || 'Universal Driver';
+        if (hold) {
+          hold.textContent = cfg.isPaused ? 'Active Hold (Quarantined in Windows Spooler)' : 'Normal Mode';
+          hold.style.color = cfg.isPaused ? '#059669' : '#D97706';
+        }
+        if (badge) {
+          badge.textContent = cfg.isShared ? '🟢 Shared on Network' : '🟡 Local Queue';
+          badge.style.background = cfg.isShared ? '#DCFCE7' : '#FEF3C7';
+          badge.style.color = cfg.isShared ? '#166534' : '#92400E';
+        }
+
+        if (liveBtn) {
+          if (cfg.livePrintingEnabled) {
+            liveBtn.innerHTML = '🟢 Hardware Printing: LIVE (Port 9100)';
+            liveBtn.style.background = '#DCFCE7';
+            liveBtn.style.color = '#166534';
+            liveBtn.style.borderColor = '#86EFAC';
+          } else {
+            liveBtn.innerHTML = '🟡 Simulation Guard Mode (No Paper)';
+            liveBtn.style.background = '#FEF3C7';
+            liveBtn.style.color = '#92400E';
+            liveBtn.style.borderColor = '#FCD34D';
+          }
+        }
+
+        if (tagsContainer) {
+          tagsContainer.innerHTML = '';
+          var phys = cfg.physicalPrinters || state.printers || [];
+          if (phys.length === 0) {
+            tagsContainer.innerHTML = '<span style="font-size:12px; color:#94A3B8; font-style:italic;">No physical printers linked yet. Click "Add Physical Printer to Virtual Pool" to connect your Toshiba MFP!</span>';
+          } else {
+            for (var p = 0; p < phys.length; p++) {
+              var pr = phys[p];
+              var pill = document.createElement('div');
+              pill.style.cssText = 'background:#FFFFFF; border:1px solid #CBD5E1; border-radius:6px; padding:4px 10px; font-size:12px; display:inline-flex; align-items:center; gap:6px; box-shadow:0 1px 2px rgba(0,0,0,0.04);';
+              var defBadge = '';
+              pill.innerHTML = '🖨️ <strong>' + (pr.name || pr.printerCode) + '</strong> <code style="font-size:11px; color:#475569;">' + pr.ipAddress + ':' + pr.rawPort + '</code>' + defBadge + ' <span style="color:#059669; font-size:10px;">● Online</span>';
+              tagsContainer.appendChild(pill);
+            }
+          }
+        }
+
+        if (select) {
+          select.innerHTML = '';
+          var printers = cfg.availableServerPrinters || [];
+          if (printers.length === 0) {
+            var optEmpty = document.createElement('option');
+            optEmpty.value = cfg.selectedPrinterName || 'QOA_Printer';
+            optEmpty.textContent = (cfg.selectedPrinterName || 'QOA_Printer') + ' (Designated Server Virtual Queue)';
+            optEmpty.selected = true;
+            select.appendChild(optEmpty);
+          } else {
+            var hasSelected = false;
+            for (var i = 0; i < printers.length; i++) {
+              var sp = printers[i];
+              var pName = sp.Name || sp.name || '';
+              if (!pName) continue;
+              var pDriver = sp.DriverName || sp.driverName || 'Driver';
+              var pShared = sp.Shared !== undefined ? sp.Shared : (sp.shared !== undefined ? sp.shared : false);
+              var pShareName = sp.ShareName || sp.shareName || pName;
+              var opt = document.createElement('option');
+              opt.value = pName;
+              var details = pName + ' [' + pDriver + ']' + (pShared ? ' (Shared: \\\\' + (cfg.serverHost || 'SERVER') + '\\' + pShareName + ')' : '');
+              opt.textContent = details;
+              if (pName.toLowerCase() === (cfg.selectedPrinterName || '').toLowerCase()) {
+                opt.selected = true;
+                hasSelected = true;
+              }
+              select.appendChild(opt);
+            }
+            if (!hasSelected && cfg.selectedPrinterName) {
+              var optFallback = document.createElement('option');
+              optFallback.value = cfg.selectedPrinterName;
+              optFallback.textContent = cfg.selectedPrinterName + ' (Active Virtual Queue)';
+              optFallback.selected = true;
+              select.insertBefore(optFallback, select.firstChild);
+            }
+          }
+        }
+      })
+      .catch(function (err) {
+        console.warn('Could not load virtual queue config:', err);
+        if (select && select.options.length <= 1) {
+          select.innerHTML = '<option value="QOA_Printer" selected>QOA_Printer (Designated Virtual Queue)</option>';
+        }
+      });
+  };
+
+  window.refreshVirtualQueuePrinters = function () {
+    var select = document.getElementById('selectServerVirtualPrinter');
+    if (select) {
+      select.innerHTML = '<option value="">Scanning installed Windows printers...</option>';
+    }
+    showToast('Scanning server Windows printers via PowerShell...', 'info');
+    fetch('/api/admin/virtual-queue/installed-printers?refresh=true')
+      .then(function () {
+        window.loadVirtualQueueConfig();
+        showToast('Server printer list updated!', 'success');
+      })
+      .catch(function (err) {
+        window.loadVirtualQueueConfig();
+      });
+  };
+
+  window.handleSaveVirtualQueuePrinter = function () {
+    var select = document.getElementById('selectServerVirtualPrinter');
+    if (!select || !select.value) {
+      showToast('Please select a printer from the list.', 'error');
+      return;
+    }
+    var chosen = select.value;
+    fetch('/api/admin/virtual-queue/select', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ printerName: chosen })
+    })
+    .then(function (res) { return res.json(); })
+    .then(function (data) {
+      if (data.success) {
+        showToast(data.message || 'Server Virtual Queue updated successfully!', 'success');
+        window.loadVirtualQueueConfig();
+      } else {
+        showToast('Error: ' + (data.error || data.message), 'error');
+      }
+    })
+    .catch(function (err) {
+      showToast('Failed to update virtual queue: ' + err.message, 'error');
+    });
+  };
+
+  window.toggleLivePrintingMode = function () {
+    fetch('/api/admin/virtual-queue/toggle-live-mode', { method: 'POST' })
+      .then(function (res) { return res.json(); })
+      .then(function (data) {
+        showToast(data.message, data.livePrintingEnabled ? 'success' : 'info');
+        window.loadVirtualQueueConfig();
+      })
+      .catch(function (err) {
+        showToast('Failed to toggle print mode: ' + err.message, 'error');
+      });
   };
 
 })();

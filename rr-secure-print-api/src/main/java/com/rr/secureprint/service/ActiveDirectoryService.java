@@ -1,6 +1,9 @@
 package com.rr.secureprint.service;
 
+import com.rr.secureprint.entity.JobStatus;
+import com.rr.secureprint.entity.PrintJob;
 import com.rr.secureprint.entity.UserEntity;
+import com.rr.secureprint.repository.PrintJobRepository;
 import com.rr.secureprint.repository.UserRepository;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -10,6 +13,7 @@ import javax.naming.Context;
 import javax.naming.NamingEnumeration;
 import javax.naming.directory.*;
 import java.util.Hashtable;
+import java.util.List;
 import java.util.Optional;
 import java.util.logging.Logger;
 
@@ -36,10 +40,12 @@ public class ActiveDirectoryService {
 
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
+    private final PrintJobRepository printJobRepository;
 
-    public ActiveDirectoryService(UserRepository userRepository, PasswordEncoder passwordEncoder) {
+    public ActiveDirectoryService(UserRepository userRepository, PasswordEncoder passwordEncoder, PrintJobRepository printJobRepository) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
+        this.printJobRepository = printJobRepository;
     }
 
     /**
@@ -65,10 +71,36 @@ public class ActiveDirectoryService {
             return Optional.empty();
         }
         String cleanPin = pin.trim();
-        return userRepository.findAll().stream()
+        List<UserEntity> matchingUsers = userRepository.findAll().stream()
                 .filter(UserEntity::isActive)
                 .filter(u -> u.getPinHash() != null && (cleanPin.equals(u.getPinHash()) || passwordEncoder.matches(cleanPin, u.getPinHash())))
-                .findFirst();
+                .toList();
+
+        if (matchingUsers.isEmpty()) {
+            return Optional.empty();
+        }
+        if (matchingUsers.size() == 1) {
+            return Optional.of(matchingUsers.getFirst());
+        }
+
+        try {
+            List<PrintJob> heldJobs = printJobRepository.findByStatus(JobStatus.HELD);
+            for (UserEntity candidate : matchingUsers) {
+                boolean hasHeldJobs = heldJobs.stream().anyMatch(j ->
+                        (j.getUserSid() != null && j.getUserSid().equalsIgnoreCase(candidate.getUserSid())) ||
+                        (j.getUsername() != null && j.getUsername().equalsIgnoreCase(candidate.getUsername())) ||
+                        (j.getUser() != null && j.getUser().getId().equals(candidate.getId()))
+                );
+                if (hasHeldJobs) {
+                    LOGGER.info("[PIN AUTH] Multiple matching users for PIN " + cleanPin + ". Prioritized candidate '" + candidate.getUsername() + "' with held jobs.");
+                    return Optional.of(candidate);
+                }
+            }
+        } catch (Exception e) {
+            LOGGER.warning("[PIN AUTH] Could not query held jobs during PIN disambiguation: " + e.getMessage());
+        }
+
+        return Optional.of(matchingUsers.getFirst());
     }
 
     /**

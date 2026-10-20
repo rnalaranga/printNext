@@ -56,6 +56,9 @@ public class PrinterEntity {
     @Column(name = "ewb_configured_at")
     private Instant ewbConfiguredAt;
 
+    @Column(name = "is_default_hold_queue", nullable = false)
+    private boolean isDefaultHoldQueue = false;
+
     @Column(name = "created_at")
     private Instant createdAt = Instant.now();
 
@@ -75,6 +78,7 @@ public class PrinterEntity {
         this.adminUsername = "admin";
         this.adminPassword = "123456";
         this.ewbConfigured = false;
+        this.isDefaultHoldQueue = false;
         this.createdAt = Instant.now();
     }
 
@@ -125,6 +129,9 @@ public class PrinterEntity {
 
     public Instant getEwbConfiguredAt() { return ewbConfiguredAt; }
     public void setEwbConfiguredAt(Instant ewbConfiguredAt) { this.ewbConfiguredAt = ewbConfiguredAt; }
+
+    public boolean isDefaultHoldQueue() { return isDefaultHoldQueue; }
+    public void setDefaultHoldQueue(boolean defaultHoldQueue) { isDefaultHoldQueue = defaultHoldQueue; }
 
     public Instant getCreatedAt() { return createdAt; }
     public void setCreatedAt(Instant createdAt) { this.createdAt = createdAt; }

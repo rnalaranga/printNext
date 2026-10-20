@@ -1,56 +1,72 @@
-# RR Secure Print - Windows Spooler Interceptor & Auto-Hold Service
+# RR Secure Print - PaperCut-Style Find-Me Virtual Queue Interceptor Daemon
 param(
-    [string]$PrinterName = "RR Secure Pull Print",
-    [string]$PrinterIp = "192.168.1.8",
+    [string]$PrinterName = "",
     [string]$ApiUrl = "http://localhost:8080/api/spool/ingest",
-    [int]$PollIntervalMs = 600
+    [string]$VirtualQueueApiUrl = "http://localhost:8080/api/admin/virtual-queue",
+    [int]$PollIntervalMs = 500
 )
 
 Write-Host "============================================================" -ForegroundColor Cyan
-Write-Host "  nexPrint - WINDOWS SPOOL INTERCEPTOR DAEMON                " -ForegroundColor Cyan
-Write-Host "  Watching Queue: $PrinterName" -ForegroundColor Yellow
-Write-Host "  Target Device:  $PrinterIp : 9100" -ForegroundColor Yellow
-Write-Host "  Backend API:    $ApiUrl" -ForegroundColor Yellow
+Write-Host "  nexPrint - SERVER VIRTUAL QUEUE INTERCEPTOR DAEMON         " -ForegroundColor Cyan
+Write-Host "  Backend API: $ApiUrl" -ForegroundColor Gray
 Write-Host "============================================================" -ForegroundColor Cyan
 
-# 1. Verify Standard TCP/IP Port exists for physical Toshiba MFP
-$portName = "IP_$PrinterIp"
-$port = Get-PrinterPort -Name $portName -ErrorAction SilentlyContinue
-if (-not $port) {
-    Write-Host "[SETUP] Creating Standard TCP/IP Port '$portName' ($PrinterIp:9100)..." -ForegroundColor Yellow
-    Add-PrinterPort -Name $portName -PrinterHostAddress $PrinterIp -PortNumber 9100 -ErrorAction SilentlyContinue
+# 1. Resolve which printer on the server acts as the Virtual Queue
+if (-not $PrinterName) {
+    try {
+        $vq = Invoke-RestMethod -Uri $VirtualQueueApiUrl -Method Get -ErrorAction Stop
+        if ($vq.selectedPrinterName) {
+            $PrinterName = $vq.selectedPrinterName
+            Write-Host "[API CONFIG] Loaded designated Virtual Queue: '$PrinterName'" -ForegroundColor Green
+        }
+    } catch {
+        Write-Host "[INFO] API not reachable yet. Checking installed Windows printers..." -ForegroundColor Gray
+    }
 }
 
-# 2. Verify / Configure Virtual Queue
+if (-not $PrinterName) {
+    # Check if QOA_Printer is installed on this Windows server
+    if (Get-Printer -Name "QOA_Printer" -ErrorAction SilentlyContinue) {
+        $PrinterName = "QOA_Printer"
+    } else {
+        $PrinterName = "RR Secure Print"
+    }
+}
+
+Write-Host "  Target Virtual Queue: $PrinterName" -ForegroundColor Yellow
+
+# 2. Check and connect to the Virtual Printer on Windows
 $printer = Get-Printer -Name $PrinterName -ErrorAction SilentlyContinue
 if (-not $printer) {
-    Write-Host "[SETUP] Creating Virtual Queue '$PrinterName'..." -ForegroundColor Yellow
-    Add-Printer -Name $PrinterName -DriverName "TOSHIBA Universal Printer 2" -PortName $portName
+    Write-Host "[SETUP] Server printer '$PrinterName' not found! Creating Virtual Queue..." -ForegroundColor Yellow
+    $driver = Get-PrinterDriver -Name "TOSHIBA Universal Printer 2" -ErrorAction SilentlyContinue
+    $driverName = if ($driver) { "TOSHIBA Universal Printer 2" } else { "Generic / Text Only" }
+    Add-Printer -Name $PrinterName -DriverName $driverName -PortName "PORTPROMPT:"
     Set-Printer -Name $PrinterName -KeepPrintedJobs $false
-    Write-Host "[OK] Virtual Queue created with Toshiba Universal Driver." -ForegroundColor Green
+    $printer = Get-Printer -Name $PrinterName
+    Write-Host "[OK] Created '$PrinterName' (Driver: $driverName)." -ForegroundColor Green
 } else {
-    Set-Printer -Name $PrinterName -PortName $portName -KeepPrintedJobs $false -ErrorAction SilentlyContinue
-    Write-Host "[OK] Connected to '$PrinterName' (Driver: $($printer.DriverName), Port: $portName)." -ForegroundColor Green
+    Write-Host "[OK] Connected to '$PrinterName' (Driver: $($printer.DriverName), Port: $($printer.PortName), Shared: $($printer.Shared))." -ForegroundColor Green
 }
 
-# 3. Ensure Queue is Paused on startup for pull-print quarantine
+# 3. Ensure Queue is Paused for secure pull-print quarantine
 $cimPrinter = Get-CimInstance -ClassName Win32_Printer -Filter "Name='$PrinterName'"
 if ($cimPrinter) {
     Invoke-CimMethod -InputObject $cimPrinter -MethodName Pause | Out-Null
     Write-Host "[OK] Queue '$PrinterName' is PAUSED (Secure Quarantine Active)." -ForegroundColor Green
 }
 
-# 4. Set as default printer for easy Ctrl+P
-try {
-    Set-ItemProperty -Path "HKCU:\Software\Microsoft\Windows NT\CurrentVersion\Windows" -Name "LegacyDefaultPrinterMode" -Value 1 -Force -ErrorAction SilentlyContinue
-    rundll32 printui.dll,PrintUIEntry /y /n "$PrinterName"
-    Write-Host "[OK] Set '$PrinterName' as Windows Default Printer." -ForegroundColor Green
-} catch {
-    Write-Host "[WARN] Could not set default printer: $_" -ForegroundColor Gray
+# 4. Display Network Sharing Path
+$serverHost = $env:COMPUTERNAME
+if ($printer.Shared -and $printer.ShareName) {
+    Write-Host "[OK] Network Share: \\$serverHost\$($printer.ShareName)" -ForegroundColor Green
+} else {
+    Write-Host "[INFO] Local Queue (Enable sharing in Windows or Admin Console to share across LAN)." -ForegroundColor Gray
 }
 
-Write-Host "`n[STATUS] Active and listening for Windows print jobs (Ctrl + P)..." -ForegroundColor Green
-Write-Host "Any document printed to '$PrinterName' will be held securely until released at the touchscreen.`n" -ForegroundColor Gray
+Write-Host "`n[STATUS] Active and listening for print jobs sent to '$PrinterName'..." -ForegroundColor Green
+Write-Host "All jobs printed to '$PrinterName' will be quarantined into the Virtual Pool." -ForegroundColor White
+Write-Host "Users can walk up to ANY physical Toshiba MFP, enter PIN, and release!`n" -ForegroundColor Yellow
 
 $processedJobs = @{}
 
@@ -58,7 +74,6 @@ while ($true) {
     try {
         $jobs = Get-PrintJob -PrinterName $PrinterName -ErrorAction SilentlyContinue
         foreach ($job in $jobs) {
-            # Skip jobs that are already being processed or already printed
             if ($job.JobStatus -eq "Printed" -or $job.JobStatus -eq "Deleting") {
                 continue
             }
@@ -70,16 +85,14 @@ while ($true) {
 
             # Immediately suspend the individual job so it cannot despool prematurely
             Suspend-PrintJob -PrinterName $PrinterName -ID $job.Id -ErrorAction SilentlyContinue
-
             $processedJobs[$jobKey] = [DateTime]::UtcNow
 
             Write-Host "`n------------------------------------------------------------" -ForegroundColor Cyan
-            Write-Host "[PRINT CAPTURED] Windows Spooler Job #$($job.Id)" -ForegroundColor Yellow
+            Write-Host "[VIRTUAL PRINT CAPTURED] Job #$($job.Id) on '$PrinterName'" -ForegroundColor Yellow
             Write-Host "  Document:  $($job.DocumentName)" -ForegroundColor White
             Write-Host "  User:      $($job.UserName)" -ForegroundColor White
             Write-Host "  Pages:     $([Math]::Max(1, $job.TotalPages))" -ForegroundColor White
-            Write-Host "  Driver:    $($printer.DriverName)" -ForegroundColor White
-            Write-Host "  Spool:     $($job.Size) bytes" -ForegroundColor White
+            Write-Host "  Size:      $($job.Size) bytes" -ForegroundColor White
 
             # Resolve Windows User SID
             $userSid = "S-1-5-21-1966046810-3588821400-173210280-1001"
@@ -87,10 +100,33 @@ while ($true) {
                 $account = New-Object System.Security.Principal.NTAccount($job.UserName)
                 $userSid = $account.Translate([System.Security.Principal.SecurityIdentifier]).Value
             } catch {
-                Write-Host "  [WARN] Using detected Windows SID mapping: $userSid" -ForegroundColor Gray
+                Write-Host "  [WARN] Using default Windows SID: $userSid" -ForegroundColor Gray
             }
 
-            # Ingest payload with windowsJobId
+            # Capture authentic .SPL raw spool data from Windows Spool directory
+            $spoolBase64 = $null
+            $splPatterns = @(
+                "C:\Windows\System32\spool\PRINTERS\{0:D5}.SPL" -f [int]$job.Id,
+                "C:\Windows\System32\spool\PRINTERS\FP{0:D5}.SPL" -f [int]$job.Id,
+                "C:\Windows\System32\spool\PRINTERS\*$($job.Id)*.SPL"
+            )
+            foreach ($pattern in $splPatterns) {
+                $candidates = Get-ChildItem -Path $pattern -ErrorAction SilentlyContinue
+                if ($candidates) {
+                    try {
+                        $bytes = [System.IO.File]::ReadAllBytes($candidates[0].FullName)
+                        if ($bytes.Length -gt 0) {
+                            $spoolBase64 = [Convert]::ToBase64String($bytes)
+                            Write-Host "  [AUTHENTIC DRIVER DATA] Captured $([Math]::Round($bytes.Length / 1024, 1)) KB raw driver spool." -ForegroundColor Green
+                            break
+                        }
+                    } catch {
+                        # Retry
+                    }
+                }
+            }
+
+            # Ingest payload into backend
             $body = @{
                 username = $job.UserName
                 userSid = $userSid
@@ -101,20 +137,23 @@ while ($true) {
                 color = $false
                 duplex = $true
                 windowsJobId = [int]$job.Id
+                spoolBase64 = $spoolBase64
             } | ConvertTo-Json
 
             try {
                 $response = Invoke-RestMethod -Uri $ApiUrl -Method Post -Body $body -ContentType "application/json"
-                Write-Host "  [HELD] Quarantined in RR Secure Print: Job ID $($response.id)" -ForegroundColor Green
-                Write-Host "  [TOUCHSCREEN] Log in at http://192.168.1.6:8080/ or MFP screen to release" -ForegroundColor Cyan
+                Write-Host "  [HELD IN VIRTUAL POOL] Job ID $($response.id) is now waiting in user's queue." -ForegroundColor Green
+                Write-Host "  [ACTION REQUIRED] Walk up to ANY physical Toshiba MFP and enter PIN to release." -ForegroundColor Yellow
+
+                # Purge from Windows spooler queue so Windows stays clean
+                Remove-PrintJob -PrinterName $PrinterName -ID $job.Id -ErrorAction SilentlyContinue
             } catch {
                 Write-Host "  [ERROR] Ingestion to API failed: $_" -ForegroundColor Red
-                # Remove from tracking so we can retry on next iteration
                 $processedJobs.Remove($jobKey)
             }
         }
 
-        # Clean tracked jobs that no longer exist in Windows Spooler (released or cancelled)
+        # Clean tracked jobs that no longer exist
         if ($jobs) {
             $activeJobIds = @($jobs | ForEach-Object { "$($_.Id)" })
             $trackedKeys = @($processedJobs.Keys)

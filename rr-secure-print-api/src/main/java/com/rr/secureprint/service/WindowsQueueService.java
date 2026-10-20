@@ -10,13 +10,28 @@ import java.util.logging.Logger;
 /**
  * Service to manage Windows Spooler queue hold and release operations.
  * Holds real print jobs in the Windows print queue and flushes them to the physical
- * Toshiba e-STUDIO 3518A upon authenticated release at the MFP touchscreen.
+ * Toshiba MFP upon authenticated release at the MFP touchscreen.
  */
 @Service
 public class WindowsQueueService {
 
     private static final Logger LOGGER = Logger.getLogger(WindowsQueueService.class.getName());
-    private static final String QUEUE_NAME = "RR Secure Pull Print";
+
+    private final VirtualQueueConfigService virtualQueueConfigService;
+
+    public WindowsQueueService() {
+        this.virtualQueueConfigService = null;
+    }
+
+    public WindowsQueueService(VirtualQueueConfigService virtualQueueConfigService) {
+        this.virtualQueueConfigService = virtualQueueConfigService;
+    }
+
+    private String getQueueName() {
+        return (virtualQueueConfigService != null && virtualQueueConfigService.getSelectedPrinterName() != null)
+                ? virtualQueueConfigService.getSelectedPrinterName()
+                : "QOA_Printer";
+    }
 
     /**
      * Releases a held Windows print job by resuming the printer queue and allowing
@@ -28,7 +43,8 @@ public class WindowsQueueService {
             return false;
         }
 
-        LOGGER.info("[WINDOWS SPOOL RELEASE] Releasing Job #" + windowsJobId + " on queue '" + QUEUE_NAME + "'...");
+        String queue = getQueueName();
+        LOGGER.info("[WINDOWS SPOOL RELEASE] Releasing Job #" + windowsJobId + " on queue '" + queue + "'...");
 
         try {
             File scriptFile = new File("scripts/release-job.ps1");
@@ -38,7 +54,7 @@ public class WindowsQueueService {
                         "powershell", "-NoProfile", "-ExecutionPolicy", "Bypass",
                         "-File", scriptFile.getAbsolutePath(),
                         "-JobId", String.valueOf(windowsJobId),
-                        "-PrinterName", QUEUE_NAME
+                        "-PrinterName", queue
                 );
             } else {
                 // Fallback to inline command if script file is not found
@@ -49,7 +65,7 @@ public class WindowsQueueService {
                         "Start-Sleep -Seconds 3; " +
                         "Invoke-CimMethod -InputObject $p -MethodName Pause | Out-Null; " +
                         "Remove-PrintJob -PrinterName '%s' -ID %d -ErrorAction SilentlyContinue",
-                        QUEUE_NAME, windowsJobId, QUEUE_NAME, QUEUE_NAME, windowsJobId
+                        queue, windowsJobId, queue, queue, windowsJobId
                 );
                 pb = new ProcessBuilder("powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", cmd);
             }
@@ -78,7 +94,8 @@ public class WindowsQueueService {
      */
     public boolean cancelWindowsJob(Integer windowsJobId) {
         if (windowsJobId == null) return true;
-        LOGGER.info("[WINDOWS SPOOL CANCEL] Purging Job #" + windowsJobId + " from queue '" + QUEUE_NAME + "'...");
+        String queue = getQueueName();
+        LOGGER.info("[WINDOWS SPOOL CANCEL] Purging Job #" + windowsJobId + " from queue '" + queue + "'...");
 
         try {
             File scriptFile = new File("scripts/cancel-job.ps1");
@@ -88,12 +105,12 @@ public class WindowsQueueService {
                         "powershell", "-NoProfile", "-ExecutionPolicy", "Bypass",
                         "-File", scriptFile.getAbsolutePath(),
                         "-JobId", String.valueOf(windowsJobId),
-                        "-PrinterName", QUEUE_NAME
+                        "-PrinterName", queue
                 );
             } else {
                 String cmd = String.format(
                         "Remove-PrintJob -PrinterName '%s' -ID %d -ErrorAction SilentlyContinue",
-                        QUEUE_NAME, windowsJobId
+                        queue, windowsJobId
                 );
                 pb = new ProcessBuilder("powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", cmd);
             }

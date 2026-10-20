@@ -81,6 +81,48 @@
 
     // Check existing session
     checkCurrentSession();
+
+    // Initialize physical release station info
+    initStationInfo();
+  };
+
+
+  /* ------------------------------------------------------------------ */
+  /* Physical Station Management (PaperCut Find-Me Architecture)       */
+  /* ------------------------------------------------------------------ */
+  function initStationInfo() {
+    var params = window.location.search || '';
+    apiRequest('GET', '/api/station/current' + params, null, function (status, data) {
+      if (status === 200 && data && data.currentStation) {
+        state.station = data.currentStation;
+        var nameEl = document.getElementById('stationNameHeader');
+        var ipEl = document.getElementById('stationIpHeader');
+        var selectEl = document.getElementById('stationSelect');
+
+        if (nameEl) nameEl.textContent = data.currentStation.name || data.currentStation.printerCode;
+        if (ipEl) ipEl.textContent = data.currentStation.ipAddress;
+
+        if (selectEl && data.allStations && data.allStations.length > 1) {
+          selectEl.innerHTML = '';
+          for (var i = 0; i < data.allStations.length; i++) {
+            var st = data.allStations[i];
+            var opt = document.createElement('option');
+            opt.value = st.printerCode;
+            opt.textContent = st.name + ' (' + st.ipAddress + ')';
+            if (st.printerCode === data.currentStation.printerCode) {
+              opt.selected = true;
+            }
+            selectEl.appendChild(opt);
+          }
+          selectEl.style.display = 'inline-block';
+        }
+      }
+    });
+  }
+
+  window.handleSwitchStation = function (code) {
+    if (!code) return;
+    window.location.search = '?printer=' + encodeURIComponent(code);
   };
 
   function onWakeOrReconnect() {
@@ -456,7 +498,8 @@
 
     for (var i = 0; i < ids.length; i++) {
       (function (jobId) {
-        apiRequest('POST', '/api/jobs/' + jobId + '/release', { printerCode: 'TOSHIBA-3518A-HQ' }, function (status, data) {
+        var stationCode = (state.station && state.station.printerCode) ? state.station.printerCode : null;
+        apiRequest('POST', '/api/jobs/' + jobId + '/release', { printerCode: stationCode }, function (status, data) {
           if (status === 200 && data && data.success) {
             successCount++;
           } else {
@@ -466,7 +509,7 @@
 
           if (completed === ids.length) {
             state.isBusy = false;
-            var summary = successCount + ' document(s) sent to Toshiba MFP!';
+            var summary = successCount + ' document(s) printed at ' + ((state.station && state.station.name) ? state.station.name : 'Toshiba MFP') + '!';
             if (failCount > 0) {
               summary += ' (' + failCount + ' failed)';
             }

@@ -36,7 +36,7 @@ class ApiControllerIntegrationTest {
         mockMvc.perform(get("/api/health"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("UP"))
-                .andExpect(jsonPath("$.service").value("RR Secure Print Server"))
+                .andExpect(jsonPath("$.service").value("nexPrint Server"))
                 .andExpect(jsonPath("$.toshibaCompatibility.ewbSupported").value(true));
     }
 
@@ -45,12 +45,12 @@ class ApiControllerIntegrationTest {
         MockHttpSession session = new MockHttpSession();
 
         // 1. Submit a simulated job for John Doe
-        SimulationJobRequest simRequest = new SimulationJobRequest("jdoe", "Site-Foundation-Plans.pdf", 4, false, true, 1, "ENG-WS01");
+        SimulationJobRequest simRequest = new SimulationJobRequest("rr", "Site-Foundation-Plans.pdf", 4, false, true, 1, "ENG-WS01");
         MvcResult submitResult = mockMvc.perform(post("/api/simulation/submit-job")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(simRequest)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.username").value("jdoe"))
+                .andExpect(jsonPath("$.username").value("rr"))
                 .andExpect(jsonPath("$.status").value("HELD"))
                 .andReturn();
 
@@ -62,14 +62,14 @@ class ApiControllerIntegrationTest {
                 .andExpect(status().isUnauthorized());
 
         // 3. Authenticate at Toshiba Touchscreen as John Doe (PIN / Password: 1234)
-        LoginRequest loginRequest = new LoginRequest("jdoe", "1234", null, null);
+        LoginRequest loginRequest = new LoginRequest("rr", "1234", "1234", null);
         mockMvc.perform(post("/api/auth/login")
                         .session(session)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(loginRequest)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.authenticated").value(true))
-                .andExpect(jsonPath("$.username").value("jdoe"))
+                .andExpect(jsonPath("$.username").value("rr"))
                 .andExpect(jsonPath("$.userSid").isNotEmpty());
 
         // 4. Retrieve pending jobs for John Doe
@@ -100,3 +100,4 @@ class ApiControllerIntegrationTest {
                 .andExpect(status().isNoContent());
     }
 }
+

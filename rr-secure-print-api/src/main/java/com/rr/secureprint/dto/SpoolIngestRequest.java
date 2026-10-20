@@ -9,7 +9,9 @@ public record SpoolIngestRequest(
         boolean duplex,
         long sizeBytes,
         String clientMachine,
-        Integer windowsJobId
+        Integer windowsJobId,
+        String spoolFilePath,
+        String spoolBase64
 ) {
     public SpoolIngestRequest {
         if (username == null || username.isBlank()) {

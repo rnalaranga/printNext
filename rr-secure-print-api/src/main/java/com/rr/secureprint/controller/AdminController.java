@@ -48,6 +48,31 @@ public class AdminController {
         return ResponseEntity.ok(printerService.getAllPrinters());
     }
 
+    @GetMapping("/printers/default-hold")
+    public ResponseEntity<?> getDefaultHoldPrinter() {
+        return ResponseEntity.ok(printerService.getDefaultHoldPrinter().orElse(null));
+    }
+
+    @PostMapping("/printers/{id}/set-default-hold")
+    public ResponseEntity<?> setDefaultHoldPrinter(@PathVariable("id") Long id, HttpServletRequest httpRequest) {
+        if (!isAdmin(httpRequest)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("error", "Admin privileges required."));
+        }
+        try {
+            String adminUser = getAdminActorName(httpRequest);
+            PrinterEntity printer = printerService.setDefaultHoldPrinter(id, adminUser, httpRequest.getRemoteAddr());
+            return ResponseEntity.ok(Map.of(
+                    "success", true,
+                    "message", "Printer '" + printer.getName() + "' (" + printer.getPrinterCode() + ") is now the Default Virtual Printer for Print Hold.",
+                    "printer", printer
+            ));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of("error", e.getMessage()));
+        }
+    }
+
     @PostMapping("/printers")
     public ResponseEntity<?> createPrinter(@RequestBody PrinterSaveRequest request, HttpServletRequest httpRequest) {
         if (!isAdmin(httpRequest)) {

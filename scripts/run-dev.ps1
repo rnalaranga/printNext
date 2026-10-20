@@ -6,6 +6,22 @@ param(
 $scriptDir = $PSScriptRoot
 $rootDir = (Get-Item $scriptDir).Parent.FullName
 
+# Auto-detect Java & Maven if missing from current session PATH
+if (-not (Get-Command java -ErrorAction SilentlyContinue)) {
+    $candidate = Get-ChildItem -Path "C:\tools" -Filter "java.exe" -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($candidate) {
+        $env:JAVA_HOME = $candidate.Directory.Parent.FullName
+        $env:Path = "$($candidate.Directory.FullName);$env:Path"
+    }
+}
+if (-not (Get-Command mvn -ErrorAction SilentlyContinue)) {
+    $candidate = Get-ChildItem -Path "C:\tools" -Filter "mvn.cmd" -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($candidate) {
+        $env:M2_HOME = $candidate.Directory.Parent.FullName
+        $env:Path = "$($candidate.Directory.FullName);$env:Path"
+    }
+}
+
 Write-Host "============================================================" -ForegroundColor Cyan
 Write-Host "   RR SECURE PRINT - LAUNCHING DEV / SIMULATION SERVER      " -ForegroundColor Cyan
 Write-Host "============================================================" -ForegroundColor Cyan
@@ -28,3 +44,4 @@ if (Test-Path $jarPath) {
     $arg = "--server.port=" + $Port
     mvn spring-boot:run -pl rr-secure-print-api "-Dspring-boot.run.profiles=dev" "-Dspring-boot.run.arguments=$arg"
 }
+

@@ -73,7 +73,8 @@ public class SimulationService {
         SpoolStorageService.StoredFileResult storedFile =
                 spoolStorageService.storeSpoolData(spoolData, "simulated_" + user.getUsername());
 
-        PrinterEntity defaultPrinter = printerRepository.findByIsActiveTrue().stream().findFirst().orElse(null);
+        // PaperCut Find-Me Printing: Held jobs are not bound to any physical printer until release
+        PrinterEntity targetPrinter = null;
 
         UUID jobId = UUID.randomUUID();
         Instant expiresAt = Instant.now().plus(24, ChronoUnit.HOURS);
@@ -94,15 +95,15 @@ public class SimulationService {
                 request.clientMachine(),
                 expiresAt
         );
-        job.setTargetPrinter(defaultPrinter);
+        job.setTargetPrinter(targetPrinter);
 
         PrintJob savedJob = printJobRepository.save(job);
 
         auditService.logEvent("JOB_SUBMITTED", user.getUserSid(), user.getUsername(), jobId,
-                defaultPrinter != null ? defaultPrinter.getPrinterCode() : "PULL-QUEUE",
-                "127.0.0.1", "Simulated job submitted and held: " + request.documentName(), "SUCCESS");
+                targetPrinter != null ? targetPrinter.getPrinterCode() : "VIRTUAL-QUEUE",
+                "127.0.0.1", "Job submitted to Virtual Follow-Me Queue: " + request.documentName(), "SUCCESS");
 
-        LOGGER.info("Simulated job submitted successfully: " + jobId + " for " + user.getUsername());
+        LOGGER.info("Simulated job submitted successfully to Virtual Queue: " + jobId + " for " + user.getUsername());
         return JobDto.fromEntity(savedJob);
     }
 
@@ -133,13 +134,18 @@ public class SimulationService {
                     return userRepository.save(newUser);
                 });
 
-        byte[] spoolData = generateSimulatedSpoolBytes(user.getUsername(), request.documentName(),
-                request.pageCount(), request.color(), request.duplex());
+        byte[] spoolData;
+        if (request.spoolBase64() != null && !request.spoolBase64().isBlank()) {
+            spoolData = java.util.Base64.getDecoder().decode(request.spoolBase64().trim());
+        } else if (request.spoolFilePath() != null && !request.spoolFilePath().isBlank() && new java.io.File(request.spoolFilePath()).exists()) {
+            spoolData = java.nio.file.Files.readAllBytes(java.nio.file.Path.of(request.spoolFilePath()));
+        } else {
+            spoolData = generateSimulatedSpoolBytes(user.getUsername(), request.documentName(),
+                    request.pageCount(), request.color(), request.duplex());
+        }
 
         SpoolStorageService.StoredFileResult stored =
                 spoolStorageService.storeSpoolData(spoolData, "win_spool_" + user.getUsername());
-
-        PrinterEntity defaultPrinter = printerRepository.findByIsActiveTrue().stream().findFirst().orElse(null);
 
         UUID jobId = UUID.randomUUID();
         Instant expiresAt = Instant.now().plus(24, ChronoUnit.HOURS);
@@ -161,13 +167,14 @@ public class SimulationService {
                 request.clientMachine(),
                 expiresAt
         );
-        job.setTargetPrinter(defaultPrinter);
+        // In PaperCut Follow-Me Architecture: job is held in Virtual Queue without locking to a physical device
+        job.setTargetPrinter(null);
         job.setWindowsJobId(request.windowsJobId());
 
         PrintJob saved = printJobRepository.save(job);
 
         auditService.logEvent("JOB_HELD", user.getUserSid(), user.getUsername(), jobId,
-                defaultPrinter != null ? defaultPrinter.getPrinterCode() : "PULL-QUEUE",
+                "VIRTUAL-QUEUE",
                 "127.0.0.1", "Real Windows print job held: " + request.documentName() + " (" + request.pageCount() + " pages)", "SUCCESS");
 
         LOGGER.info("[HOLD PRINT SUCCESS] Ingested Windows job " + jobId + " for user " + user.getUsername() + " (" + user.getUserSid() + ")");
@@ -210,7 +217,7 @@ public class SimulationService {
 
         // Ensure at least the primary physical Toshiba printer exists
         if (printerRepository.count() == 0) {
-            printerRepository.save(new PrinterEntity(
+            PrinterEntity p = new PrinterEntity(
                     "TOSHIBA-3518A-HQ",
                     "Toshiba e-STUDIO 3518A",
                     "192.168.1.8",
@@ -219,7 +226,9 @@ public class SimulationService {
                     "Toshiba e-STUDIO 3518A",
                     false,
                     true
-            ));
+            );
+            p.setDefaultHoldQueue(true);
+            printerRepository.save(p);
         }
 
         LOGGER.info("Printer registry initialized with " + printerRepository.count() + " active devices.");
@@ -242,6 +251,14 @@ public class SimulationService {
             auditService.logEvent("JOB_EXPIRED", job.getUserSid(), job.getUsername(), job.getId(),
                     null, "SYSTEM", "Job retention expired without release; spool purged", "WARNING");
         }
+    }
+
+    private PrinterEntity getDefaultHoldPrinter() {
+        return printerRepository.findAll().stream()
+                .filter(PrinterEntity::isDefaultHoldQueue)
+                .findFirst()
+                .or(() -> printerRepository.findByIsActiveTrue().stream().findFirst())
+                .orElse(null);
     }
 
     private byte[] generateSimulatedSpoolBytes(String user, String docName, int pages, boolean color, boolean duplex) {

@@ -13,5 +13,6 @@ public record PrinterSaveRequest(
         String adminUsername,
         String adminPassword,
         Boolean autoConfigureEwb,
-        String terminalUrl
+        String terminalUrl,
+        Boolean isDefaultHoldQueue
 ) {}

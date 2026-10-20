@@ -33,6 +33,8 @@ public class ToshibaEwbService {
     private static final Pattern AUTOSCREEN_PATTERN = Pattern.compile("<AutoScreenChange>(.*?)</AutoScreenChange>", Pattern.CASE_INSENSITIVE);
     private static final Pattern OP_STATUS_PATTERN = Pattern.compile("<statusOfOperation>(.*?)</statusOfOperation>", Pattern.CASE_INSENSITIVE);
 
+    private record TopAccessSession(HttpClient client, CookieManager cookieManager, String sessionCookie, String clientIp) {}
+
     /**
      * Authenticates as admin and pushes EWB Home Page & Auto Screen Change configuration to the Toshiba MFP.
      */
@@ -47,89 +49,9 @@ public class ToshibaEwbService {
         }
 
         try {
-            CookieManager cookieManager = new CookieManager();
-            cookieManager.setCookiePolicy(CookiePolicy.ACCEPT_ALL);
-            HttpClient client = HttpClient.newBuilder()
-                    .cookieHandler(cookieManager)
-                    .connectTimeout(TIMEOUT)
-                    .build();
+            TopAccessSession session = loginToTopAccess(cleanIp, username, password);
 
-            // 1. Initial Handshake to obtain Session cookie
-            String topAccessUrl = "http://" + cleanIp + "/";
-            HttpRequest handshakeReq = HttpRequest.newBuilder()
-                    .uri(URI.create(topAccessUrl))
-                    .timeout(TIMEOUT)
-                    .GET()
-                    .build();
-
-            HttpResponse<String> handshakeResp = client.send(handshakeReq, HttpResponse.BodyHandlers.ofString());
-            String sessionCookie = extractSessionCookie(cookieManager);
-            if (sessionCookie == null || sessionCookie.isBlank()) {
-                return new EwbConfigResult(false, "Failed to connect to Toshiba TopAccess at " + cleanIp + " (No session cookie).", null, null, false, Instant.now());
-            }
-
-            String clientIp = sessionCookie.contains(".") ? sessionCookie.substring(0, sessionCookie.indexOf('.')) : "127.0.0.1";
-
-            // 2. Admin Login Request
-            String loginXml = "<DeviceInformationModel>" +
-                    "<SetValue>" +
-                    "<Authentication>" +
-                    "<UserCredential>" +
-                    "<userName>" + escapeXml(username) + "</userName>" +
-                    "<passwd>" + escapeXml(password) + "</passwd>" +
-                    "<ipaddress>" + clientIp + "</ipaddress>" +
-                    "<DepartmentManagement isEnable='false'>" +
-                    "<requireDepartment>false</requireDepartment>" +
-                    "</DepartmentManagement>" +
-                    "<domainName></domainName>" +
-                    "<applicationType>TOP_ACCESS</applicationType>" +
-                    "</UserCredential>" +
-                    "</Authentication>" +
-                    "</SetValue>" +
-                    "<SetValue>" +
-                    "<UserManager>" +
-                    "<View>" +
-                    "<Users>" +
-                    "<Information>" +
-                    "<passwd>" + escapeXml(password) + "</passwd>" +
-                    "</Information>" +
-                    "</Users>" +
-                    "</View>" +
-                    "</UserManager>" +
-                    "</SetValue>" +
-                    "<Command>" +
-                    "<Login>" +
-                    "<commandNode>Authentication/UserCredential</commandNode>" +
-                    "<Params><appName>TOPACCESS</appName></Params>" +
-                    "</Login>" +
-                    "</Command>" +
-                    "</DeviceInformationModel>";
-
-            HttpRequest loginReq = HttpRequest.newBuilder()
-                    .uri(URI.create("http://" + cleanIp + "/contentwebserver"))
-                    .timeout(TIMEOUT)
-                    .header("Content-Type", "text/xml; charset=UTF-8")
-                    .header("csrfpId", sessionCookie)
-                    .header("Referer", "http://" + cleanIp + "/Administration/AdminLogin.html")
-                    .POST(HttpRequest.BodyPublishers.ofString(loginXml))
-                    .build();
-
-            HttpResponse<String> loginResp = client.send(loginReq, HttpResponse.BodyHandlers.ofString());
-            String loginBody = loginResp.body() != null ? loginResp.body() : "";
-
-            if (!loginBody.contains("STATUS_OK")) {
-                String errorMsg = "Toshiba Admin Login failed. Check printer admin credentials.";
-                if (loginBody.contains("STATUS_AUTHENTICATION_FAILED") || loginBody.contains("STATUS_FAILED")) {
-                    errorMsg = "Invalid printer admin username or password.";
-                }
-                return new EwbConfigResult(false, errorMsg, null, null, false, Instant.now());
-            }
-
-            // Updated session cookie after login
-            String authSession = extractSessionCookie(cookieManager);
-            if (authSession == null) authSession = sessionCookie;
-
-            // 3. Set EWB Configuration
+            // Set EWB Configuration
             String serverHost = extractHost(targetUrl);
             String trustedServerXml = !serverHost.isBlank()
                     ? "<TrustedServers><TrustedServer>" + escapeXml(serverHost) + "</TrustedServer></TrustedServers>"
@@ -177,17 +99,17 @@ public class ToshibaEwbService {
                     .uri(URI.create("http://" + cleanIp + "/contentwebserver"))
                     .timeout(TIMEOUT)
                     .header("Content-Type", "text/xml; charset=UTF-8")
-                    .header("csrfpId", authSession)
+                    .header("csrfpId", session.sessionCookie())
                     .header("Referer", "http://" + cleanIp + "/Administration/Setup/Ewb.html")
                     .POST(HttpRequest.BodyPublishers.ofString(setEwbXml))
                     .build();
 
-            HttpResponse<String> setResp = client.send(setReq, HttpResponse.BodyHandlers.ofString());
+            HttpResponse<String> setResp = session.client().send(setReq, HttpResponse.BodyHandlers.ofString());
             String setBody = setResp.body() != null ? setResp.body() : "";
 
             boolean setSuccess = setBody.contains("Normal") || setBody.contains("STATUS_OK");
 
-            // 3b. Commit Controller with DefaultScreen = EWB and MDS Authentication = true (Enforces boot to terminal)
+            // Commit Controller with DefaultScreen = Home and ProgrammableKey #1 = EWB
             String setUiXml = "<DeviceInformationModel>" +
                     "<Command>" +
                     "<Set>" +
@@ -224,22 +146,22 @@ public class ToshibaEwbService {
                         .uri(URI.create("http://" + cleanIp + "/contentwebserver"))
                         .timeout(TIMEOUT)
                         .header("Content-Type", "text/xml; charset=UTF-8")
-                        .header("csrfpId", authSession)
+                        .header("csrfpId", session.sessionCookie())
                         .header("Referer", "http://" + cleanIp + "/Administration/Setup/General.html")
                         .POST(HttpRequest.BodyPublishers.ofString(setUiXml))
                         .build();
-                client.send(setUiReq, HttpResponse.BodyHandlers.ofString());
+                session.client().send(setUiReq, HttpResponse.BodyHandlers.ofString());
             } catch (Exception ex) {
                 log.warn("Could not commit DefaultScreen to EWB on {}: {}", cleanIp, ex.getMessage());
             }
 
-            // 4. Query current EWB configuration to verify
-            EwbConfigResult statusResult = getEwbStatus(cleanIp, client, authSession);
+            // Query current EWB configuration to verify
+            EwbConfigResult statusResult = queryEwbSettings(cleanIp, session.client(), session.sessionCookie());
 
             if (setSuccess) {
                 return new EwbConfigResult(
                         true,
-                        "Successfully configured Toshiba EWB & Default Boot Screen! Terminal URL: " + targetUrl,
+                        "Successfully configured Toshiba EWB! Terminal URL: " + targetUrl,
                         statusResult.printerModel(),
                         targetUrl,
                         true,
@@ -256,6 +178,9 @@ public class ToshibaEwbService {
                 );
             }
 
+        } catch (SecurityException se) {
+            log.warn("Authentication failure configuring Toshiba EWB on {}: {}", cleanIp, se.getMessage());
+            return new EwbConfigResult(false, se.getMessage(), null, null, false, Instant.now());
         } catch (Exception e) {
             log.error("Failed to configure Toshiba EWB on {}: {}", cleanIp, e.getMessage(), e);
             return new EwbConfigResult(false, "Connection error: " + e.getMessage(), null, null, false, Instant.now());
@@ -264,7 +189,6 @@ public class ToshibaEwbService {
 
     /**
      * Resets Toshiba EWB settings back to default (blank) and restores the native Toshiba Home Screen.
-     * Disables MDS External Authentication mode. Optionally triggers a controller reboot.
      */
     public boolean resetEwbAndRestoreDefaultScreen(String printerIp, String adminUsername, String adminPassword, boolean rebootAfterReset) {
         String cleanIp = printerIp != null ? printerIp.trim() : "";
@@ -276,83 +200,9 @@ public class ToshibaEwbService {
         }
 
         try {
-            CookieManager cookieManager = new CookieManager();
-            cookieManager.setCookiePolicy(CookiePolicy.ACCEPT_ALL);
-            HttpClient client = HttpClient.newBuilder()
-                    .cookieHandler(cookieManager)
-                    .connectTimeout(TIMEOUT)
-                    .build();
+            TopAccessSession session = loginToTopAccess(cleanIp, username, password);
 
-            // 1. Initial Handshake to obtain Session cookie
-            HttpRequest handshakeReq = HttpRequest.newBuilder()
-                    .uri(URI.create("http://" + cleanIp + "/"))
-                    .timeout(TIMEOUT)
-                    .GET()
-                    .build();
-
-            client.send(handshakeReq, HttpResponse.BodyHandlers.ofString());
-            String sessionCookie = extractSessionCookie(cookieManager);
-            if (sessionCookie == null || sessionCookie.isBlank()) {
-                log.warn("Cannot reset EWB: Failed to get session cookie from {}", cleanIp);
-                return false;
-            }
-
-            String clientIp = sessionCookie.contains(".") ? sessionCookie.substring(0, sessionCookie.indexOf('.')) : "127.0.0.1";
-
-            // 2. Admin Login Request
-            String loginXml = "<DeviceInformationModel>" +
-                    "<SetValue>" +
-                    "<Authentication>" +
-                    "<UserCredential>" +
-                    "<userName>" + escapeXml(username) + "</userName>" +
-                    "<passwd>" + escapeXml(password) + "</passwd>" +
-                    "<ipaddress>" + clientIp + "</ipaddress>" +
-                    "<DepartmentManagement isEnable='false'>" +
-                    "<requireDepartment>false</requireDepartment>" +
-                    "</DepartmentManagement>" +
-                    "<domainName></domainName>" +
-                    "<applicationType>TOP_ACCESS</applicationType>" +
-                    "</UserCredential>" +
-                    "</Authentication>" +
-                    "</SetValue>" +
-                    "<SetValue>" +
-                    "<UserManager>" +
-                    "<View>" +
-                    "<Users>" +
-                    "<Information>" +
-                    "<passwd>" + escapeXml(password) + "</passwd>" +
-                    "</Information>" +
-                    "</Users>" +
-                    "</View>" +
-                    "</UserManager>" +
-                    "</SetValue>" +
-                    "<Command>" +
-                    "<Login>" +
-                    "<commandNode>Authentication/UserCredential</commandNode>" +
-                    "<Params><appName>TOPACCESS</appName></Params>" +
-                    "</Login>" +
-                    "</Command>" +
-                    "</DeviceInformationModel>";
-
-            HttpRequest loginReq = HttpRequest.newBuilder()
-                    .uri(URI.create("http://" + cleanIp + "/contentwebserver"))
-                    .timeout(TIMEOUT)
-                    .header("Content-Type", "text/xml; charset=UTF-8")
-                    .header("csrfpId", sessionCookie)
-                    .header("Referer", "http://" + cleanIp + "/Administration/AdminLogin.html")
-                    .POST(HttpRequest.BodyPublishers.ofString(loginXml))
-                    .build();
-
-            HttpResponse<String> loginResp = client.send(loginReq, HttpResponse.BodyHandlers.ofString());
-            if (loginResp.body() == null || !loginResp.body().contains("STATUS_OK")) {
-                log.warn("Cannot reset EWB: Admin login failed on {}", cleanIp);
-                return false;
-            }
-
-            String authSession = extractSessionCookie(cookieManager);
-            if (authSession == null) authSession = sessionCookie;
-
-            // 3. Clear EWBSettings (HomePage to about:blank, MDS BootUpURL empty, AutoScreenChange false, clear TrustedServers and URLList)
+            // Clear EWBSettings (HomePage to about:blank, clear TrustedServers and URLList)
             String resetEwbXml = "<DeviceInformationModel>" +
                     "<SetValue>" +
                     "<EWBSettings>" +
@@ -389,14 +239,14 @@ public class ToshibaEwbService {
                     .uri(URI.create("http://" + cleanIp + "/contentwebserver"))
                     .timeout(TIMEOUT)
                     .header("Content-Type", "text/xml; charset=UTF-8")
-                    .header("csrfpId", authSession)
+                    .header("csrfpId", session.sessionCookie())
                     .header("Referer", "http://" + cleanIp + "/Administration/Setup/Ewb.html")
                     .POST(HttpRequest.BodyPublishers.ofString(resetEwbXml))
                     .build();
 
-            client.send(resetEwbReq, HttpResponse.BodyHandlers.ofString());
+            session.client().send(resetEwbReq, HttpResponse.BodyHandlers.ofString());
 
-            // 4. Reset Controller: DefaultScreen back to Home, MDS Authentication to false, clear ProgrammableKey
+            // Reset Controller: DefaultScreen back to Home, MDS Authentication to false, clear ProgrammableKey
             String resetUiXml = "<DeviceInformationModel>" +
                     "<Command>" +
                     "<Set>" +
@@ -432,35 +282,18 @@ public class ToshibaEwbService {
                     .uri(URI.create("http://" + cleanIp + "/contentwebserver"))
                     .timeout(TIMEOUT)
                     .header("Content-Type", "text/xml; charset=UTF-8")
-                    .header("csrfpId", authSession)
+                    .header("csrfpId", session.sessionCookie())
                     .header("Referer", "http://" + cleanIp + "/Administration/Setup/General.html")
                     .POST(HttpRequest.BodyPublishers.ofString(resetUiXml))
                     .build();
 
-            client.send(resetUiReq, HttpResponse.BodyHandlers.ofString());
+            session.client().send(resetUiReq, HttpResponse.BodyHandlers.ofString());
             log.info("Toshiba EWB cleared and DefaultScreen reset to Home on {}", cleanIp);
 
-            // 5. Optional Reboot to immediately reload the native Home screen
+            // Optional Reboot to immediately reload the native Home screen
             if (rebootAfterReset) {
                 try {
-                    String rebootXml = "<DeviceInformationModel>" +
-                            "<Command>" +
-                            "<SetPowerState>" +
-                            "<commandNode>ForcedReboot</commandNode>" +
-                            "</SetPowerState>" +
-                            "</Command>" +
-                            "</DeviceInformationModel>";
-
-                    HttpRequest rebootReq = HttpRequest.newBuilder()
-                            .uri(URI.create("http://" + cleanIp + "/contentwebserver"))
-                            .timeout(TIMEOUT)
-                            .header("Content-Type", "text/xml; charset=UTF-8")
-                            .header("csrfpId", authSession)
-                            .header("Referer", "http://" + cleanIp + "/Administration/maintenance/reboot/RebootList.html")
-                            .POST(HttpRequest.BodyPublishers.ofString(rebootXml))
-                            .build();
-
-                    client.send(rebootReq, HttpResponse.BodyHandlers.ofString());
+                    sendRebootCommand(cleanIp, session.client(), session.sessionCookie());
                 } catch (Exception ex) {
                     log.info("Printer {} rebooted following EWB reset to Home.", cleanIp);
                 }
@@ -474,31 +307,129 @@ public class ToshibaEwbService {
     }
 
     /**
-     * Reads current EWB settings directly without altering them.
+     * Reads current EWB settings by authenticating with TopAccess.
      */
-    public EwbConfigResult getEwbStatus(String printerIp) {
+    public EwbConfigResult getEwbStatus(String printerIp, String adminUsername, String adminPassword) {
+        String cleanIp = printerIp != null ? printerIp.trim() : "";
+        String username = (adminUsername != null && !adminUsername.isBlank()) ? adminUsername.trim() : "admin";
+        String password = (adminPassword != null && !adminPassword.isBlank()) ? adminPassword.trim() : "123456";
+
+        if (cleanIp.isEmpty()) {
+            return new EwbConfigResult(false, "Printer IP is required.", null, null, false, Instant.now());
+        }
+
         try {
-            CookieManager cookieManager = new CookieManager();
-            cookieManager.setCookiePolicy(CookiePolicy.ACCEPT_ALL);
-            HttpClient client = HttpClient.newBuilder()
-                    .cookieHandler(cookieManager)
-                    .connectTimeout(TIMEOUT)
-                    .build();
-
-            client.send(HttpRequest.newBuilder()
-                    .uri(URI.create("http://" + printerIp.trim() + "/"))
-                    .timeout(TIMEOUT)
-                    .GET()
-                    .build(), HttpResponse.BodyHandlers.ofString());
-
-            String sessionCookie = extractSessionCookie(cookieManager);
-            return getEwbStatus(printerIp.trim(), client, sessionCookie);
+            TopAccessSession session = loginToTopAccess(cleanIp, username, password);
+            return queryEwbSettings(cleanIp, session.client(), session.sessionCookie());
+        } catch (SecurityException se) {
+            return new EwbConfigResult(false, se.getMessage(), null, null, false, Instant.now());
         } catch (Exception e) {
             return new EwbConfigResult(false, "Unable to query EWB status: " + e.getMessage(), null, null, false, Instant.now());
         }
     }
 
-    private EwbConfigResult getEwbStatus(String printerIp, HttpClient client, String sessionCookie) {
+    public EwbConfigResult getEwbStatus(String printerIp) {
+        return getEwbStatus(printerIp, "admin", "123456");
+    }
+
+    /**
+     * Sends a forced reboot command to the Toshiba controller to apply settings and restart the UI.
+     */
+    public boolean rebootPrinter(String printerIp, String adminUsername, String adminPassword) {
+        String cleanIp = printerIp != null ? printerIp.trim() : "";
+        String username = (adminUsername != null && !adminUsername.isBlank()) ? adminUsername.trim() : "admin";
+        String password = (adminPassword != null && !adminPassword.isBlank()) ? adminPassword.trim() : "123456";
+
+        try {
+            TopAccessSession session = loginToTopAccess(cleanIp, username, password);
+            return sendRebootCommand(cleanIp, session.client(), session.sessionCookie());
+        } catch (Exception e) {
+            String msg = e.getMessage() != null ? e.getMessage().toLowerCase() : "";
+            if (msg.contains("reset") || msg.contains("closed") || msg.contains("eof") || msg.contains("timeout")) {
+                log.info("Printer {} entered reboot sequence: {}", cleanIp, e.getMessage());
+                return true;
+            }
+            log.error("Failed to reboot printer {}: {}", cleanIp, e.getMessage());
+            return false;
+        }
+    }
+
+    private TopAccessSession loginToTopAccess(String printerIp, String username, String password) throws Exception {
+        CookieManager cookieManager = new CookieManager();
+        cookieManager.setCookiePolicy(CookiePolicy.ACCEPT_ALL);
+        HttpClient client = HttpClient.newBuilder()
+                .cookieHandler(cookieManager)
+                .connectTimeout(TIMEOUT)
+                .build();
+
+        // 1. Initial Handshake to obtain Session cookie
+        String topAccessUrl = "http://" + printerIp + "/";
+        HttpRequest handshakeReq = HttpRequest.newBuilder()
+                .uri(URI.create(topAccessUrl))
+                .timeout(TIMEOUT)
+                .GET()
+                .build();
+
+        HttpResponse<String> handshakeResp = client.send(handshakeReq, HttpResponse.BodyHandlers.ofString());
+        String initialSession = extractSessionFromResponse(handshakeResp, cookieManager);
+        if (initialSession == null || initialSession.isBlank()) {
+            throw new IllegalStateException("Failed to connect to Toshiba TopAccess at " + printerIp + " (No session cookie).");
+        }
+
+        String clientIp = extractClientIp(initialSession);
+
+        // 2. Admin Login Request
+        String loginXml = "<DeviceInformationModel>" +
+                "<GetValue><Authentication><UserCredential></UserCredential></Authentication></GetValue>" +
+                "<GetValue><Panel><DiagnosticMode><Mode_08><Code_8913></Code_8913></Mode_08></DiagnosticMode></Panel></GetValue>" +
+                "<SetValue><Authentication><UserCredential>" +
+                "<userName>" + escapeXml(username) + "</userName>" +
+                "<passwd>" + escapeXml(password) + "</passwd>" +
+                "<ipaddress>" + clientIp + "</ipaddress>" +
+                "<DepartmentManagement isEnable='false'>" +
+                "<requireDepartment>false</requireDepartment>" +
+                "</DepartmentManagement>" +
+                "<domainName></domainName>" +
+                "<applicationType>TOP_ACCESS</applicationType>" +
+                "</UserCredential></Authentication></SetValue>" +
+                "<Command><Login><commandNode>Authentication/UserCredential</commandNode><Params><appName>TOPACCESS</appName></Params></Login></Command>" +
+                "<SaveSessionInformation><SessionInfo>" +
+                "<Information><type>LoginPassword</type><data>" + escapeXml(password) + "</data></Information>" +
+                "<Information><type>LoginUser</type><data>" + escapeXml(username) + "</data></Information>" +
+                "</SessionInfo></SaveSessionInformation>" +
+                "</DeviceInformationModel>";
+
+        HttpRequest loginReq = HttpRequest.newBuilder()
+                .uri(URI.create("http://" + printerIp + "/contentwebserver"))
+                .timeout(TIMEOUT)
+                .header("Content-Type", "text/xml; charset=UTF-8")
+                .header("csrfpId", initialSession)
+                .header("Referer", "http://" + printerIp + "/Administration/AdminLogin.html")
+                .POST(HttpRequest.BodyPublishers.ofString(loginXml))
+                .build();
+
+        HttpResponse<String> loginResp = client.send(loginReq, HttpResponse.BodyHandlers.ofString());
+        String loginBody = loginResp.body() != null ? loginResp.body() : "";
+
+        boolean loginOk = loginBody.contains("Normal") || loginBody.contains("STATUS_OK");
+        if (!loginOk) {
+            String errorMsg = "Toshiba Admin Login failed. Check printer admin credentials.";
+            if (loginBody.contains("STATUS_AUTHENTICATION_FAILED") || loginBody.contains("STATUS_FAILED") || loginBody.contains("STATUS_AL_CWS_UNAUTHORIZED")) {
+                errorMsg = "Invalid printer admin username or password.";
+            }
+            throw new SecurityException(errorMsg);
+        }
+
+        // TopAccess returns a renewed Session cookie upon authentication
+        String authSession = extractSessionFromResponse(loginResp, cookieManager);
+        if (authSession == null || authSession.isBlank()) {
+            authSession = initialSession;
+        }
+
+        return new TopAccessSession(client, cookieManager, authSession, clientIp);
+    }
+
+    private EwbConfigResult queryEwbSettings(String printerIp, HttpClient client, String sessionCookie) {
         try {
             String getXml = "<DeviceInformationModel><GetValue><EWBSettings/></GetValue></DeviceInformationModel>";
             HttpRequest getReq = HttpRequest.newBuilder()
@@ -506,13 +437,14 @@ public class ToshibaEwbService {
                     .timeout(TIMEOUT)
                     .header("Content-Type", "text/xml; charset=UTF-8")
                     .header("csrfpId", sessionCookie != null ? sessionCookie : "")
+                    .header("Referer", "http://" + printerIp + "/Administration/Setup/Ewb.html")
                     .POST(HttpRequest.BodyPublishers.ofString(getXml))
                     .build();
 
             HttpResponse<String> resp = client.send(getReq, HttpResponse.BodyHandlers.ofString());
             String body = resp.body() != null ? resp.body() : "";
 
-            String model = extractTag(MODEL_PATTERN, body, "Toshiba e-STUDIO");
+            String model = extractTag(MODEL_PATTERN, body, "TOSHIBA e-STUDIO");
             String homePage = extractTag(HOMEPAGE_PATTERN, body, "");
             String autoScreen = extractTag(AUTOSCREEN_PATTERN, body, "false");
 
@@ -527,86 +459,12 @@ public class ToshibaEwbService {
                     Instant.now()
             );
         } catch (Exception e) {
-            return new EwbConfigResult(false, "Query failed: " + e.getMessage(), null, null, false, Instant.now());
+            return new EwbConfigResult(false, "Query failed: " + e.getMessage(), "TOSHIBA e-STUDIO", null, false, Instant.now());
         }
     }
 
-    /**
-     * Sends a forced reboot command to the Toshiba controller to apply settings and restart the UI.
-     */
-    public boolean rebootPrinter(String printerIp, String adminUsername, String adminPassword) {
-        String cleanIp = printerIp != null ? printerIp.trim() : "";
-        String username = (adminUsername != null && !adminUsername.isBlank()) ? adminUsername.trim() : "admin";
-        String password = (adminPassword != null && !adminPassword.isBlank()) ? adminPassword.trim() : "123456";
-
+    private boolean sendRebootCommand(String cleanIp, HttpClient client, String authSession) {
         try {
-            CookieManager cookieManager = new CookieManager();
-            cookieManager.setCookiePolicy(CookiePolicy.ACCEPT_ALL);
-            HttpClient client = HttpClient.newBuilder()
-                    .cookieHandler(cookieManager)
-                    .connectTimeout(TIMEOUT)
-                    .build();
-
-            // Handshake
-            client.send(HttpRequest.newBuilder()
-                    .uri(URI.create("http://" + cleanIp + "/"))
-                    .timeout(TIMEOUT)
-                    .GET()
-                    .build(), HttpResponse.BodyHandlers.ofString());
-
-            String sessionCookie = extractSessionCookie(cookieManager);
-            if (sessionCookie == null) return false;
-            String clientIp = sessionCookie.contains(".") ? sessionCookie.substring(0, sessionCookie.indexOf('.')) : "127.0.0.1";
-
-            // Login
-            String loginXml = "<DeviceInformationModel>" +
-                    "<SetValue>" +
-                    "<Authentication>" +
-                    "<UserCredential>" +
-                    "<userName>" + escapeXml(username) + "</userName>" +
-                    "<passwd>" + escapeXml(password) + "</passwd>" +
-                    "<ipaddress>" + clientIp + "</ipaddress>" +
-                    "<DepartmentManagement isEnable='false'>" +
-                    "<requireDepartment>false</requireDepartment>" +
-                    "</DepartmentManagement>" +
-                    "<domainName></domainName>" +
-                    "<applicationType>TOP_ACCESS</applicationType>" +
-                    "</UserCredential>" +
-                    "</Authentication>" +
-                    "</SetValue>" +
-                    "<SetValue>" +
-                    "<UserManager>" +
-                    "<View>" +
-                    "<Users>" +
-                    "<Information>" +
-                    "<passwd>" + escapeXml(password) + "</passwd>" +
-                    "</Information>" +
-                    "</Users>" +
-                    "</View>" +
-                    "</UserManager>" +
-                    "</SetValue>" +
-                    "<Command>" +
-                    "<Login>" +
-                    "<commandNode>Authentication/UserCredential</commandNode>" +
-                    "<Params><appName>TOPACCESS</appName></Params>" +
-                    "</Login>" +
-                    "</Command>" +
-                    "</DeviceInformationModel>";
-
-            HttpResponse<String> loginResp = client.send(HttpRequest.newBuilder()
-                    .uri(URI.create("http://" + cleanIp + "/contentwebserver"))
-                    .timeout(TIMEOUT)
-                    .header("Content-Type", "text/xml; charset=UTF-8")
-                    .header("csrfpId", sessionCookie)
-                    .POST(HttpRequest.BodyPublishers.ofString(loginXml))
-                    .build(), HttpResponse.BodyHandlers.ofString());
-
-            if (!loginResp.body().contains("STATUS_OK")) return false;
-
-            String authSession = extractSessionCookie(cookieManager);
-            if (authSession == null) authSession = sessionCookie;
-
-            // Forced Reboot
             String rebootXml = "<DeviceInformationModel>" +
                     "<Command>" +
                     "<SetPowerState>" +
@@ -626,7 +484,6 @@ public class ToshibaEwbService {
 
             return rebootResp.statusCode() >= 200 && rebootResp.statusCode() < 400;
         } catch (java.io.IOException ioe) {
-            // Connection reset or abrupt close is NORMAL when the MFP controller immediately restarts
             log.info("Printer {} closed connection to execute ForcedReboot: {}", cleanIp, ioe.getMessage());
             return true;
         } catch (Exception e) {
@@ -635,9 +492,16 @@ public class ToshibaEwbService {
                 log.info("Printer {} entered reboot sequence: {}", cleanIp, e.getMessage());
                 return true;
             }
-            log.error("Failed to reboot printer {}: {}", cleanIp, e.getMessage());
             return false;
         }
+    }
+
+    private String extractClientIp(String sessionCookie) {
+        if (sessionCookie == null || !sessionCookie.contains(".")) {
+            return "127.0.0.1";
+        }
+        int lastDot = sessionCookie.lastIndexOf('.');
+        return sessionCookie.substring(0, lastDot);
     }
 
     private String extractHost(String url) {
@@ -656,14 +520,33 @@ public class ToshibaEwbService {
         return s.substring(0, end).trim();
     }
 
-    private String extractSessionCookie(CookieManager cookieManager) {
-        List<HttpCookie> cookies = cookieManager.getCookieStore().getCookies();
-        for (HttpCookie cookie : cookies) {
-            if ("Session".equalsIgnoreCase(cookie.getName())) {
-                return cookie.getValue();
+    private String extractSessionFromResponse(HttpResponse<?> response, CookieManager cookieManager) {
+        if (response != null) {
+            List<String> setCookies = response.headers().allValues("Set-Cookie");
+            for (String sc : setCookies) {
+                if (sc.startsWith("Session=")) {
+                    int end = sc.indexOf(';');
+                    if (end != -1) {
+                        return sc.substring("Session=".length(), end).trim();
+                    } else {
+                        return sc.substring("Session=".length()).trim();
+                    }
+                }
             }
         }
-        return null;
+        return extractSessionCookie(cookieManager);
+    }
+
+    private String extractSessionCookie(CookieManager cookieManager) {
+        if (cookieManager == null) return null;
+        List<HttpCookie> cookies = cookieManager.getCookieStore().getCookies();
+        String found = null;
+        for (HttpCookie cookie : cookies) {
+            if ("Session".equalsIgnoreCase(cookie.getName())) {
+                found = cookie.getValue();
+            }
+        }
+        return found;
     }
 
     private String extractTag(Pattern pattern, String text, String defaultValue) {

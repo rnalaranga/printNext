@@ -3,6 +3,22 @@ Write-Host "============================================================" -Foreg
 Write-Host "   RR SECURE PRINT - PREREQUISITE AND ENVIRONMENT CHECKER   " -ForegroundColor Cyan
 Write-Host "============================================================" -ForegroundColor Cyan
 
+# Auto-detect Java & Maven if missing from current session PATH
+if (-not (Get-Command java -ErrorAction SilentlyContinue)) {
+    $candidate = Get-ChildItem -Path "C:\tools" -Filter "java.exe" -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($candidate) {
+        $env:JAVA_HOME = $candidate.Directory.Parent.FullName
+        $env:Path = "$($candidate.Directory.FullName);$env:Path"
+    }
+}
+if (-not (Get-Command mvn -ErrorAction SilentlyContinue)) {
+    $candidate = Get-ChildItem -Path "C:\tools" -Filter "mvn.cmd" -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($candidate) {
+        $env:M2_HOME = $candidate.Directory.Parent.FullName
+        $env:Path = "$($candidate.Directory.FullName);$env:Path"
+    }
+}
+
 # 1. Check Java
 Write-Host ""
 Write-Host "[1/5] Checking Java Version..." -NoNewline

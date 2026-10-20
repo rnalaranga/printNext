@@ -46,6 +46,40 @@ public class PrinterService {
         return printerRepository.findById(id);
     }
 
+    public Optional<PrinterEntity> getDefaultHoldPrinter() {
+        return printerRepository.findAll().stream()
+                .filter(PrinterEntity::isDefaultHoldQueue)
+                .findFirst()
+                .or(() -> printerRepository.findByIsActiveTrue().stream().findFirst());
+    }
+
+    @Transactional
+    public PrinterEntity setDefaultHoldPrinter(Long id, String adminActor, String clientIp) {
+        PrinterEntity target = printerRepository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("Printer id " + id + " not found."));
+
+        // Demote all other printers
+        List<PrinterEntity> all = printerRepository.findAll();
+        for (PrinterEntity p : all) {
+            if (p.isDefaultHoldQueue() && !p.getId().equals(id)) {
+                p.setDefaultHoldQueue(false);
+                printerRepository.save(p);
+            }
+        }
+
+        target.setDefaultHoldQueue(true);
+        target.setActive(true);
+        PrinterEntity saved = printerRepository.save(target);
+
+        auditService.logEvent("PRINTER_DEFAULT_HOLD_SET", null, adminActor, null,
+                saved.getPrinterCode(), clientIp,
+                "Designated printer " + saved.getName() + " (" + saved.getPrinterCode() + ", " + saved.getIpAddress() + ") as Default Virtual Printer for Print Hold.",
+                "SUCCESS");
+
+        log.info("Default virtual printer for print hold set to: {} [{}] ({})", saved.getName(), saved.getPrinterCode(), saved.getIpAddress());
+        return saved;
+    }
+
     @Transactional
     public PrinterEntity createPrinter(PrinterSaveRequest request, String adminActor, String clientIp) {
         String code = request.printerCode().trim().toUpperCase();
@@ -75,26 +109,42 @@ public class PrinterService {
             printer.setActive(request.isActive());
         }
 
+        // Manage Default Hold Queue flag
+        boolean makeDefault = Boolean.TRUE.equals(request.isDefaultHoldQueue()) || printerRepository.count() == 0;
+        if (makeDefault) {
+            printerRepository.findAll().forEach(p -> {
+                if (p.isDefaultHoldQueue()) {
+                    p.setDefaultHoldQueue(false);
+                    printerRepository.save(p);
+                }
+            });
+            printer.setDefaultHoldQueue(true);
+        }
+
         // Auto-configure EWB if requested
         if (Boolean.TRUE.equals(request.autoConfigureEwb())) {
-            String termUrl = request.terminalUrl() != null && !request.terminalUrl().isBlank()
-                    ? request.terminalUrl().trim()
-                    : "http://" + (clientIp != null && !clientIp.contains(":") ? clientIp : "localhost") + ":8080/";
+            try {
+                String termUrl = request.terminalUrl() != null && !request.terminalUrl().isBlank()
+                        ? request.terminalUrl().trim()
+                        : "http://" + (clientIp != null && !clientIp.contains(":") ? clientIp : "localhost") + ":8080/";
 
-            EwbConfigResult ewbResult = toshibaEwbService.configureEwb(
-                    printer.getIpAddress(),
-                    printer.getAdminUsername(),
-                    printer.getAdminPassword(),
-                    termUrl
-            );
+                EwbConfigResult ewbResult = toshibaEwbService.configureEwb(
+                        printer.getIpAddress(),
+                        printer.getAdminUsername(),
+                        printer.getAdminPassword(),
+                        termUrl
+                );
 
-            if (ewbResult.success()) {
-                printer.setEwbConfigured(true);
-                printer.setEwbUrl(ewbResult.configuredUrl());
-                printer.setEwbConfiguredAt(Instant.now());
-                if (ewbResult.printerModel() != null && !ewbResult.printerModel().isBlank()) {
-                    printer.setModel(ewbResult.printerModel());
+                if (ewbResult != null && ewbResult.success()) {
+                    printer.setEwbConfigured(true);
+                    printer.setEwbUrl(ewbResult.configuredUrl());
+                    printer.setEwbConfiguredAt(Instant.now());
+                    if (ewbResult.printerModel() != null && !ewbResult.printerModel().isBlank()) {
+                        printer.setModel(ewbResult.printerModel());
+                    }
                 }
+            } catch (Exception e) {
+                log.warn("[EWB AUTO-CONFIG] EWB setup could not complete: " + e.getMessage());
             }
         }
 
@@ -102,6 +152,7 @@ public class PrinterService {
 
         auditService.logEvent("PRINTER_ADDED", null, adminActor, null, saved.getPrinterCode(), clientIp,
                 "Registered new printer: " + saved.getName() + " (" + saved.getIpAddress() + ":" + saved.getRawPort() + ")" +
+                        (saved.isDefaultHoldQueue() ? " [Default Hold Queue]" : "") +
                         (saved.isEwbConfigured() ? " with EWB auto-configured to " + saved.getEwbUrl() : ""), "SUCCESS");
 
         return saved;
@@ -143,33 +194,49 @@ public class PrinterService {
             printer.setAdminPassword(request.adminPassword().trim());
         }
 
+        if (Boolean.TRUE.equals(request.isDefaultHoldQueue())) {
+            printerRepository.findAll().forEach(p -> {
+                if (p.isDefaultHoldQueue() && !p.getId().equals(id)) {
+                    p.setDefaultHoldQueue(false);
+                    printerRepository.save(p);
+                }
+            });
+            printer.setDefaultHoldQueue(true);
+        } else if (request.isDefaultHoldQueue() != null && !request.isDefaultHoldQueue()) {
+            printer.setDefaultHoldQueue(false);
+        }
+
         // Auto-configure EWB if requested
         if (Boolean.TRUE.equals(request.autoConfigureEwb())) {
-            String termUrl = request.terminalUrl() != null && !request.terminalUrl().isBlank()
-                    ? request.terminalUrl().trim()
-                    : (printer.getEwbUrl() != null ? printer.getEwbUrl() : "http://localhost:8080/");
+            try {
+                String termUrl = request.terminalUrl() != null && !request.terminalUrl().isBlank()
+                        ? request.terminalUrl().trim()
+                        : (printer.getEwbUrl() != null ? printer.getEwbUrl() : "http://localhost:8080/");
 
-            EwbConfigResult ewbResult = toshibaEwbService.configureEwb(
-                    printer.getIpAddress(),
-                    printer.getAdminUsername(),
-                    printer.getAdminPassword(),
-                    termUrl
-            );
+                EwbConfigResult ewbResult = toshibaEwbService.configureEwb(
+                        printer.getIpAddress(),
+                        printer.getAdminUsername(),
+                        printer.getAdminPassword(),
+                        termUrl
+                );
 
-            if (ewbResult.success()) {
-                printer.setEwbConfigured(true);
-                printer.setEwbUrl(ewbResult.configuredUrl());
-                printer.setEwbConfiguredAt(Instant.now());
-                if (ewbResult.printerModel() != null && !ewbResult.printerModel().isBlank()) {
-                    printer.setModel(ewbResult.printerModel());
+                if (ewbResult != null && ewbResult.success()) {
+                    printer.setEwbConfigured(true);
+                    printer.setEwbUrl(ewbResult.configuredUrl());
+                    printer.setEwbConfiguredAt(Instant.now());
+                    if (ewbResult.printerModel() != null && !ewbResult.printerModel().isBlank()) {
+                        printer.setModel(ewbResult.printerModel());
+                    }
                 }
+            } catch (Exception e) {
+                log.warn("[EWB AUTO-CONFIG] EWB update setup could not complete: " + e.getMessage());
             }
         }
 
         PrinterEntity updated = printerRepository.save(printer);
 
         auditService.logEvent("PRINTER_UPDATED", null, adminActor, null, updated.getPrinterCode(), clientIp,
-                "Updated printer configuration for " + updated.getName(), "SUCCESS");
+                "Updated printer configuration for " + updated.getName() + (updated.isDefaultHoldQueue() ? " [Default Hold Queue]" : ""), "SUCCESS");
 
         return updated;
     }
@@ -204,7 +271,16 @@ public class PrinterService {
         // Detach existing print jobs to avoid foreign key constraint violation
         printJobRepository.detachPrinterFromJobs(printer.getId());
 
+        boolean wasDefault = printer.isDefaultHoldQueue();
         printerRepository.delete(printer);
+
+        if (wasDefault) {
+            printerRepository.findByIsActiveTrue().stream().findFirst().ifPresent(next -> {
+                next.setDefaultHoldQueue(true);
+                printerRepository.save(next);
+                log.info("Auto-promoted printer {} as new default hold queue.", next.getName());
+            });
+        }
 
         auditService.logEvent("PRINTER_DELETED", null, adminActor, null, printer.getPrinterCode(), clientIp,
                 "Deleted printer: " + printer.getName() + " (" + printer.getPrinterCode() + ")" +
@@ -283,9 +359,16 @@ public class PrinterService {
                 ? request.adminPassword().trim()
                 : (printer.getAdminPassword() != null ? printer.getAdminPassword() : "123456");
 
+        String serverHost = clientIp != null && !clientIp.contains(":") && !clientIp.equals("127.0.0.1") ? clientIp : "192.168.1.80";
         String targetUrl = request.terminalUrl() != null && !request.terminalUrl().isBlank()
                 ? request.terminalUrl().trim()
-                : (printer.getEwbUrl() != null ? printer.getEwbUrl() : "http://localhost:8080/");
+                : (printer.getEwbUrl() != null && !printer.getEwbUrl().isBlank()
+                    ? printer.getEwbUrl()
+                    : "http://" + serverHost + ":8080/?printer=" + printer.getPrinterCode());
+
+        if (!targetUrl.contains("printer=")) {
+            targetUrl += (targetUrl.contains("?") ? "&" : "?") + "printer=" + printer.getPrinterCode();
+        }
 
         EwbConfigResult result = toshibaEwbService.configureEwb(printer.getIpAddress(), user, pass, targetUrl);
 
@@ -310,7 +393,7 @@ public class PrinterService {
     public EwbConfigResult getPrinterEwbStatus(Long id) {
         PrinterEntity printer = printerRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Printer id " + id + " not found."));
-        return toshibaEwbService.getEwbStatus(printer.getIpAddress());
+        return toshibaEwbService.getEwbStatus(printer.getIpAddress(), printer.getAdminUsername(), printer.getAdminPassword());
     }
 
     public EwbConfigResult testEwbDirect(EwbConfigRequest request) {

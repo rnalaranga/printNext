@@ -15,7 +15,9 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.io.IOException;
 import java.time.Instant;
+import java.util.*;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.logging.Logger;
 
@@ -50,8 +52,40 @@ public class JobService {
      */
     @Transactional(readOnly = true)
     public List<JobDto> getPendingJobsForUser(UserEntity user) {
-        List<PrintJob> jobs = printJobRepository.findByUserSidAndStatusOrderBySubmittedAtDesc(user.getUserSid(), JobStatus.HELD);
-        return jobs.stream().map(JobDto::fromEntity).toList();
+        Set<UUID> seen = new HashSet<>();
+        List<PrintJob> result = new ArrayList<>();
+
+        // 1. Direct match by User SID
+        List<PrintJob> bySid = printJobRepository.findByUserSidAndStatusOrderBySubmittedAtDesc(user.getUserSid(), JobStatus.HELD);
+        for (PrintJob j : bySid) {
+            if (seen.add(j.getId())) {
+                result.add(j);
+            }
+        }
+
+        // 2. Direct match by username or user entity ID
+        List<PrintJob> allHeld = printJobRepository.findByStatusOrderBySubmittedAtDesc(JobStatus.HELD);
+        for (PrintJob j : allHeld) {
+            if (seen.contains(j.getId())) continue;
+            if ((j.getUser() != null && j.getUser().getId().equals(user.getId())) ||
+                j.getUsername().equalsIgnoreCase(user.getUsername())) {
+                seen.add(j.getId());
+                result.add(j);
+            }
+        }
+
+        // 3. Admin / Shared Operator cluster (admin, administrator, rr)
+        Set<String> adminCluster = Set.of("admin", "administrator", "rr");
+        if ("ADMIN".equalsIgnoreCase(user.getRole()) || adminCluster.contains(user.getUsername().toLowerCase())) {
+            for (PrintJob j : allHeld) {
+                if (!seen.contains(j.getId()) && adminCluster.contains(j.getUsername().toLowerCase())) {
+                    seen.add(j.getId());
+                    result.add(j);
+                }
+            }
+        }
+
+        return result.stream().map(JobDto::fromEntity).toList();
     }
 
     /**
@@ -86,41 +120,10 @@ public class JobService {
 
         validateOwnership(job, user);
 
-        // 3. Identify target printer
-        PrinterEntity targetPrinter = resolvePrinter(targetPrinterCode);
+        // 3. Identify physical target printer (PaperCut Station resolution)
+        PrinterEntity targetPrinter = resolvePrinter(targetPrinterCode, clientIp);
 
-        // 4. If this job is held in Windows Spooler, release it via Windows Spooler directly to physical printer
-        if (job.getWindowsJobId() != null) {
-            LOGGER.info("Releasing authentic Windows Spool job #" + job.getWindowsJobId() + " to " + targetPrinter.getPrinterCode());
-            boolean released = windowsQueueService.releaseWindowsJob(job.getWindowsJobId());
-            if (released) {
-                job.setStatus(JobStatus.COMPLETED);
-                job.setTargetPrinter(targetPrinter);
-                job.setReleasedAt(Instant.now());
-                job.setErrorMessage(null);
-                printJobRepository.save(job);
-
-                auditService.logEvent("JOB_RELEASED", user.getUserSid(), user.getUsername(), id,
-                        targetPrinter.getPrinterCode(), clientIp,
-                        "Released Windows Job #" + job.getWindowsJobId() + " (" + job.getDocumentName() + ") to " + targetPrinter.getIpAddress() + ":" + targetPrinter.getRawPort(),
-                        "SUCCESS");
-
-                return ReleaseResponse.physicalSuccess(id, job.getDocumentName(),
-                        targetPrinter.getPrinterCode(), targetPrinter.getName());
-            } else {
-                job.setStatus(JobStatus.FAILED);
-                job.setErrorMessage("Windows spooler failed to transmit job #" + job.getWindowsJobId());
-                printJobRepository.save(job);
-
-                auditService.logEvent("JOB_RELEASE_FAILED", user.getUserSid(), user.getUsername(), id,
-                        targetPrinter.getPrinterCode(), clientIp, "Windows spooler release failed", "FAILURE");
-
-                return ReleaseResponse.failed(id, job.getDocumentName(), targetPrinter.getPrinterCode(),
-                        "Windows spooler failed to transmit job #" + job.getWindowsJobId());
-            }
-        }
-
-        // 5. Fallback for simulated or direct spool storage jobs
+        // 4. Retrieve authentic spool bytes (.SPL or simulated data)
         byte[] spoolBytes;
         try {
             spoolBytes = spoolStorageService.readAndVerifySpoolData(job.getSpoolFilePath(), job.getChecksumSha256());
@@ -134,7 +137,7 @@ public class JobService {
             return ReleaseResponse.failed(id, job.getDocumentName(), targetPrinter.getPrinterCode(), e.getMessage());
         }
 
-        // 6. Transmit spool bytes (either simulated or Port 9100 live socket)
+        // 5. Transmit spool data directly to the physical printer where user is standing (Port 9100)
         RawSocketPrinterService.PrintTransmissionResult result =
                 rawSocketPrinterService.transmitSpoolData(targetPrinter, spoolBytes, job.getDocumentName());
 
@@ -145,9 +148,15 @@ public class JobService {
             job.setErrorMessage(null);
             printJobRepository.save(job);
 
+            // Clean up Windows spooler queue if this was an authentic intercepted Windows job
+            if (job.getWindowsJobId() != null) {
+                windowsQueueService.cancelWindowsJob(job.getWindowsJobId());
+            }
+
             auditService.logEvent("JOB_RELEASED", user.getUserSid(), user.getUsername(), id,
                     targetPrinter.getPrinterCode(), clientIp,
-                    "Released " + job.getDocumentName() + " (" + job.getPageCount() + " pages). " + result.message(),
+                    "Released " + job.getDocumentName() + " (" + job.getPageCount() + " pages) to " +
+                            targetPrinter.getName() + " (" + targetPrinter.getIpAddress() + ":" + targetPrinter.getRawPort() + "). " + result.message(),
                     "SUCCESS");
 
             if (result.simulated()) {
@@ -207,21 +216,51 @@ public class JobService {
     }
 
     private void validateOwnership(PrintJob job, UserEntity user) {
-        if (!"ADMIN".equalsIgnoreCase(user.getRole()) && !job.getUserSid().equalsIgnoreCase(user.getUserSid())) {
-            throw new SecurityException("Access Denied: You do not own print job " + job.getId());
+        if ("ADMIN".equalsIgnoreCase(user.getRole())) {
+            return;
         }
+        if (job.getUserSid().equalsIgnoreCase(user.getUserSid())) {
+            return;
+        }
+        if (job.getUser() != null && job.getUser().getId().equals(user.getId())) {
+            return;
+        }
+        if (job.getUsername().equalsIgnoreCase(user.getUsername())) {
+            return;
+        }
+        Set<String> adminCluster = Set.of("admin", "administrator", "rr");
+        if (adminCluster.contains(user.getUsername().toLowerCase()) &&
+            adminCluster.contains(job.getUsername().toLowerCase())) {
+            return;
+        }
+        throw new SecurityException("Access Denied: You do not own print job " + job.getId());
     }
 
-    private PrinterEntity resolvePrinter(String printerCode) {
-        if (printerCode != null && !printerCode.isBlank()) {
-            return printerRepository.findByPrinterCode(printerCode)
-                    .orElseGet(this::getDefaultPrinter);
+    public PrinterEntity resolvePrinter(String printerCode, String clientIp) {
+        if (printerCode != null && !printerCode.isBlank() && !"VIRTUAL-QUEUE".equalsIgnoreCase(printerCode)) {
+            Optional<PrinterEntity> byCode = printerRepository.findByPrinterCode(printerCode.trim().toUpperCase());
+            if (byCode.isPresent()) {
+                return byCode.get();
+            }
+        }
+        // Auto-detect by physical MFP IP address (from EWB terminal HTTP connection)
+        if (clientIp != null && !clientIp.isBlank()) {
+            String cleanIp = clientIp.replace("/", "").trim();
+            for (PrinterEntity p : printerRepository.findAll()) {
+                if (cleanIp.equalsIgnoreCase(p.getIpAddress()) || cleanIp.endsWith(p.getIpAddress())) {
+                    LOGGER.info("[AUTO-DETECT STATION] Resolved client IP " + clientIp + " to physical MFP: " + p.getName() + " (" + p.getPrinterCode() + ")");
+                    return p;
+                }
+            }
         }
         return getDefaultPrinter();
     }
 
     private PrinterEntity getDefaultPrinter() {
-        return printerRepository.findByIsActiveTrue().stream().findFirst()
+        return printerRepository.findAll().stream()
+                .filter(PrinterEntity::isDefaultHoldQueue)
+                .findFirst()
+                .or(() -> printerRepository.findByIsActiveTrue().stream().findFirst())
                 .orElseGet(() -> new PrinterEntity("TOSHIBA-3518A-HQ", "Toshiba e-STUDIO 3518A", "192.168.1.150", 9100, "HQ Office", "Toshiba e-STUDIO 3518A", false, true));
     }
 }

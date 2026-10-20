@@ -19,7 +19,7 @@ public class RawSocketPrinterService {
 
     private static final Logger LOGGER = Logger.getLogger(RawSocketPrinterService.class.getName());
 
-    @Value("${app.printer.simulation-mode:true}")
+    @Value("${app.printer.simulation-mode:false}")
     private boolean simulationMode;
 
     @Value("${app.printer.connection-timeout-ms:5000}")
