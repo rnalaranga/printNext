@@ -1,0 +1,33 @@
+server:
+  port: ${PORT:8080}
+  address: 0.0.0.0
+  servlet:
+    session:
+      timeout: 5m
+      cookie:
+        http-only: true
+        same-site: lax
+
+spring:
+  application:
+    name: rr-secure-print
+  profiles:
+    active: ${ACTIVE_PROFILE:dev}
+
+app:
+  spool:
+    storage-dir: spool_data
+  printer:
+    simulation-mode: false
+    connection-timeout-ms: 5000
+  ad:
+    enabled: false
+    ldap-url: ldaps://dc01.rrconstruction.local:636
+    domain: rrconstruction.local
+    base-dn: DC=rrconstruction,DC=local
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info

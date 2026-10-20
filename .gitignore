@@ -1,0 +1,44 @@
+# Maven
+target/
+*.class
+*.jar
+*.war
+*.ear
+*.nar
+*.zip
+*.tar.gz
+*.rar
+
+# Runtime data & Spool storage
+data/
+spool_data/
+*.log
+logs/
+
+# Environment and sensitive files
+.env
+.env.local
+
+# IDE & Editor files
+.idea/
+*.iml
+*.iws
+*.ipr
+.vscode/
+.settings/
+.classpath
+.project
+.metadata
+bin/
+
+# Temporary and Scratch files
+*.tmp
+*.bak
+*.swp
+*~
+NPrint/
+
+# OS generated files
+Thumbs.db
+Desktop.ini
+.DS_Store

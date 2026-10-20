@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>RR Secure Print — Toshiba e-STUDIO Pull-Print Terminal</title>
+  <link rel="stylesheet" href="/css/ewb-touch.css">
+</head>
+<body>
+
+  <!-- Top Header & Branding Bar -->
+  <div class="header-bar clearfix">
+    <div class="brand-title">RR SECURE PRINT</div>
+    <div class="brand-subtitle">Toshiba e-STUDIO 3518A Pull-Print Terminal</div>
+
+    <div class="header-right">
+      <span id="userBadgeText" class="user-badge-info"></span>
+      <span id="timerDisplay" class="session-timer" style="display:none;">Auto-Logout: 120s</span>
+    </div>
+  </div>
+
+  <div class="container">
+
+    <!-- Global Alert / Status Notification Banner -->
+    <div id="alertBox" class="alert-box"></div>
+
+    <!-- =====================================================================
+         SCREEN 1: Touchscreen Authentication (PIN Keypad / Badge Simulation)
+         ===================================================================== -->
+    <div id="screenAuth" class="screen-panel screen-active">
+      <div class="card-box auth-wrapper">
+        <div class="auth-header">
+          <h2>Employee Sign-In</h2>
+          <p>Tap your 4-digit PIN code or select a demo account below</p>
+        </div>
+
+        <!-- PIN Display Box -->
+        <div id="pinDisplay" class="pin-display-box">ENTER PIN</div>
+
+        <!-- Touchscreen Keypad Grid -->
+        <div class="keypad-grid">
+          <div class="keypad-row">
+            <button class="keypad-btn" onclick="window.handleKeypad('1')">1</button>
+            <button class="keypad-btn" onclick="window.handleKeypad('2')">2</button>
+            <button class="keypad-btn" onclick="window.handleKeypad('3')">3</button>
+          </div>
+          <div class="keypad-row">
+            <button class="keypad-btn" onclick="window.handleKeypad('4')">4</button>
+            <button class="keypad-btn" onclick="window.handleKeypad('5')">5</button>
+            <button class="keypad-btn" onclick="window.handleKeypad('6')">6</button>
+          </div>
+          <div class="keypad-row">
+            <button class="keypad-btn" onclick="window.handleKeypad('7')">7</button>
+            <button class="keypad-btn" onclick="window.handleKeypad('8')">8</button>
+            <button class="keypad-btn" onclick="window.handleKeypad('9')">9</button>
+          </div>
+          <div class="keypad-row">
+            <button class="keypad-btn keypad-btn-clear" onclick="window.handleKeypad('CLEAR')">CLEAR</button>
+            <button class="keypad-btn" onclick="window.handleKeypad('0')">0</button>
+            <button class="keypad-btn keypad-btn-enter" onclick="window.handleKeypad('ENTER')">ENTER</button>
+          </div>
+        </div>
+
+        <!-- One-Touch Quick Demo Logins -->
+        <div class="quick-login-section">
+          <div class="quick-login-title">Quick Demo Sign-In (Touch to Test)</div>
+          <button class="demo-chip-btn" onclick="window.quickDemoLogin('rr', '1234')">👷 RR (You - PIN 1234)</button>
+          <button class="demo-chip-btn" onclick="window.quickDemoLogin('jdoe', '1234')">👷 John Doe (Engineer)</button>
+          <button class="demo-chip-btn" onclick="window.quickDemoLogin('msmith', '1234')">👩‍💼 Mary Smith (Director)</button>
+          <button class="demo-chip-btn" onclick="window.quickDemoLogin('admin', '1234')">🛠️ Administrator</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- =====================================================================
+         SCREEN 2: Secure Job Queue & Release Operations
+         ===================================================================== -->
+    <div id="screenQueue" class="screen-panel">
+      <!-- Toolbar -->
+      <div class="queue-toolbar clearfix">
+        <div class="toolbar-left">
+          <button id="releaseBtn" class="btn-touch btn-primary-release btn-disabled" onclick="window.releaseSelectedJobs()">Release Selected</button>
+          <button id="cancelBtn" class="btn-touch btn-danger-cancel btn-disabled" onclick="window.cancelSelectedJobs()">Cancel Selected</button>
+          <button id="selectAllBtn" class="btn-touch btn-secondary" onclick="window.toggleSelectAll()">Select All</button>
+        </div>
+        <div class="toolbar-right">
+          <button class="btn-touch btn-secondary" onclick="window.loadJobs()">🔄 Refresh</button>
+          <button class="btn-touch btn-warning" onclick="window.handleLogout()">🚪 Logout</button>
+        </div>
+      </div>
+
+      <!-- Pending Jobs List -->
+      <div id="jobListContainer" class="job-list-container">
+        <!-- Rendered dynamically by ewb-app.js -->
+      </div>
+    </div>
+
+    <!-- Safe Simulation Notice Footer -->
+    <div class="simulation-footer">
+      <strong>SAFE SIMULATION MODE ACTIVE:</strong> No documents are transmitted to physical print engines.
+      Spool data is held securely in local storage with SHA-256 integrity verification.
+      <span style="margin-left:15px;"><a href="/admin.html" style="color:#a0c0e8;text-decoration:underline;">Open Admin &amp; Audit Portal</a></span>
+    </div>
+
+  </div>
+
+  <script src="/js/ewb-app.js"></script>
+</body>
+</html>
