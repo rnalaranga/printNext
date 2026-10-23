@@ -89,15 +89,28 @@ public class PrinterService {
             throw new IllegalArgumentException("Printer code '" + code + "' already registered.");
         }
 
+        String gen = request.deviceGeneration();
+        if (gen == null || gen.isBlank()) {
+            String m = request.model() != null ? request.model().toLowerCase() : "";
+            if (m.contains("306") || m.contains("256") || m.contains("356") || m.contains("456") || m.contains("506") || m.contains("305") || m.contains("255")) {
+                gen = "TOSHIBA_OLD";
+            } else {
+                gen = "TOSHIBA_NEW";
+            }
+        } else {
+            gen = gen.trim().toUpperCase();
+        }
+
         PrinterEntity printer = new PrinterEntity(
                 code,
                 request.name() != null ? request.name().trim() : code,
                 request.ipAddress().trim(),
                 request.rawPort() != null ? request.rawPort() : 9100,
                 request.location() != null ? request.location().trim() : "Office",
-                request.model() != null ? request.model().trim() : "Toshiba e-STUDIO 3518A",
+                request.model() != null ? request.model().trim() : ("TOSHIBA_OLD".equalsIgnoreCase(gen) ? "Toshiba e-STUDIO 306SE" : "Toshiba e-STUDIO 3518A"),
                 request.colorSupported() != null && request.colorSupported(),
-                request.duplexSupported() == null || request.duplexSupported()
+                request.duplexSupported() == null || request.duplexSupported(),
+                gen
         );
 
         if (request.adminUsername() != null && !request.adminUsername().isBlank()) {
@@ -123,37 +136,41 @@ public class PrinterService {
             printer.setDefaultHoldQueue(true);
         }
 
-        // Auto-configure EWB if requested
+        // Auto-configure EWB if requested (Only applicable to modern e-BRIDGE Next)
         if (Boolean.TRUE.equals(request.autoConfigureEwb())) {
-            try {
-                String termUrl = request.terminalUrl() != null && !request.terminalUrl().isBlank()
-                        ? request.terminalUrl().trim()
-                        : "http://" + (clientIp != null && !clientIp.contains(":") ? clientIp : "localhost") + ":8080/";
+            if ("TOSHIBA_OLD".equalsIgnoreCase(printer.getDeviceGeneration())) {
+                log.info("[EWB AUTO-CONFIG] Skipped EWB push for legacy device {} ({}). Toshiba Old models release via Mobile/Web Station or RAW socket.", printer.getName(), printer.getModel());
+            } else {
+                try {
+                    String termUrl = request.terminalUrl() != null && !request.terminalUrl().isBlank()
+                            ? request.terminalUrl().trim()
+                            : "http://" + (clientIp != null && !clientIp.contains(":") ? clientIp : "192.168.1.100") + ":8080/";
 
-                EwbConfigResult ewbResult = toshibaEwbService.configureEwb(
-                        printer.getIpAddress(),
-                        printer.getAdminUsername(),
-                        printer.getAdminPassword(),
-                        termUrl
-                );
+                    EwbConfigResult ewbResult = toshibaEwbService.configureEwb(
+                            printer.getIpAddress(),
+                            printer.getAdminUsername(),
+                            printer.getAdminPassword(),
+                            termUrl
+                    );
 
-                if (ewbResult != null && ewbResult.success()) {
-                    printer.setEwbConfigured(true);
-                    printer.setEwbUrl(ewbResult.configuredUrl());
-                    printer.setEwbConfiguredAt(Instant.now());
-                    if (ewbResult.printerModel() != null && !ewbResult.printerModel().isBlank()) {
-                        printer.setModel(ewbResult.printerModel());
+                    if (ewbResult != null && ewbResult.success()) {
+                        printer.setEwbConfigured(true);
+                        printer.setEwbUrl(ewbResult.configuredUrl());
+                        printer.setEwbConfiguredAt(Instant.now());
+                        if (ewbResult.printerModel() != null && !ewbResult.printerModel().isBlank()) {
+                            printer.setModel(ewbResult.printerModel());
+                        }
                     }
+                } catch (Exception e) {
+                    log.warn("[EWB AUTO-CONFIG] EWB setup could not complete: " + e.getMessage());
                 }
-            } catch (Exception e) {
-                log.warn("[EWB AUTO-CONFIG] EWB setup could not complete: " + e.getMessage());
             }
         }
 
         PrinterEntity saved = printerRepository.save(printer);
 
         auditService.logEvent("PRINTER_ADDED", null, adminActor, null, saved.getPrinterCode(), clientIp,
-                "Registered new printer: " + saved.getName() + " (" + saved.getIpAddress() + ":" + saved.getRawPort() + ")" +
+                "Registered new printer: " + saved.getName() + " [" + saved.getDeviceGeneration() + "] (" + saved.getIpAddress() + ":" + saved.getRawPort() + ")" +
                         (saved.isDefaultHoldQueue() ? " [Default Hold Queue]" : "") +
                         (saved.isEwbConfigured() ? " with EWB auto-configured to " + saved.getEwbUrl() : ""), "SUCCESS");
 
@@ -167,6 +184,9 @@ public class PrinterService {
 
         if (request.name() != null && !request.name().isBlank()) {
             printer.setName(request.name().trim());
+        }
+        if (request.deviceGeneration() != null && !request.deviceGeneration().isBlank()) {
+            printer.setDeviceGeneration(request.deviceGeneration().trim());
         }
         if (request.ipAddress() != null && !request.ipAddress().isBlank()) {
             printer.setIpAddress(request.ipAddress().trim());
@@ -208,37 +228,42 @@ public class PrinterService {
             printer.setDefaultHoldQueue(false);
         }
 
-        // Auto-configure EWB if requested
+        // Auto-configure EWB if requested (Only applicable to modern e-BRIDGE Next)
         if (Boolean.TRUE.equals(request.autoConfigureEwb())) {
-            try {
-                String termUrl = request.terminalUrl() != null && !request.terminalUrl().isBlank()
-                        ? request.terminalUrl().trim()
-                        : (printer.getEwbUrl() != null ? printer.getEwbUrl() : "http://localhost:8080/");
+            if ("TOSHIBA_OLD".equalsIgnoreCase(printer.getDeviceGeneration())) {
+                log.info("[EWB AUTO-CONFIG] Skipped EWB push for legacy device {} ({}).", printer.getName(), printer.getModel());
+            } else {
+                try {
+                    String termUrl = request.terminalUrl() != null && !request.terminalUrl().isBlank()
+                            ? request.terminalUrl().trim()
+                            : (printer.getEwbUrl() != null ? printer.getEwbUrl() : "http://192.168.1.100:8080/");
 
-                EwbConfigResult ewbResult = toshibaEwbService.configureEwb(
-                        printer.getIpAddress(),
-                        printer.getAdminUsername(),
-                        printer.getAdminPassword(),
-                        termUrl
-                );
+                    EwbConfigResult ewbResult = toshibaEwbService.configureEwb(
+                            printer.getIpAddress(),
+                            printer.getAdminUsername(),
+                            printer.getAdminPassword(),
+                            termUrl
+                    );
 
-                if (ewbResult != null && ewbResult.success()) {
-                    printer.setEwbConfigured(true);
-                    printer.setEwbUrl(ewbResult.configuredUrl());
-                    printer.setEwbConfiguredAt(Instant.now());
-                    if (ewbResult.printerModel() != null && !ewbResult.printerModel().isBlank()) {
-                        printer.setModel(ewbResult.printerModel());
+                    if (ewbResult != null && ewbResult.success()) {
+                        printer.setEwbConfigured(true);
+                        printer.setEwbUrl(ewbResult.configuredUrl());
+                        printer.setEwbConfiguredAt(Instant.now());
+                        if (ewbResult.printerModel() != null && !ewbResult.printerModel().isBlank()) {
+                            printer.setModel(ewbResult.printerModel());
+                        }
                     }
+                } catch (Exception e) {
+                    log.warn("[EWB AUTO-CONFIG] EWB update setup could not complete: " + e.getMessage());
                 }
-            } catch (Exception e) {
-                log.warn("[EWB AUTO-CONFIG] EWB update setup could not complete: " + e.getMessage());
             }
         }
 
         PrinterEntity updated = printerRepository.save(printer);
 
         auditService.logEvent("PRINTER_UPDATED", null, adminActor, null, updated.getPrinterCode(), clientIp,
-                "Updated printer configuration for " + updated.getName() + (updated.isDefaultHoldQueue() ? " [Default Hold Queue]" : ""), "SUCCESS");
+                "Updated printer configuration for " + updated.getName() + " [" + updated.getDeviceGeneration() + "]" +
+                        (updated.isDefaultHoldQueue() ? " [Default Hold Queue]" : ""), "SUCCESS");
 
         return updated;
     }
@@ -254,7 +279,7 @@ public class PrinterService {
                 .orElseThrow(() -> new IllegalArgumentException("Printer id " + id + " not found."));
 
         // If requested, reset Toshiba EWB & DefaultScreen back to Home screen and restart device
-        if (resetDeviceEwb && printer.getIpAddress() != null && !printer.getIpAddress().isBlank()) {
+        if (resetDeviceEwb && printer.getIpAddress() != null && !printer.getIpAddress().isBlank() && !"TOSHIBA_OLD".equalsIgnoreCase(printer.getDeviceGeneration())) {
             try {
                 log.info("Resetting Toshiba EWB and restoring DefaultScreen to Home for printer {} ({}) prior to deletion...",
                         printer.getName(), printer.getIpAddress());
@@ -293,6 +318,11 @@ public class PrinterService {
     public boolean resetPrinterEwb(Long id, boolean reboot, String adminActor, String clientIp) {
         PrinterEntity printer = printerRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Printer id " + id + " not found."));
+
+        if ("TOSHIBA_OLD".equalsIgnoreCase(printer.getDeviceGeneration())) {
+            log.info("Reset EWB called on Toshiba Old device {}. Skipped as legacy device does not use e-BRIDGE Next EWB.", printer.getName());
+            return true;
+        }
 
         boolean success = toshibaEwbService.resetEwbAndRestoreDefaultScreen(
                 printer.getIpAddress(),
@@ -361,7 +391,7 @@ public class PrinterService {
                 ? request.adminPassword().trim()
                 : (printer.getAdminPassword() != null ? printer.getAdminPassword() : "123456");
 
-        String serverHost = clientIp != null && !clientIp.contains(":") && !clientIp.equals("127.0.0.1") ? clientIp : "192.168.1.80";
+        String serverHost = clientIp != null && !clientIp.contains(":") && !clientIp.equals("127.0.0.1") ? clientIp : "192.168.1.100";
         String targetUrl = request.terminalUrl() != null && !request.terminalUrl().isBlank()
                 ? request.terminalUrl().trim()
                 : (printer.getEwbUrl() != null && !printer.getEwbUrl().isBlank()
@@ -419,7 +449,8 @@ public class PrinterService {
         };
         String[] models = {
                 "Toshiba e-STUDIO 2518A", "Toshiba e-STUDIO 3518A", "Toshiba e-STUDIO 4508A",
-                "Toshiba e-STUDIO 5018A", "Toshiba e-STUDIO 2010AC (Color)", "Toshiba e-STUDIO 3015AC (Color)"
+                "Toshiba e-STUDIO 5018A", "Toshiba e-STUDIO 2010AC (Color)", "Toshiba e-STUDIO 3015AC (Color)",
+                "Toshiba e-STUDIO 306SE", "Toshiba e-STUDIO 256"
         };
 
         List<PrinterEntity> created = new ArrayList<>();
@@ -434,10 +465,11 @@ public class PrinterService {
             String loc = locations[(int) (seq % locations.length)];
             String model = models[(int) (seq % models.length)];
             boolean isColor = model.contains("(Color)");
+            String gen = (model.contains("306") || model.contains("256")) ? "TOSHIBA_OLD" : "TOSHIBA_NEW";
             String ip = String.format("192.168.1.%d", 20 + (int)(seq % 200));
             String name = model.replace("Toshiba ", "") + " (" + loc.split(" - ")[1] + ")";
 
-            PrinterEntity printer = new PrinterEntity(code, name, ip, 9100, loc, model, isColor, true);
+            PrinterEntity printer = new PrinterEntity(code, name, ip, 9100, loc, model, isColor, true, gen);
             created.add(printerRepository.save(printer));
         }
 

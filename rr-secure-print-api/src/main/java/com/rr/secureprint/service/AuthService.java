@@ -3,6 +3,7 @@ package com.rr.secureprint.service;
 import com.rr.secureprint.dto.AuthResponse;
 import com.rr.secureprint.dto.LoginRequest;
 import com.rr.secureprint.entity.UserEntity;
+import com.rr.secureprint.repository.PrinterRepository;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpSession;
 import org.springframework.stereotype.Service;
@@ -21,13 +22,20 @@ public class AuthService {
 
     private final ActiveDirectoryService activeDirectoryService;
     private final AuditService auditService;
+    private final CopyTrackingService copyTrackingService;
+    private final PrinterRepository printerRepository;
 
     // Rate Limiting: Max 5 failed attempts per IP within 60 seconds
     private final Map<String, RateLimitTracker> rateLimitMap = new ConcurrentHashMap<>();
 
-    public AuthService(ActiveDirectoryService activeDirectoryService, AuditService auditService) {
+    public AuthService(ActiveDirectoryService activeDirectoryService,
+                       AuditService auditService,
+                       CopyTrackingService copyTrackingService,
+                       PrinterRepository printerRepository) {
         this.activeDirectoryService = activeDirectoryService;
         this.auditService = auditService;
+        this.copyTrackingService = copyTrackingService;
+        this.printerRepository = printerRepository;
     }
 
     public AuthResponse login(LoginRequest request, HttpServletRequest httpRequest) {
@@ -42,7 +50,9 @@ public class AuthService {
 
         Optional<UserEntity> userOpt = Optional.empty();
 
-        if (request.hasPin()) {
+        if (request.hasCredentials()) {
+            userOpt = activeDirectoryService.authenticate(request.username(), request.password());
+        } else if (request.hasPin()) {
             if (request.username() != null && !request.username().isBlank()) {
                 userOpt = activeDirectoryService.authenticateByUsernameAndPin(request.username(), request.pin());
             } else {
@@ -50,8 +60,6 @@ public class AuthService {
             }
         } else if (request.hasBadge()) {
             userOpt = activeDirectoryService.authenticateByBadge(request.badgeId());
-        } else if (request.hasCredentials()) {
-            userOpt = activeDirectoryService.authenticate(request.username(), request.password());
         }
 
         if (userOpt.isPresent()) {
@@ -67,8 +75,18 @@ public class AuthService {
             auditService.logEvent("LOGIN_SUCCESS", user.getUserSid(), user.getUsername(), null, null, clientIp,
                     "Authenticated via " + (request.hasPin() ? "PIN" : request.hasBadge() ? "BADGE" : "CREDENTIALS"), "SUCCESS");
 
+            // Register terminal session for attribution
+            copyTrackingService.registerActiveTerminalUser(clientIp, user.getUsername());
+            if (request.printerIp() != null && !request.printerIp().isBlank()) {
+                copyTrackingService.registerActiveTerminalUser(request.printerIp(), user.getUsername());
+            }
+            if (request.printerCode() != null && !request.printerCode().isBlank()) {
+                printerRepository.findByPrinterCode(request.printerCode().trim().toUpperCase())
+                        .ifPresent(p -> copyTrackingService.registerActiveTerminalUser(p.getIpAddress(), user.getUsername()));
+            }
+
             return AuthResponse.success(user.getUsername(), user.getDisplayName(), user.getUserSid(),
-                    user.getDepartment(), user.getRole());
+                    user.getDepartment(), user.getRole(), user.getPrintCount(), user.getCopyCount());
         } else {
             recordFailedAttempt(clientIp);
             auditService.logEvent("LOGIN_FAILED", null, request.username(), null, null, clientIp,
@@ -78,15 +96,35 @@ public class AuthService {
     }
 
     public void logout(HttpServletRequest httpRequest) {
+        logout(httpRequest, null, null);
+    }
+
+    public void logout(HttpServletRequest httpRequest, String printerIp, String printerCode) {
         HttpSession session = httpRequest.getSession(false);
         String clientIp = getClientIp(httpRequest);
+        java.util.Set<String> targetIps = new java.util.LinkedHashSet<>();
+        if (clientIp != null && !clientIp.isBlank()) targetIps.add(clientIp.trim());
+
         if (session != null) {
+            String sessPrinterIp = (String) session.getAttribute("RR_ACTIVE_PRINTER_IP");
+            if (sessPrinterIp != null && !sessPrinterIp.isBlank()) targetIps.add(sessPrinterIp.trim());
+
             UserEntity user = (UserEntity) session.getAttribute(SESSION_USER_KEY);
             if (user != null) {
                 auditService.logEvent("LOGOUT", user.getUserSid(), user.getUsername(), null, null, clientIp,
                         "User logged out", "SUCCESS");
             }
             session.invalidate();
+        }
+
+        if (printerIp != null && !printerIp.isBlank()) targetIps.add(printerIp.trim());
+        if (printerCode != null && !printerCode.isBlank()) {
+            printerRepository.findByPrinterCode(printerCode.trim().toUpperCase())
+                    .ifPresent(p -> targetIps.add(p.getIpAddress()));
+        }
+
+        for (String ip : targetIps) {
+            copyTrackingService.recordTerminalLogout(ip);
         }
     }
 

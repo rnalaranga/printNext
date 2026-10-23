@@ -11,6 +11,7 @@
     printers: [],
     users: [],
     jobs: [],
+    copyJobs: [],
     auditLogs: [],
     stats: {
       totalJobs: 0,
@@ -19,7 +20,7 @@
       printerCount: 0,
       userCount: 0
     },
-    serverTerminalUrl: 'http://192.168.1.80:8080/'
+    serverTerminalUrl: 'http://192.168.1.100:8080/'
   };
 
   /* =========================================================================
@@ -43,9 +44,12 @@
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ username: 'admin', pin: '9999' })
     }).finally(function () {
+      // Load corporate branding & logo for left-corner sidebar
+      loadSystemBranding();
+
       // Determine page from URL hash (e.g. #printers, #users, #virtual-queue)
       var hash = (window.location.hash || '').replace('#', '').toLowerCase();
-      var validPages = ['dashboard', 'virtual-queue', 'printers', 'users', 'queue', 'audit'];
+      var validPages = ['dashboard', 'virtual-queue', 'printers', 'users', 'queue', 'copy-logs', 'audit', 'settings'];
       var targetPage = validPages.indexOf(hash) !== -1 ? hash : 'dashboard';
       window.navigatePage(targetPage);
 
@@ -113,14 +117,23 @@
       topbarTitle.textContent = 'User Identity Management';
       topbarSub.textContent   = 'Security Credentials, Touchscreen PINs, and Windows SIDs';
       loadUsers();
+      loadDirectoryConfig();
     } else if (pageId === 'queue') {
       topbarTitle.textContent = 'Global Held Print Queue';
       topbarSub.textContent   = 'Active Print Jobs Quarantined Awaiting Walk-up Release';
       loadJobs();
+    } else if (pageId === 'copy-logs') {
+      topbarTitle.textContent = 'Walk-Up Photocopy Logs';
+      topbarSub.textContent   = 'MFP Hardware Copy Tracking & User Accounting';
+      loadCopyJobs();
     } else if (pageId === 'audit') {
       topbarTitle.textContent = 'Security Audit Trail';
       topbarSub.textContent   = 'Tamper-Evident Security Log & Device Release Events';
       loadAudit();
+    } else if (pageId === 'settings') {
+      topbarTitle.textContent = 'System Settings & Corporate Branding';
+      topbarSub.textContent   = 'Organization Branding, Custom Logo, and System Preferences';
+      window.loadSettings();
     }
   };
 
@@ -199,7 +212,7 @@
     }
     var host = window.location.hostname;
     if (!host || host === 'localhost' || host === '127.0.0.1') {
-      return 'http://192.168.1.80:8080/';
+      return 'http://192.168.1.100:8080/';
     }
     return 'http://' + host + ':8080/';
   }
@@ -223,7 +236,7 @@
     tbody.innerHTML = '';
 
     if (state.printers.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;padding:30px;color:#6B7299;">No physical printers registered in the Follow-Me pool yet. Click "+ Register New Printer" to add one.</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;padding:30px;color:#6B7299;">No physical printers registered in the Follow-Me pool yet. Click "+ Register New Printer" to add one.</td></tr>';
       return;
     }
 
@@ -231,28 +244,44 @@
       var p = state.printers[i];
       var tr = document.createElement('tr');
 
+      var isOld = (p.deviceGeneration === 'TOSHIBA_OLD' || (!p.deviceGeneration && p.model && (p.model.indexOf('306') !== -1 || p.model.indexOf('256') !== -1 || p.model.indexOf('356') !== -1 || p.model.indexOf('456') !== -1)));
+
+      var genBadge = isOld
+        ? '<span class="badge" style="background:#FEF3C7; color:#92400E; border:1px solid #FDE68A; font-weight:600;"><span style="color:#D97706;">●</span> Toshiba Old (Legacy)</span>'
+        : '<span class="badge" style="background:#E0F2FE; color:#0369A1; border:1px solid #BAE6FD; font-weight:600;"><span style="color:#0284C7;">●</span> e-BRIDGE Next</span>';
+
       var statusBadge = p.status === 'ONLINE'
         ? '<span class="badge badge-online">ONLINE</span>'
         : '<span class="badge badge-offline">' + esc(p.status || 'OFFLINE') + '</span>';
 
-      var ewbBadge = p.ewbConfigured
-        ? '<span class="badge badge-ewb-ready" title="Terminal URL: ' + esc(p.ewbUrl || '') + '">EWB READY</span>'
-        : '<span class="badge badge-ewb-none" title="Not pushed to device yet">NO EWB</span>';
+      var ewbBadge;
+      if (isOld) {
+        ewbBadge = '<span class="badge" style="background:#F1F5F9; color:#475569; border:1px solid #CBD5E1;" title="Legacy device releases prints via RAW Port 9100 / Web Station">PORT 9100 / WEB</span>';
+      } else {
+        ewbBadge = p.ewbConfigured
+          ? '<span class="badge badge-ewb-ready" title="Terminal URL: ' + esc(p.ewbUrl || '') + '">EWB READY</span>'
+          : '<span class="badge badge-ewb-none" title="Not pushed to device yet">NO EWB</span>';
+      }
 
       var roleBadge = '<span class="badge" style="background:#EFF6FF; color:#1D4ED8; font-weight:600; border:1px solid #BFDBFE;">Follow-Me Station</span>';
+
+      var ewbActionBtn = isOld
+        ? ''
+        : '<button class="btn btn-sm btn-action-ewb" onclick="openQuickEwbModal(' + p.id + ')">PUSH EWB</button>';
 
       tr.innerHTML =
         '<td><strong>' + esc(p.name) + '</strong></td>' +
         '<td><code>' + esc(p.printerCode) + '</code></td>' +
+        '<td>' + genBadge + '</td>' +
         '<td>' + esc(p.ipAddress) + ':' + p.rawPort + '</td>' +
         '<td>' + esc(p.location || 'Office') + '</td>' +
-        '<td>' + esc(p.model || 'Toshiba MFP') + '</td>' +
+        '<td>' + esc(p.model || (isOld ? 'Toshiba e-STUDIO 306SE' : 'Toshiba MFP')) + '</td>' +
         '<td>' + roleBadge + '</td>' +
         '<td>' + ewbBadge + '</td>' +
         '<td id="printer-status-' + p.id + '">' + statusBadge + '</td>' +
         '<td style="text-align:right; white-space:nowrap;">' +
           '<button class="btn btn-sm btn-action-test" id="btn-test-' + p.id + '" onclick="testPrinter(' + p.id + ')">TEST</button>' +
-          '<button class="btn btn-sm btn-action-ewb" onclick="openQuickEwbModal(' + p.id + ')">PUSH EWB</button>' +
+          ewbActionBtn +
           '<button class="btn btn-sm btn-action-web" onclick="window.open(\'http://' + esc(p.ipAddress) + '/\', \'_blank\')" title="Open TopAccess in new tab">TOPACCESS</button>' +
           '<button class="btn btn-sm btn-action-edit" onclick="openEditPrinterModal(' + p.id + ')">EDIT</button>' +
           '<button class="btn btn-sm btn-action-delete" onclick="deletePrinter(' + p.id + ', \'' + esc(p.name) + '\')">DEL</button>' +
@@ -261,6 +290,48 @@
       tbody.appendChild(tr);
     }
   }
+
+  window.handleDeviceGenerationChange = function () {
+    var genEl = document.getElementById('printerDeviceGeneration');
+    if (!genEl) return;
+    var isOld = (genEl.value === 'TOSHIBA_OLD');
+    var modelInput = document.getElementById('printerModel');
+    var ewbFields = document.getElementById('ewbConfigFields');
+    var ewbNotice = document.getElementById('ewbLegacyNotice');
+    var ewbBadge = document.getElementById('ewbArchBadge');
+    var autoEwb = document.getElementById('printerAutoEwb');
+
+    if (isOld) {
+      if (modelInput && (!modelInput.value || modelInput.value.indexOf('3518A') !== -1 || modelInput.value.indexOf('4508A') !== -1)) {
+        modelInput.value = 'Toshiba e-STUDIO 306SE';
+      }
+      if (ewbFields) {
+        ewbFields.style.opacity = '0.35';
+        ewbFields.style.pointerEvents = 'none';
+      }
+      if (ewbNotice) ewbNotice.style.display = 'block';
+      if (ewbBadge) {
+        ewbBadge.textContent = 'Toshiba Old (Legacy)';
+        ewbBadge.style.background = '#FEF3C7';
+        ewbBadge.style.color = '#92400E';
+      }
+      if (autoEwb) autoEwb.checked = false;
+    } else {
+      if (modelInput && modelInput.value === 'Toshiba e-STUDIO 306SE') {
+        modelInput.value = 'Toshiba e-STUDIO 3518A';
+      }
+      if (ewbFields) {
+        ewbFields.style.opacity = '1';
+        ewbFields.style.pointerEvents = 'auto';
+      }
+      if (ewbNotice) ewbNotice.style.display = 'none';
+      if (ewbBadge) {
+        ewbBadge.textContent = 'e-BRIDGE Next Only';
+        ewbBadge.style.background = '#E0F2FE';
+        ewbBadge.style.color = '#0369A1';
+      }
+    }
+  };
 
   window.openAddPrinterModal = function () {
     document.getElementById('printerModalTitle').textContent = 'Register New Printer';
@@ -272,6 +343,7 @@
     document.getElementById('printerPort').value = '9100';
     document.getElementById('printerLocation').value = '';
     document.getElementById('printerModel').value = 'Toshiba e-STUDIO 3518A';
+    document.getElementById('printerDeviceGeneration').value = 'TOSHIBA_NEW';
     document.getElementById('printerDuplex').checked = true;
     document.getElementById('printerColor').checked = false;
     document.getElementById('printerActive').checked = true;
@@ -281,6 +353,8 @@
     document.getElementById('printerAdminPass').value = '123456';
     document.getElementById('printerTerminalUrl').value = getDefaultTerminalUrl();
     document.getElementById('printerAutoEwb').checked = true;
+
+    window.handleDeviceGenerationChange();
 
     var logBox = document.getElementById('modalEwbLog');
     if (logBox) { logBox.style.display = 'none'; logBox.textContent = ''; }
@@ -308,6 +382,10 @@
     document.getElementById('printerPort').value = p.rawPort;
     document.getElementById('printerLocation').value = p.location || '';
     document.getElementById('printerModel').value = p.model || 'Toshiba e-STUDIO 3518A';
+
+    var gen = p.deviceGeneration || (p.model && (p.model.indexOf('306') !== -1 || p.model.indexOf('256') !== -1 || p.model.indexOf('356') !== -1 || p.model.indexOf('456') !== -1 || p.model.indexOf('506') !== -1) ? 'TOSHIBA_OLD' : 'TOSHIBA_NEW');
+    document.getElementById('printerDeviceGeneration').value = gen;
+
     document.getElementById('printerDuplex').checked = !!p.duplexSupported;
     document.getElementById('printerColor').checked = !!p.colorSupported;
     document.getElementById('printerActive').checked = p.isActive !== false;
@@ -317,6 +395,8 @@
     document.getElementById('printerAdminPass').value = p.adminPassword || '123456';
     document.getElementById('printerTerminalUrl').value = sanitizeTerminalUrl(p.ewbUrl, p.ipAddress);
     document.getElementById('printerAutoEwb').checked = false;
+
+    window.handleDeviceGenerationChange();
 
     var logBox = document.getElementById('modalEwbLog');
     if (logBox) { logBox.style.display = 'none'; logBox.textContent = ''; }
@@ -396,6 +476,10 @@
     document.getElementById('quickEwbPass').value = p.adminPassword || '123456';
     document.getElementById('quickEwbUrl').value = sanitizeTerminalUrl(p.ewbUrl, p.ipAddress);
     document.getElementById('quickEwbTopAccessLink').href = 'http://' + p.ipAddress + '/';
+    var secLink = document.getElementById('quickEwbSecLink');
+    if (secLink) {
+      secLink.href = 'http://' + p.ipAddress + '/Administration/Security/Authentication.html';
+    }
 
     var logBox = document.getElementById('quickEwbLog');
     logBox.textContent = 'Device: ' + p.name + ' (' + p.ipAddress + ')\nReady to push EWB Home Page to printer. Click "Push EWB Now".';
@@ -535,6 +619,7 @@
     var payload = {
       printerCode: document.getElementById('printerCode').value.trim(),
       name: document.getElementById('printerName').value.trim(),
+      deviceGeneration: document.getElementById('printerDeviceGeneration').value,
       ipAddress: document.getElementById('printerIp').value.trim(),
       rawPort: parseInt(document.getElementById('printerPort').value, 10) || 9100,
       location: document.getElementById('printerLocation').value.trim(),
@@ -652,7 +737,7 @@
         console.error('Users error:', err);
         var tbody = document.getElementById('usersTableBody');
         if (tbody) {
-          tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:#ef4444;">Failed to load users: ' + esc(err.message) + '</td></tr>';
+          tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;color:#ef4444;">Failed to load users: ' + esc(err.message) + '</td></tr>';
         }
       });
   };
@@ -663,7 +748,7 @@
     tbody.innerHTML = '';
 
     if (state.users.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;padding:30px;color:#6B7299;">No users registered yet.</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="11" style="text-align:center;padding:30px;color:#6B7299;">No users registered yet.</td></tr>';
       return;
     }
 
@@ -671,9 +756,12 @@
       var u = state.users[i];
       var tr = document.createElement('tr');
 
-      var roleBadge = u.role === 'ADMIN'
-        ? '<span class="badge badge-role-admin">ADMIN</span>'
-        : '<span class="badge badge-role-user">USER</span>';
+      var sourceBadge = '<span class="badge badge-source-manual">MANUAL</span>';
+      if (u.authSource === 'ACTIVE_DIRECTORY') {
+        sourceBadge = '<span class="badge badge-source-ad">AD / LDAP</span>';
+      } else if (u.authSource === 'WINDOWS_LOCAL') {
+        sourceBadge = '<span class="badge badge-source-win">WINDOWS LOCAL</span>';
+      }
 
       var pinBadge = u.hasPin
         ? '<span class="badge badge-pin-yes">CONFIGURED</span>'
@@ -683,14 +771,20 @@
         ? '<span class="badge badge-online">ACTIVE</span>'
         : '<span class="badge badge-offline">DISABLED</span>';
 
+      var printPages = (u.printCount != null) ? u.printCount : 0;
+      var copyPages = (u.copyCount != null) ? u.copyCount : 0;
+      var totalPages = printPages + copyPages;
+
       tr.innerHTML =
         '<td><strong>' + esc(u.username) + '</strong></td>' +
         '<td>' + esc(u.displayName) + '</td>' +
         '<td>' + esc(u.department || 'Operations') + '</td>' +
-        '<td>' + roleBadge + '</td>' +
+        '<td>' + sourceBadge + '</td>' +
         '<td>' + pinBadge + '</td>' +
         '<td>' + (u.badgeId ? '<code>' + esc(u.badgeId) + '</code>' : '<span style="color:#94a3b8;">None</span>') + '</td>' +
-        '<td><span style="font-size:11px; color:#475569;">' + esc(u.userSid) + '</span></td>' +
+        '<td><span class="badge" style="background:#eff6ff; color:#1d4ed8; font-weight:700;">🖨️ ' + printPages + '</span></td>' +
+        '<td><span class="badge" style="background:#f0fdf4; color:#15803d; font-weight:700;">📄 ' + copyPages + '</span></td>' +
+        '<td><strong style="color:#0f172a; font-size:13px;">' + totalPages + '</strong></td>' +
         '<td>' + statusBadge + '</td>' +
         '<td style="text-align:right; white-space:nowrap;">' +
           '<button class="btn btn-sm btn-action-pin" onclick="openResetPinModal(' + u.id + ', \'' + esc(u.username) + '\')">PIN</button>' +
@@ -713,6 +807,8 @@
     document.getElementById('userPin').value = '';
     document.getElementById('userPin').required = false;
     document.getElementById('userPinHint').textContent = 'PIN entered at the Toshiba touchscreen (e.g. 1234)';
+    document.getElementById('userPassword').value = '';
+    document.getElementById('userPasswordHint').textContent = 'Password for login at MFP touchscreen';
     document.getElementById('userBadge').value = '';
     document.getElementById('userEmail').value = '';
     document.getElementById('userSid').value = '';
@@ -741,6 +837,8 @@
     document.getElementById('userRole').value = u.role || 'USER';
     document.getElementById('userPin').value = '';
     document.getElementById('userPinHint').textContent = 'Leave empty to keep existing PIN unchanged.';
+    document.getElementById('userPassword').value = '';
+    document.getElementById('userPasswordHint').textContent = 'Leave empty to keep existing password unchanged.';
     document.getElementById('userBadge').value = u.badgeId || '';
     document.getElementById('userEmail').value = u.email || '';
     document.getElementById('userSid').value = u.userSid || '';
@@ -765,6 +863,7 @@
       department: document.getElementById('userDepartment').value.trim(),
       role: document.getElementById('userRole').value,
       pin: document.getElementById('userPin').value.trim() || null,
+      password: document.getElementById('userPassword').value.trim() || null,
       badgeId: document.getElementById('userBadge').value.trim() || null,
       email: document.getElementById('userEmail').value.trim() || null,
       userSid: document.getElementById('userSid').value.trim() || null,
@@ -789,6 +888,7 @@
         closeUserModal();
         showToast(isEdit ? 'User updated successfully.' : 'New user created successfully.', 'success');
         loadUsers();
+      loadDirectoryConfig();
         loadStats();
       })
       .catch(function (err) {
@@ -810,6 +910,7 @@
           if (!res.ok) throw new Error('HTTP ' + res.status);
           showToast('User "' + username + '" deleted successfully.', 'success');
           loadUsers();
+      loadDirectoryConfig();
           loadStats();
         })
         .catch(function (err) {
@@ -852,10 +953,233 @@
         closeResetPinModal();
         showToast('PIN reset successfully.', 'success');
         loadUsers();
+      loadDirectoryConfig();
       })
       .catch(function (err) {
         showToast('Failed to reset PIN: ' + err.message, 'error');
       });
+  };
+
+  /* =========================================================================
+     ACTIVE DIRECTORY & LDAP INTEGRATION (PaperCut Find-Me Directory Sync)
+     ========================================================================= */
+
+  window.loadDirectoryConfig = function () {
+    fetch('/api/admin/directory/config')
+      .then(function (res) {
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        return res.json();
+      })
+      .then(function (cfg) {
+        state.directoryConfig = cfg;
+        var elDomain = document.getElementById('dirDomainName');
+        var elLdapUrl = document.getElementById('dirLdapUrl');
+        var elPin = document.getElementById('dirDefaultPin');
+        var elSyncInfo = document.getElementById('dirLastSyncInfo');
+        var elBadge = document.getElementById('dirSyncBadge');
+
+        if (elDomain) elDomain.textContent = cfg.domainName || 'qoa.local';
+        if (elLdapUrl) elLdapUrl.textContent = cfg.ldapUrl || 'ldap://127.0.0.1:389';
+        if (elPin) elPin.textContent = cfg.defaultPin || '1234';
+
+        if (elSyncInfo) {
+          if (cfg.lastSyncAt) {
+            elSyncInfo.textContent = 'Last synchronized ' + new Date(cfg.lastSyncAt).toLocaleString() +
+              ' (' + (cfg.lastSyncStatus || 'SUCCESS') + ', ' + (cfg.lastSyncedUsersCount || 0) + ' accounts)';
+          } else {
+            elSyncInfo.textContent = 'Ready to sync with Domain Controller';
+          }
+        }
+
+        if (elBadge) {
+          if (cfg.lastSyncStatus === 'SUCCESS') {
+            elBadge.className = 'badge badge-online';
+            elBadge.textContent = 'AD Synced (' + (cfg.lastSyncedUsersCount || 0) + ' users)';
+          } else if (cfg.lastSyncStatus === 'FAILED') {
+            elBadge.className = 'badge badge-offline';
+            elBadge.textContent = 'Sync Failed';
+          } else {
+            elBadge.className = 'badge badge-online';
+            elBadge.textContent = 'Active Directory Ready';
+          }
+        }
+
+        var inpUrl = document.getElementById('ldapUrlInput');
+        var inpDomain = document.getElementById('ldapDomainInput');
+        var inpBaseDn = document.getElementById('ldapBaseDnInput');
+        var inpBindUser = document.getElementById('ldapBindUserInput');
+        var inpDefaultPin = document.getElementById('ldapDefaultPinInput');
+        var inpFilter = document.getElementById('ldapFilterInput');
+
+        if (inpUrl) inpUrl.value = cfg.ldapUrl || 'ldap://127.0.0.1:389';
+        if (inpDomain) inpDomain.value = cfg.domainName || 'qoa.local';
+        if (inpBaseDn) inpBaseDn.value = cfg.baseDn || 'DC=qoa,DC=local';
+        if (inpBindUser) inpBindUser.value = cfg.bindUsername || '';
+        if (inpDefaultPin) inpDefaultPin.value = cfg.defaultPin || '1234';
+        if (inpFilter) inpFilter.value = cfg.userFilter || '(&(objectCategory=person)(objectClass=user))';
+      })
+      .catch(function (err) {
+        console.warn('Directory config error:', err);
+      });
+  };
+
+  window.openDirectoryModal = function () {
+    loadDirectoryConfig();
+    var modal = document.getElementById('modalDirectorySync');
+    if (modal) modal.style.display = 'flex';
+  };
+
+  window.closeDirectoryModal = function () {
+    var modal = document.getElementById('modalDirectorySync');
+    if (modal) modal.style.display = 'none';
+  };
+
+  window.handleSaveDirectoryConfig = function (e) {
+    if (e && e.preventDefault) e.preventDefault();
+    var payload = {
+      ldapUrl: document.getElementById('ldapUrlInput').value.trim(),
+      domainName: document.getElementById('ldapDomainInput').value.trim(),
+      baseDn: document.getElementById('ldapBaseDnInput').value.trim(),
+      bindUsername: document.getElementById('ldapBindUserInput').value.trim(),
+      bindPassword: document.getElementById('ldapBindPassInput').value,
+      defaultPin: document.getElementById('ldapDefaultPinInput').value.trim() || '1234',
+      userFilter: document.getElementById('ldapFilterInput').value.trim(),
+      autoProvisionOnPrint: true
+    };
+
+    var logBox = document.getElementById('dirSyncLogBox');
+    if (logBox) logBox.textContent = 'Saving Active Directory & LDAP configuration...';
+
+    fetch('/api/admin/directory/config', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    })
+      .then(function (res) {
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        return res.json();
+      })
+      .then(function (saved) {
+        showToast('Directory settings saved successfully.', 'success');
+        if (logBox) logBox.textContent = 'Directory settings successfully saved.\nDomain: ' + saved.domainName + '\nLDAP URL: ' + saved.ldapUrl;
+        loadDirectoryConfig();
+      })
+      .catch(function (err) {
+        showToast('Failed to save directory config: ' + err.message, 'error');
+        if (logBox) logBox.textContent = 'ERROR saving config: ' + err.message;
+      });
+  };
+
+  window.handleTestLdapConnection = function () {
+    var btn = document.getElementById('btnTestLdap');
+    var logBox = document.getElementById('dirSyncLogBox');
+    if (btn) btn.disabled = true;
+    if (logBox) logBox.textContent = 'Probing LDAP / Active Directory connection to ' + document.getElementById('ldapUrlInput').value.trim() + '...';
+
+    var payload = {
+      ldapUrl: document.getElementById('ldapUrlInput').value.trim(),
+      domainName: document.getElementById('ldapDomainInput').value.trim(),
+      baseDn: document.getElementById('ldapBaseDnInput').value.trim(),
+      bindUsername: document.getElementById('ldapBindUserInput').value.trim(),
+      bindPassword: document.getElementById('ldapBindPassInput').value,
+      defaultPin: document.getElementById('ldapDefaultPinInput').value.trim() || '1234',
+      userFilter: document.getElementById('ldapFilterInput').value.trim(),
+      autoProvisionOnPrint: true
+    };
+
+    fetch('/api/admin/directory/test', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    })
+      .then(function (res) { return res.json(); })
+      .then(function (res) {
+        if (btn) btn.disabled = false;
+        if (res.connected) {
+          if (logBox) {
+            logBox.textContent = 'SUCCESS: ' + res.message + '\n' +
+              'Response latency: ' + res.responseTimeMs + 'ms\n' +
+              'Discovered AD Accounts: ' + (res.discoveredUsersCount || 0);
+          }
+          showToast(res.message, 'success');
+        } else {
+          if (logBox) {
+            logBox.textContent = 'FAILED TO CONNECT: ' + res.message + '\nError: ' + (res.errorDetails || 'Unknown error');
+          }
+          showToast('Directory test failed: ' + res.message, 'error');
+        }
+      })
+      .catch(function (err) {
+        if (btn) btn.disabled = false;
+        if (logBox) logBox.textContent = 'ERROR during LDAP probe: ' + err.message;
+        showToast('Probe request failed: ' + err.message, 'error');
+      });
+  };
+
+  window.handleSyncActiveDirectory = function () {
+    var btnExec = document.getElementById('btnExecuteAdSync');
+    var btnQuick = document.getElementById('btnQuickSyncAd');
+    var logBox = document.getElementById('dirSyncLogBox');
+
+    if (btnExec) btnExec.disabled = true;
+    if (btnQuick) btnQuick.disabled = true;
+    if (logBox) logBox.textContent = 'Connecting to Active Directory domain controller and synchronizing accounts...';
+
+    showToast('Synchronizing Active Directory accounts...', 'info');
+
+    fetch('/api/admin/directory/sync-ad', { method: 'POST' })
+      .then(function (res) { return res.json(); })
+      .then(function (res) {
+        if (btnExec) btnExec.disabled = false;
+        if (btnQuick) btnQuick.disabled = false;
+
+        if (res.success) {
+          var details = 'SUCCESS: ' + res.message + '\n' +
+            'Imported: ' + res.importedCount + ' | Updated: ' + res.updatedCount +
+            ' | Total in AD: ' + res.totalFoundCount + ' | Duration: ' + res.durationMs + 'ms';
+          if (logBox) logBox.textContent = details;
+          showToast('Active Directory sync completed! ' + res.importedCount + ' imported, ' + res.updatedCount + ' updated.', 'success');
+          loadUsers();
+          loadDirectoryConfig();
+          loadStats();
+        } else {
+          if (logBox) logBox.textContent = 'SYNC FAILED: ' + res.message + (res.error ? '\nDetails: ' + res.error : '');
+          showToast('AD Sync failed: ' + res.message, 'error');
+        }
+      })
+      .catch(function (err) {
+        if (btnExec) btnExec.disabled = false;
+        if (btnQuick) btnQuick.disabled = false;
+        if (logBox) logBox.textContent = 'NETWORK ERROR: ' + err.message;
+        showToast('Failed to sync AD users: ' + err.message, 'error');
+      });
+  };
+
+  window.handleImportWindowsUsers = function () {
+    customConfirm(
+      'Import Windows Local Users',
+      'This will query all Windows local user accounts on this computer and synchronize them with RR Secure Print. Continue?',
+      'Import Windows Users',
+      'btn-action-primary'
+    ).then(function (confirmed) {
+      if (!confirmed) return;
+
+      showToast('Importing local Windows users...', 'info');
+      fetch('/api/admin/directory/import-windows', { method: 'POST' })
+        .then(function (res) { return res.json(); })
+        .then(function (res) {
+          if (res.success) {
+            showToast('Windows users imported! ' + res.importedCount + ' added, ' + res.updatedCount + ' updated.', 'success');
+            loadUsers();
+            loadStats();
+          } else {
+            showToast('Import failed: ' + res.message, 'error');
+          }
+        })
+        .catch(function (err) {
+          showToast('Error importing Windows users: ' + err.message, 'error');
+        });
+    });
   };
 
   /* =========================================================================
@@ -1058,6 +1382,90 @@
   }
 
   /* =========================================================================
+     WALK-UP PHOTOCOPY LOGS (TOSHIBA E-BRIDGE NEXT)
+     ========================================================================= */
+
+  window.loadCopyJobs = function () {
+    fetch('/api/admin/copy-jobs')
+      .then(function (res) {
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        return res.json();
+      })
+      .then(function (data) {
+        state.copyJobs = data || [];
+        renderCopyJobs();
+      })
+      .catch(function (err) {
+        console.error('Copy jobs error:', err);
+        var tbody = document.getElementById('copyJobsTableBody');
+        if (tbody) {
+          tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:#ef4444;">Failed to load photocopy logs: ' + esc(err.message) + '</td></tr>';
+        }
+      });
+  };
+
+  function renderCopyJobs() {
+    var tbody = document.getElementById('copyJobsTableBody');
+    if (!tbody) return;
+    tbody.innerHTML = '';
+
+    if (!state.copyJobs || state.copyJobs.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:30px;color:#6B7299;">No walk-up photocopy jobs recorded yet. Polling runs every 60s.</td></tr>';
+      return;
+    }
+
+    for (var i = 0; i < state.copyJobs.length; i++) {
+      var job = state.copyJobs[i];
+      var tr = document.createElement('tr');
+
+      tr.innerHTML =
+        '<td style="white-space:nowrap; font-size:11px; color:#475569;">' + formatTime(job.completedAt || job.createdAt) + '</td>' +
+        '<td><strong>' + esc(job.username || 'Anonymous') + '</strong></td>' +
+        '<td>' + esc(job.printerName || 'Toshiba MFP') + '</td>' +
+        '<td><code>' + esc(job.printerIp || '-') + '</code></td>' +
+        '<td><span class="badge" style="background:#eff6ff; color:#1d4ed8; font-weight:700; font-size:13px;">' + (job.pages || 1) + ' pgs</span></td>' +
+        '<td>' + (job.monoPages || 0) + '</td>' +
+        '<td>' + (job.colorPages || 0) + '</td>' +
+        '<td><span style="font-size:11px; color:#64748B;">#' + esc(job.printerJobId || '-') + '</span></td>';
+
+      tbody.appendChild(tr);
+    }
+  }
+
+  window.pollFleetCopyJobs = function () {
+    var btnPrinters = document.getElementById('btnPollCopyFleet');
+    var btnLogs = document.getElementById('btnPollCopyFleetLogs');
+    if (btnPrinters) { btnPrinters.disabled = true; btnPrinters.textContent = '⏳ Polling MFPs...'; }
+    if (btnLogs) { btnLogs.disabled = true; btnLogs.textContent = '⏳ Polling MFPs...'; }
+
+    fetch('/api/admin/printers/poll-copy-jobs', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' }
+    })
+      .then(function (res) {
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        return res.json();
+      })
+      .then(function (data) {
+        showToast(data.message || 'Polled active Toshiba MFPs successfully.', 'success');
+        setTimeout(function () {
+          if (state.currentPage === 'copy-logs') {
+            window.loadCopyJobs();
+          } else if (state.currentPage === 'users') {
+            window.loadUsers();
+          }
+        }, 1200);
+      })
+      .catch(function (err) {
+        showToast('Fleet poll failed: ' + err.message, 'error');
+      })
+      .finally(function () {
+        if (btnPrinters) { btnPrinters.disabled = false; btnPrinters.textContent = '📑 Poll Walk-Up Copy Jobs'; }
+        if (btnLogs) { btnLogs.disabled = false; btnLogs.textContent = '🔄 Poll MFPs Now'; }
+      });
+  };
+
+  /* =========================================================================
      HELPERS & UTILITIES
      ========================================================================= */
 
@@ -1234,8 +1642,8 @@
             var isSel = (q.id === cfg.id);
             var tab = document.createElement('div');
             tab.className = 'vq-queue-tab';
-            tab.style.cssText = 'cursor:pointer; padding:10px 14px; border-radius:2px; font-size:12.5px; transition:all 0.15s ease; border:1px solid ' +
-              (isSel ? '#1D4ED8' : '#CBD5E1') + '; background:' + (isSel ? '#EFF6FF' : '#FFFFFF') + '; min-width:210px; flex:1; max-width:280px; box-shadow:0 1px 2px rgba(0,0,0,0.03);';
+            tab.style.cssText = 'cursor:pointer; padding:10px 14px; border-radius:0px; font-size:12.5px; transition:all 0.15s ease; border:1px solid ' +
+              (isSel ? '#1D4ED8' : '#CBD5E1') + '; border-top:' + (isSel ? '3px solid #F59E0B' : '1px solid #CBD5E1') + '; background:' + (isSel ? '#EFF6FF' : '#FFFFFF') + '; min-width:210px; flex:1; max-width:280px; box-shadow:0 1px 2px rgba(0,0,0,0.03);';
             tab.setAttribute('onclick', 'window.switchVirtualQueue(' + q.id + ')');
 
             var badges = '';
@@ -1481,6 +1889,11 @@
         ? ' <span class="badge" style="background:#EFF6FF; color:#1D4ED8; font-size:10px;">⭐ Default MFP</span>'
         : '';
 
+      var isOldModel = (printer.deviceGeneration === 'TOSHIBA_OLD' || (printer.model && (printer.model.indexOf('306') !== -1 || printer.model.indexOf('256') !== -1 || printer.model.indexOf('356') !== -1 || printer.model.indexOf('456') !== -1)));
+      var genTag = isOldModel
+        ? ' <span class="badge" style="background:#FEF3C7; color:#92400E; font-size:9.5px; border:1px solid #FDE68A;">Toshiba Old</span>'
+        : ' <span class="badge" style="background:#E0F2FE; color:#0369A1; font-size:9.5px; border:1px solid #BAE6FD;">Next</span>';
+
       html += '<tr style="' + (inPool ? 'background:#FAFDFB;' : '') + '">' +
         '<td style="text-align:center;">' +
           '<input type="checkbox" onchange="window.handleVqTogglePrinterCheck(' + printer.id + ', this.checked)" ' + (isChecked ? 'checked' : '') + '>' +
@@ -1489,7 +1902,7 @@
         '<td><code style="font-size:11.5px; color:#1E40AF; font-weight:700;">' + printer.printerCode + '</code></td>' +
         '<td><code style="font-size:12px; color:#334155;">' + printer.ipAddress + ':' + printer.rawPort + '</code></td>' +
         '<td>' + (printer.location || 'HQ Office') + '</td>' +
-        '<td style="color:#475569;">' + (printer.model || 'Toshiba e-STUDIO') + '</td>' +
+        '<td style="color:#475569;">' + (printer.model || (isOldModel ? 'Toshiba e-STUDIO 306SE' : 'Toshiba e-STUDIO')) + genTag + '</td>' +
         '<td>' + poolBadge + '</td>' +
         '<td style="text-align:center;">' + actionBtn + '</td>' +
         '<td><span style="color:#059669; font-weight:600; font-size:11px;">● Online</span></td>' +
@@ -1990,6 +2403,291 @@
       .catch(function (err) {
         showToast('Failed to toggle print mode: ' + err.message, 'error');
       });
+  };
+
+  /* =========================================================================
+     SYSTEM SETTINGS & CORPORATE BRANDING CONTROLLER
+     ========================================================================= */
+
+  var pendingLogoData = null;
+  var pendingLogoFilename = null;
+
+  function escapeHtml(str) {
+    if (!str) return '';
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
+  }
+
+  function applyBrandingToSidebar(settings) {
+    if (!settings) return;
+    var sidebarLogoImg = document.getElementById('sidebarLogoImg');
+    var sidebarLogoWrap = document.getElementById('sidebarLogoWrap');
+    var defaultGroup   = document.getElementById('sidebarBrandDefaultGroup');
+    var sidebarBrandName = document.getElementById('sidebarBrandName');
+    var sidebarBrandSub  = document.getElementById('sidebarBrandSub');
+
+    if (settings.logoData && settings.logoData.trim()) {
+      // Full-width horizontal logo (350x106 ratio) spanning the header - title/sub hidden
+      if (sidebarLogoImg) sidebarLogoImg.src = settings.logoData;
+      if (sidebarLogoWrap) sidebarLogoWrap.style.display = 'flex';
+      if (defaultGroup) defaultGroup.style.display = 'none';
+    } else {
+      // Fallback default branding (nP mark + title & subtitle)
+      if (sidebarLogoImg) sidebarLogoImg.src = '';
+      if (sidebarLogoWrap) sidebarLogoWrap.style.display = 'none';
+      if (defaultGroup) defaultGroup.style.display = 'flex';
+
+      if (sidebarBrandName && settings.systemTitle) {
+        sidebarBrandName.textContent = settings.systemTitle;
+      }
+      if (sidebarBrandSub && settings.organizationName) {
+        sidebarBrandSub.textContent = settings.organizationName;
+      }
+    }
+  }
+
+  function loadSystemBranding() {
+    fetch('/api/admin/settings')
+      .then(function (res) {
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        return res.json();
+      })
+      .then(function (settings) {
+        applyBrandingToSidebar(settings);
+      })
+      .catch(function () {
+        // Silently retain default branding if unauthenticated or error
+      });
+  }
+
+  window.loadSettings = function () {
+    fetch('/api/admin/settings')
+      .then(function (res) {
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        return res.json();
+      })
+      .then(function (settings) {
+        var orgInput = document.getElementById('settingOrgName');
+        var titleInput = document.getElementById('settingSystemTitle');
+        var subInput = document.getElementById('settingSystemSubtitle');
+        var timeoutInput = document.getElementById('settingInactivityTimeout');
+        var supportInput = document.getElementById('settingSupportContact');
+
+        if (orgInput) orgInput.value = settings.organizationName || '';
+        if (titleInput) titleInput.value = settings.systemTitle || '';
+        if (subInput) subInput.value = settings.systemSubtitle || '';
+        if (timeoutInput) timeoutInput.value = settings.inactivityTimeoutSecs || 60;
+        if (supportInput) supportInput.value = settings.supportContact || '';
+
+        updateLogoPreviewUI(settings.logoData, settings.logoFilename);
+        applyBrandingToSidebar(settings);
+
+        var statusBadge = document.getElementById('settingsSaveStatus');
+        if (statusBadge) {
+          statusBadge.textContent = 'Configured';
+          statusBadge.style.background = '#F0FDF4';
+          statusBadge.style.color = '#15803D';
+        }
+      })
+      .catch(function (err) {
+        showToast('Failed to load system settings: ' + err.message, 'error');
+      });
+  };
+
+  function updateLogoPreviewUI(logoData, filename) {
+    var previewImg = document.getElementById('settingsLogoPreviewImg');
+    var defaultMark = document.getElementById('settingsLogoDefaultMark');
+    var logoInfo = document.getElementById('settingsLogoInfo');
+    var logoStatusBadge = document.getElementById('logoStatusBadge');
+    var btnSave = document.getElementById('btnSaveLogo');
+    var btnReset = document.getElementById('btnResetLogo');
+
+    if (logoData && logoData.trim()) {
+      if (previewImg) {
+        previewImg.src = logoData;
+        previewImg.style.display = 'block';
+      }
+      if (defaultMark) defaultMark.style.display = 'none';
+      if (logoInfo) {
+        logoInfo.innerHTML = '<strong>' + escapeHtml(filename || 'Custom Logo') + '</strong>';
+      }
+      if (logoStatusBadge) {
+        logoStatusBadge.textContent = 'Custom Logo Active';
+        logoStatusBadge.className = 'badge badge-online';
+      }
+      if (btnReset) btnReset.disabled = false;
+    } else {
+      if (previewImg) {
+        previewImg.src = '';
+        previewImg.style.display = 'none';
+      }
+      if (defaultMark) defaultMark.style.display = 'flex';
+      if (logoInfo) {
+        logoInfo.textContent = 'Default nexPrint Branding';
+      }
+      if (logoStatusBadge) {
+        logoStatusBadge.textContent = 'Default Logo';
+        logoStatusBadge.className = 'badge badge-offline';
+      }
+      if (btnReset) btnReset.disabled = true;
+    }
+    if (btnSave) btnSave.disabled = true;
+  }
+
+  window.handleLogoFileSelect = function (event) {
+    var file = event.target.files && event.target.files[0];
+    if (!file) return;
+
+    if (file.size > 4 * 1024 * 1024) {
+      showToast('Image file too large. Maximum size is 4MB.', 'error');
+      event.target.value = '';
+      return;
+    }
+
+    var reader = new FileReader();
+    reader.onload = function (e) {
+      pendingLogoData = e.target.result;
+      pendingLogoFilename = file.name;
+
+      var previewImg = document.getElementById('settingsLogoPreviewImg');
+      var defaultMark = document.getElementById('settingsLogoDefaultMark');
+      var logoInfo = document.getElementById('settingsLogoInfo');
+      var btnSave = document.getElementById('btnSaveLogo');
+
+      if (previewImg) {
+        previewImg.src = pendingLogoData;
+        previewImg.style.display = 'block';
+      }
+      if (defaultMark) defaultMark.style.display = 'none';
+      if (logoInfo) {
+        logoInfo.innerHTML = '<strong>' + escapeHtml(file.name) + '</strong> (' + Math.round(file.size / 1024) + ' KB - Pending Save)';
+      }
+      if (btnSave) {
+        btnSave.disabled = false;
+      }
+      showToast('Logo file selected. Click "Save Logo" to apply changes.', 'info');
+    };
+    reader.readAsDataURL(file);
+  };
+
+  window.handleSaveLogo = function () {
+    if (!pendingLogoData) {
+      showToast('Please select a logo file first.', 'error');
+      return;
+    }
+
+    var btnSave = document.getElementById('btnSaveLogo');
+    if (btnSave) btnSave.disabled = true;
+
+    fetch('/api/admin/settings/logo', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        logoData: pendingLogoData,
+        filename: pendingLogoFilename || 'custom-logo.png'
+      })
+    })
+    .then(function (res) {
+      if (!res.ok) return res.json().then(function (e) { throw new Error(e.error || 'Server error'); });
+      return res.json();
+    })
+    .then(function (updated) {
+      showToast('Organization logo updated and applied successfully!', 'success');
+      pendingLogoData = null;
+      pendingLogoFilename = null;
+      var fileInput = document.getElementById('logoFileInput');
+      if (fileInput) fileInput.value = '';
+      updateLogoPreviewUI(updated.logoData, updated.logoFilename);
+      applyBrandingToSidebar(updated);
+    })
+    .catch(function (err) {
+      showToast('Failed to save logo: ' + err.message, 'error');
+      if (btnSave) btnSave.disabled = false;
+    });
+  };
+
+  window.handleResetLogo = function () {
+    if (!confirm('Are you sure you want to reset the organization logo to the default branding?')) {
+      return;
+    }
+
+    fetch('/api/admin/settings/logo', {
+      method: 'DELETE'
+    })
+    .then(function (res) {
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      return res.json();
+    })
+    .then(function (updated) {
+      showToast('Logo reset to default branding.', 'success');
+      pendingLogoData = null;
+      pendingLogoFilename = null;
+      var fileInput = document.getElementById('logoFileInput');
+      if (fileInput) fileInput.value = '';
+      updateLogoPreviewUI(null, null);
+      applyBrandingToSidebar(updated);
+    })
+    .catch(function (err) {
+      showToast('Failed to reset logo: ' + err.message, 'error');
+    });
+  };
+
+  window.handleSaveGeneralSettings = function (event) {
+    if (event) event.preventDefault();
+
+    var orgName = (document.getElementById('settingOrgName').value || '').trim();
+    var title = (document.getElementById('settingSystemTitle').value || '').trim();
+    var subtitle = (document.getElementById('settingSystemSubtitle').value || '').trim();
+    var timeout = parseInt(document.getElementById('settingInactivityTimeout').value, 10) || 60;
+    var support = (document.getElementById('settingSupportContact').value || '').trim();
+
+    if (!orgName) {
+      showToast('Organization name is required.', 'error');
+      return;
+    }
+    if (!title) {
+      showToast('System title is required.', 'error');
+      return;
+    }
+
+    var btnSubmit = document.getElementById('btnSaveGeneralSettings');
+    if (btnSubmit) btnSubmit.disabled = true;
+
+    fetch('/api/admin/settings', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        organizationName: orgName,
+        systemTitle: title,
+        systemSubtitle: subtitle,
+        inactivityTimeoutSecs: timeout,
+        supportContact: support
+      })
+    })
+    .then(function (res) {
+      if (!res.ok) return res.json().then(function (e) { throw new Error(e.error || 'Server error'); });
+      return res.json();
+    })
+    .then(function (saved) {
+      showToast('General settings saved successfully!', 'success');
+      applyBrandingToSidebar(saved);
+      var statusBadge = document.getElementById('settingsSaveStatus');
+      if (statusBadge) {
+        statusBadge.textContent = 'Saved';
+        statusBadge.style.background = '#F0FDF4';
+        statusBadge.style.color = '#15803D';
+      }
+    })
+    .catch(function (err) {
+      showToast('Failed to save settings: ' + err.message, 'error');
+    })
+    .finally(function () {
+      if (btnSubmit) btnSubmit.disabled = false;
+    });
   };
 
 })();

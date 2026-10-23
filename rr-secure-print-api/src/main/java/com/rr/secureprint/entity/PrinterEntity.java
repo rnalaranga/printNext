@@ -59,12 +59,19 @@ public class PrinterEntity {
     @Column(name = "is_default_hold_queue", nullable = false)
     private boolean isDefaultHoldQueue = false;
 
+    @Column(name = "device_generation", length = 32)
+    private String deviceGeneration = "TOSHIBA_NEW";
+
     @Column(name = "created_at")
     private Instant createdAt = Instant.now();
 
     public PrinterEntity() {}
 
     public PrinterEntity(String printerCode, String name, String ipAddress, int rawPort, String location, String model, boolean colorSupported, boolean duplexSupported) {
+        this(printerCode, name, ipAddress, rawPort, location, model, colorSupported, duplexSupported, "TOSHIBA_NEW");
+    }
+
+    public PrinterEntity(String printerCode, String name, String ipAddress, int rawPort, String location, String model, boolean colorSupported, boolean duplexSupported, String deviceGeneration) {
         this.printerCode = printerCode;
         this.name = name;
         this.ipAddress = ipAddress;
@@ -73,6 +80,7 @@ public class PrinterEntity {
         this.model = model != null ? model : "Toshiba e-STUDIO 3518A";
         this.colorSupported = colorSupported;
         this.duplexSupported = duplexSupported;
+        this.deviceGeneration = (deviceGeneration != null && !deviceGeneration.isBlank()) ? deviceGeneration.toUpperCase() : "TOSHIBA_NEW";
         this.isActive = true;
         this.status = "ONLINE";
         this.adminUsername = "admin";
@@ -132,6 +140,14 @@ public class PrinterEntity {
 
     public boolean isDefaultHoldQueue() { return isDefaultHoldQueue; }
     public void setDefaultHoldQueue(boolean defaultHoldQueue) { isDefaultHoldQueue = defaultHoldQueue; }
+
+    public String getDeviceGeneration() {
+        return deviceGeneration != null ? deviceGeneration : "TOSHIBA_NEW";
+    }
+
+    public void setDeviceGeneration(String deviceGeneration) {
+        this.deviceGeneration = (deviceGeneration != null && !deviceGeneration.isBlank()) ? deviceGeneration.toUpperCase() : "TOSHIBA_NEW";
+    }
 
     public Instant getCreatedAt() { return createdAt; }
     public void setCreatedAt(Instant createdAt) { this.createdAt = createdAt; }

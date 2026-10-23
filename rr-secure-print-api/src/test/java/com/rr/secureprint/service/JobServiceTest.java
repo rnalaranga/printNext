@@ -8,6 +8,7 @@ import com.rr.secureprint.entity.UserEntity;
 import com.rr.secureprint.exception.JobConcurrencyException;
 import com.rr.secureprint.repository.PrintJobRepository;
 import com.rr.secureprint.repository.PrinterRepository;
+import com.rr.secureprint.repository.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -31,6 +32,9 @@ class JobServiceTest {
 
     @Mock
     private PrinterRepository printerRepository;
+
+    @Mock
+    private UserRepository userRepository;
 
     private AuditService fakeAuditService;
     private SpoolStorageService fakeSpoolStorageService;
@@ -71,7 +75,7 @@ class JobServiceTest {
             }
         };
 
-        jobService = new JobService(printJobRepository, printerRepository, fakeSpoolStorageService, fakePrinterService, new WindowsQueueService(), fakeAuditService);
+        jobService = new JobService(printJobRepository, printerRepository, userRepository, fakeSpoolStorageService, fakePrinterService, new WindowsQueueService(), fakeAuditService);
 
         authorizedUser = new UserEntity("jdoe", "John Doe", "S-1-5-21-1001", "hash", "BADGE-1", "jdoe@rr.local", "Engineering", "USER");
         attackerUser = new UserEntity("mallory", "Mallory", "S-1-5-21-9999", "hash", "BADGE-9", "mallory@rr.local", "Sales", "USER");

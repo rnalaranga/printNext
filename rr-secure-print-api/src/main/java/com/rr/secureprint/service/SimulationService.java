@@ -35,17 +35,20 @@ public class SimulationService {
     private final PrinterRepository printerRepository;
     private final SpoolStorageService spoolStorageService;
     private final AuditService auditService;
+    private final ActiveDirectoryService activeDirectoryService;
 
     public SimulationService(PrintJobRepository printJobRepository,
                              UserRepository userRepository,
                              PrinterRepository printerRepository,
                              SpoolStorageService spoolStorageService,
-                             AuditService auditService) {
+                             AuditService auditService,
+                             ActiveDirectoryService activeDirectoryService) {
         this.printJobRepository = printJobRepository;
         this.userRepository = userRepository;
         this.printerRepository = printerRepository;
         this.spoolStorageService = spoolStorageService;
         this.auditService = auditService;
+        this.activeDirectoryService = activeDirectoryService;
     }
 
     /**
@@ -113,26 +116,8 @@ public class SimulationService {
      */
     @Transactional
     public JobDto ingestWindowsSpoolJob(com.rr.secureprint.dto.SpoolIngestRequest request) throws IOException {
-        String username = request.username().trim();
-        String userSid = (request.userSid() != null && !request.userSid().isBlank())
-                ? request.userSid()
-                : "S-1-5-21-1966046810-3588821400-173210280-1001";
-
-        UserEntity user = userRepository.findByUserSid(userSid)
-                .or(() -> userRepository.findByUsername(username.toLowerCase()))
-                .orElseGet(() -> {
-                    UserEntity newUser = new UserEntity(
-                            username.toLowerCase(),
-                            username + " (Windows User)",
-                            userSid,
-                            "1234",
-                            "BADGE-" + Math.abs(username.hashCode() % 10000),
-                            username.toLowerCase() + "@rrconstruction.local",
-                            "RR Construction",
-                            "USER"
-                    );
-                    return userRepository.save(newUser);
-                });
+        // PaperCut MF Style: Resolve user identity from AD / Windows Local / JIT provision
+        UserEntity user = activeDirectoryService.resolveOrProvisionUser(request.username(), request.userSid());
 
         byte[] spoolData;
         if (request.spoolBase64() != null && !request.spoolBase64().isBlank()) {
@@ -140,8 +125,8 @@ public class SimulationService {
         } else if (request.spoolFilePath() != null && !request.spoolFilePath().isBlank() && new java.io.File(request.spoolFilePath()).exists()) {
             spoolData = java.nio.file.Files.readAllBytes(java.nio.file.Path.of(request.spoolFilePath()));
         } else {
-            spoolData = generateSimulatedSpoolBytes(user.getUsername(), request.documentName(),
-                    request.pageCount(), request.color(), request.duplex());
+            LOGGER.severe("[SPOOL INGEST ERROR] Rejected Windows job '" + request.documentName() + "': no authentic spool bytes provided!");
+            throw new IllegalArgumentException("Cannot ingest Windows print job: authentic driver spool bytes (.SPL) were not provided.");
         }
 
         SpoolStorageService.StoredFileResult stored =

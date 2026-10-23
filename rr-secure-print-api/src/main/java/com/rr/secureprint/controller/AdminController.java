@@ -4,10 +4,13 @@ import com.rr.secureprint.dto.*;
 import com.rr.secureprint.entity.PrinterEntity;
 import com.rr.secureprint.entity.UserEntity;
 import com.rr.secureprint.repository.AuditLogRepository;
+import com.rr.secureprint.service.ActiveDirectoryService;
 import com.rr.secureprint.service.AuthService;
 import com.rr.secureprint.service.JobService;
 import com.rr.secureprint.service.PrinterService;
 import com.rr.secureprint.service.UserService;
+import com.rr.secureprint.service.CopyTrackingService;
+import com.rr.secureprint.service.SystemSettingsService;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -26,17 +29,26 @@ public class AdminController {
     private final AuditLogRepository auditLogRepository;
     private final PrinterService printerService;
     private final UserService userService;
+    private final ActiveDirectoryService activeDirectoryService;
+    private final CopyTrackingService copyTrackingService;
+    private final SystemSettingsService systemSettingsService;
 
     public AdminController(JobService jobService,
                            AuthService authService,
                            AuditLogRepository auditLogRepository,
                            PrinterService printerService,
-                           UserService userService) {
+                           UserService userService,
+                           ActiveDirectoryService activeDirectoryService,
+                           CopyTrackingService copyTrackingService,
+                           SystemSettingsService systemSettingsService) {
         this.jobService = jobService;
         this.authService = authService;
         this.auditLogRepository = auditLogRepository;
         this.printerService = printerService;
         this.userService = userService;
+        this.activeDirectoryService = activeDirectoryService;
+        this.copyTrackingService = copyTrackingService;
+        this.systemSettingsService = systemSettingsService;
     }
 
     /* =========================================================================
@@ -318,6 +330,77 @@ public class AdminController {
         return ResponseEntity.ok(Map.of("message", "PIN successfully reset."));
     }
 
+    @PostMapping("/users/{id}/reset-password")
+    public ResponseEntity<?> resetPassword(@PathVariable("id") Long id,
+                                           @RequestBody Map<String, String> body,
+                                           HttpServletRequest httpRequest) {
+        if (!isAdmin(httpRequest)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("error", "Admin privileges required."));
+        }
+        String password = body.get("password");
+        if (password == null || password.trim().isEmpty()) {
+            return ResponseEntity.badRequest().body(Map.of("error", "Password cannot be empty."));
+        }
+        String adminUser = getAdminActorName(httpRequest);
+        userService.resetPassword(id, password.trim(), adminUser, httpRequest.getRemoteAddr());
+        return ResponseEntity.ok(Map.of("message", "Password successfully reset."));
+    }
+
+    /* =========================================================================
+       ACTIVE DIRECTORY & LDAP INTEGRATION ENDPOINTS
+       ========================================================================= */
+
+    @GetMapping("/directory/config")
+    public ResponseEntity<?> getDirectoryConfig(HttpServletRequest httpRequest) {
+        if (!isAdmin(httpRequest)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("error", "Admin privileges required."));
+        }
+        return ResponseEntity.ok(activeDirectoryService.getDirectoryConfigDto());
+    }
+
+    @PostMapping("/directory/config")
+    public ResponseEntity<?> saveDirectoryConfig(@RequestBody DirectoryConfigDto dto, HttpServletRequest httpRequest) {
+        if (!isAdmin(httpRequest)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("error", "Admin privileges required."));
+        }
+        try {
+            String adminUser = getAdminActorName(httpRequest);
+            DirectoryConfigDto saved = activeDirectoryService.saveDirectoryConfig(dto, adminUser, httpRequest.getRemoteAddr());
+            return ResponseEntity.ok(saved);
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    @PostMapping("/directory/test")
+    public ResponseEntity<?> testDirectoryConnection(@RequestBody(required = false) DirectoryConfigDto dto, HttpServletRequest httpRequest) {
+        if (!isAdmin(httpRequest)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("error", "Admin privileges required."));
+        }
+        Map<String, Object> result = activeDirectoryService.testConnection(dto);
+        return ResponseEntity.ok(result);
+    }
+
+    @PostMapping("/directory/sync-ad")
+    public ResponseEntity<?> syncActiveDirectoryUsers(HttpServletRequest httpRequest) {
+        if (!isAdmin(httpRequest)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("error", "Admin privileges required."));
+        }
+        String adminUser = getAdminActorName(httpRequest);
+        DirectorySyncResultDto result = activeDirectoryService.syncActiveDirectoryUsers(adminUser, httpRequest.getRemoteAddr());
+        return ResponseEntity.ok(result);
+    }
+
+    @PostMapping("/directory/import-windows")
+    public ResponseEntity<?> importWindowsUsers(HttpServletRequest httpRequest) {
+        if (!isAdmin(httpRequest)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("error", "Admin privileges required."));
+        }
+        String adminUser = getAdminActorName(httpRequest);
+        DirectorySyncResultDto result = activeDirectoryService.importWindowsUsers(adminUser, httpRequest.getRemoteAddr());
+        return ResponseEntity.ok(result);
+    }
+
     /* =========================================================================
        PRINT JOB QUEUE & AUDIT ENDPOINTS
        ========================================================================= */
@@ -377,9 +460,93 @@ public class AdminController {
                 "localhost".equalsIgnoreCase(httpRequest.getServerName());
     }
 
+    /* =========================================================================
+       FLEET PHOTOCOPY AUDIT & TRACKING ENDPOINTS
+       ========================================================================= */
+
+    @GetMapping("/copy-jobs")
+    public ResponseEntity<?> getRecentCopyJobs(HttpServletRequest httpRequest) {
+        if (!isAdmin(httpRequest)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("error", "Admin privileges required."));
+        }
+        return ResponseEntity.ok(copyTrackingService.getRecentCopyJobs());
+    }
+
+    @PostMapping("/printers/poll-copy-jobs")
+    public ResponseEntity<?> triggerCopyJobPoll(HttpServletRequest httpRequest) {
+        if (!isAdmin(httpRequest)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("error", "Admin privileges required."));
+        }
+        java.util.concurrent.CompletableFuture.runAsync(copyTrackingService::pollFleetPhotocopyJobs);
+        return ResponseEntity.ok(Map.of("success", true, "message", "Fleet photocopy poll initiated across all active MFPs."));
+    }
+
     private String getAdminActorName(HttpServletRequest httpRequest) {
         return authService.getCurrentUser(httpRequest)
                 .map(UserEntity::getUsername)
                 .orElse("admin");
+    }
+
+    /* =========================================================================
+       SYSTEM SETTINGS & BRANDING ENDPOINTS
+       ========================================================================= */
+
+    @GetMapping("/settings")
+    public ResponseEntity<?> getSystemSettings(HttpServletRequest httpRequest) {
+        if (!isAdmin(httpRequest)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("error", "Admin privileges required."));
+        }
+        return ResponseEntity.ok(systemSettingsService.toDto(systemSettingsService.getOrCreateSettings()));
+    }
+
+    @PutMapping("/settings")
+    public ResponseEntity<?> updateSystemSettings(@RequestBody SystemSettingsDto dto, HttpServletRequest httpRequest) {
+        if (!isAdmin(httpRequest)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("error", "Admin privileges required."));
+        }
+        try {
+            String adminUser = getAdminActorName(httpRequest);
+            var saved = systemSettingsService.updateSettings(dto, adminUser, httpRequest.getRemoteAddr());
+            return ResponseEntity.ok(systemSettingsService.toDto(saved));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    @PostMapping("/settings/logo")
+    public ResponseEntity<?> updateSystemLogo(@RequestBody Map<String, String> payload, HttpServletRequest httpRequest) {
+        if (!isAdmin(httpRequest)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("error", "Admin privileges required."));
+        }
+        try {
+            String logoData = payload.get("logoData");
+            String filename = payload.get("filename");
+            if (logoData == null || logoData.isBlank()) {
+                return ResponseEntity.badRequest().body(Map.of("error", "No logo image data provided."));
+            }
+            String adminUser = getAdminActorName(httpRequest);
+            var saved = systemSettingsService.updateLogo(logoData, filename, adminUser, httpRequest.getRemoteAddr());
+            return ResponseEntity.ok(systemSettingsService.toDto(saved));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    @DeleteMapping("/settings/logo")
+    public ResponseEntity<?> resetSystemLogo(HttpServletRequest httpRequest) {
+        if (!isAdmin(httpRequest)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("error", "Admin privileges required."));
+        }
+        try {
+            String adminUser = getAdminActorName(httpRequest);
+            var saved = systemSettingsService.resetLogo(adminUser, httpRequest.getRemoteAddr());
+            return ResponseEntity.ok(systemSettingsService.toDto(saved));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of("error", e.getMessage()));
+        }
     }
 }

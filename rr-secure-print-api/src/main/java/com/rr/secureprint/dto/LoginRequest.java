@@ -1,13 +1,17 @@
 package com.rr.secureprint.dto;
 
-import jakarta.validation.constraints.NotBlank;
-
 public record LoginRequest(
         String username,
         String password,
         String pin,
-        String badgeId
+        String badgeId,
+        String printerIp,
+        String printerCode
 ) {
+    public LoginRequest(String username, String password, String pin, String badgeId) {
+        this(username, password, pin, badgeId, null, null);
+    }
+
     public boolean hasPin() {
         return pin != null && !pin.isBlank();
     }

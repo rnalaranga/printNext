@@ -10,6 +10,7 @@ import com.rr.secureprint.exception.JobConcurrencyException;
 import com.rr.secureprint.exception.JobNotFoundException;
 import com.rr.secureprint.repository.PrintJobRepository;
 import com.rr.secureprint.repository.PrinterRepository;
+import com.rr.secureprint.repository.UserRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -28,6 +29,7 @@ public class JobService {
 
     private final PrintJobRepository printJobRepository;
     private final PrinterRepository printerRepository;
+    private final UserRepository userRepository;
     private final SpoolStorageService spoolStorageService;
     private final RawSocketPrinterService rawSocketPrinterService;
     private final WindowsQueueService windowsQueueService;
@@ -35,12 +37,14 @@ public class JobService {
 
     public JobService(PrintJobRepository printJobRepository,
                       PrinterRepository printerRepository,
+                      UserRepository userRepository,
                       SpoolStorageService spoolStorageService,
                       RawSocketPrinterService rawSocketPrinterService,
                       WindowsQueueService windowsQueueService,
                       AuditService auditService) {
         this.printJobRepository = printJobRepository;
         this.printerRepository = printerRepository;
+        this.userRepository = userRepository;
         this.spoolStorageService = spoolStorageService;
         this.rawSocketPrinterService = rawSocketPrinterService;
         this.windowsQueueService = windowsQueueService;
@@ -132,6 +136,7 @@ public class JobService {
             job.setStatus(JobStatus.FAILED);
             job.setErrorMessage("Spool data read/integrity failure: " + e.getMessage());
             printJobRepository.save(job);
+
             auditService.logEvent("JOB_RELEASE_FAILED", user.getUserSid(), user.getUsername(), id,
                     targetPrinter.getPrinterCode(), clientIp, e.getMessage(), "FAILURE");
             return ReleaseResponse.failed(id, job.getDocumentName(), targetPrinter.getPrinterCode(), e.getMessage());
@@ -147,6 +152,11 @@ public class JobService {
             job.setReleasedAt(Instant.now());
             job.setErrorMessage(null);
             printJobRepository.save(job);
+
+            // Increment user's central print count (user-wise accounting)
+            int pages = job.getPageCount() > 0 ? job.getPageCount() : 1;
+            user.setPrintCount(user.getPrintCount() + pages);
+            userRepository.save(user);
 
             // Clean up Windows spooler queue if this was an authentic intercepted Windows job
             if (job.getWindowsJobId() != null) {

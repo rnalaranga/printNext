@@ -10,6 +10,7 @@ import java.util.Optional;
 @Repository
 public interface PrinterRepository extends JpaRepository<PrinterEntity, Long> {
     Optional<PrinterEntity> findByPrinterCode(String printerCode);
+    Optional<PrinterEntity> findByIpAddress(String ipAddress);
     List<PrinterEntity> findByIsActiveTrue();
     Optional<PrinterEntity> findByIsDefaultHoldQueueTrue();
 }

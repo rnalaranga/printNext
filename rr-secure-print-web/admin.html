@@ -3,153 +3,1155 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>RR Secure Print — Admin &amp; Audit Portal</title>
-  <link rel="stylesheet" href="/css/admin.css">
+  <title>nexPrint - Administration Console</title>
+  <link rel="stylesheet" href="/css/admin.css?v=20261020_50">
 </head>
 <body>
 
-  <header class="admin-header">
-    <div class="brand-area">
-      <span style="font-size:24px;">🖨️</span>
-      <h1>RR Secure Print — System Administration</h1>
-    </div>
-    <nav class="admin-nav">
-      <a class="nav-link active" onclick="loadAll()">Dashboard</a>
-      <a class="nav-link" href="/" target="_blank">Open Toshiba EWB Touchscreen ↗</a>
-      <a class="nav-link" href="/api/health" target="_blank">Health Status ↗</a>
-    </nav>
-  </header>
-
-  <main class="admin-container">
-
-    <!-- KPI Stats -->
-    <div class="stats-grid">
-      <div class="stat-card">
-        <div class="stat-label">Total Jobs Logged</div>
-        <div id="statTotalJobs" class="stat-val">-</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-label">Currently Held (Ready)</div>
-        <div id="statHeldJobs" class="stat-val" style="color:#d29922;">-</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-label">Released / Completed</div>
-        <div id="statCompletedJobs" class="stat-val" style="color:#3fb950;">-</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-label">Queue Safety Switch</div>
-        <div class="stat-val" style="color:#58a6ff;font-size:18px;margin-top:8px;">SIMULATION ACTIVE</div>
+<!-- =========================================================================
+     SIDEBAR NAVIGATION (Clean nexPrint Admin)
+     ========================================================================= -->
+<div class="sidebar">
+  <div class="sidebar-brand" id="sidebarBrandContainer">
+    <!-- Default Branding (nP icon + title/sub) when no custom logo is uploaded -->
+    <div class="brand-default-group" id="sidebarBrandDefaultGroup">
+      <div class="brand-mark" id="sidebarBrandMark">nP</div>
+      <div class="brand-words" id="sidebarBrandWords">
+        <span class="brand-name" id="sidebarBrandName">nex<span>Print</span></span>
+        <span class="brand-sub" id="sidebarBrandSub">Print Management</span>
       </div>
     </div>
 
-    <!-- Simulation Job Generator -->
-    <div class="card">
-      <div class="card-header">
-        <h2>🛠️ Spool Simulation &amp; Test Injector</h2>
-        <div>
-          <button class="btn btn-secondary" onclick="triggerExpirySweep()">Run Expiry Sweep</button>
+    <!-- Full-Width Horizontal Logo Container (350x106 ratio) -->
+    <div class="sidebar-logo-wrap" id="sidebarLogoWrap" style="display:none;">
+      <img id="sidebarLogoImg" class="sidebar-logo-img" src="" alt="Organization Logo">
+    </div>
+  </div>
+
+  <nav class="sidebar-nav">
+    <a class="sidebar-item active" data-page="dashboard" onclick="navigatePage('dashboard')">
+      Dashboard
+    </a>
+    <a class="sidebar-item" data-page="virtual-queue" onclick="navigatePage('virtual-queue')">
+      Virtual Print Queue
+    </a>
+    <a class="sidebar-item" data-page="printers" onclick="navigatePage('printers')">
+      Printer Devices
+    </a>
+    <a class="sidebar-item" data-page="users" onclick="navigatePage('users')">
+      User Management
+    </a>
+    <a class="sidebar-item" data-page="queue" onclick="navigatePage('queue')">
+      Print Queue
+    </a>
+    <a class="sidebar-item" data-page="copy-logs" onclick="navigatePage('copy-logs')">
+      Photocopy Logs
+    </a>
+    <a class="sidebar-item" data-page="audit" onclick="navigatePage('audit')">
+      Audit Trail
+    </a>
+    <a class="sidebar-item" data-page="settings" onclick="navigatePage('settings')">
+      System Settings
+    </a>
+
+    <div class="sidebar-divider"></div>
+
+    <a class="sidebar-item sidebar-external" href="/" target="_blank">
+      Open Terminal UI
+    </a>
+    <a class="sidebar-item sidebar-external" href="/api/health" target="_blank">
+      System Health
+    </a>
+  </nav>
+
+  <div class="sidebar-bottom">
+    <div class="printer-label">
+      <span class="printer-dot"></span><span id="sidebarPrinterIp">192.168.1.11:9100</span>
+    </div>
+    <div class="printer-sub" id="sidebarPrinterModel">Toshiba e-STUDIO 4508A</div>
+  </div>
+</div>
+
+<!-- =========================================================================
+     MAIN VIEWPORT
+     ========================================================================= -->
+<div class="main-wrap">
+
+  <!-- TOP HEADER -->
+  <div class="topbar">
+    <div>
+      <h1 id="topbarTitle">System Administration</h1>
+      <p id="topbarSub">Enterprise Pull-Print Management &amp; Device Control</p>
+    </div>
+    <div class="nav-links">
+      <button class="nav-btn active" onclick="refreshCurrentPage()">Refresh Page</button>
+      <a class="nav-btn" href="/" target="_blank">Open Touchscreen</a>
+    </div>
+  </div>
+
+  <!-- TOAST / NOTIFICATION STRIP -->
+  <div id="toastNotification" class="toast-strip" style="display:none;"></div>
+
+  <div class="admin-body">
+
+    <!-- =====================================================================
+         PAGE 1: DASHBOARD OVERVIEW
+         ===================================================================== -->
+    <div id="page-dashboard" class="page-view">
+      <!-- Metric Cards -->
+      <div class="stats-row">
+        <div class="stat-card">
+          <div class="stat-label">Total Jobs Processed</div>
+          <div id="statTotalJobs" class="stat-val">-</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Currently Held in Queue</div>
+          <div id="statHeldJobs" class="stat-val amber">-</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Completed / Released</div>
+          <div id="statCompletedJobs" class="stat-val green">-</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Managed Printers</div>
+          <div id="statPrintersCount" class="stat-val">-</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Registered Users</div>
+          <div id="statUsersCount" class="stat-val">-</div>
         </div>
       </div>
-      <div class="form-row">
+
+      <!-- Quick Shortcuts -->
+      <div class="card" style="margin-bottom:20px;">
+        <div class="card-head">
+          <h2>Administrative Quick Actions</h2>
+        </div>
+        <div class="card-body-pad">
+          <button class="btn btn-primary" onclick="openAddPrinterModal()">+ Add New Printer</button>
+          <button class="btn btn-primary" onclick="openAddUserModal()">+ Add New User</button>
+          <button class="btn btn-secondary" onclick="navigatePage('queue')">View Held Print Queue</button>
+          <button class="btn btn-secondary" onclick="navigatePage('audit')">View Security Logs</button>
+        </div>
+      </div>
+
+      <!-- Recent Jobs Snippet -->
+      <div class="card">
+        <div class="card-head">
+          <h2>Recent Print Activity</h2>
+          <button class="btn btn-secondary btn-sm" onclick="navigatePage('queue')">View All Jobs</button>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Job #</th>
+                <th>Document</th>
+                <th>User</th>
+                <th>Target Printer</th>
+                <th>Pages</th>
+                <th>Size</th>
+                <th>Status</th>
+                <th>Submitted</th>
+              </tr>
+            </thead>
+            <tbody id="dashboardJobsTbody">
+              <tr><td colspan="8" style="text-align:center;padding:24px;color:#6B7299;">Loading recent print jobs...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- =====================================================================
+         PAGE 2: VIRTUAL PRINT QUEUE (PaperCut Find-Me Architecture)
+         ===================================================================== -->
+    <div id="page-virtual-queue" class="page-view" style="display:none;">
+      <div class="section-header">
         <div>
-          <label style="color:#8b949e;font-size:11px;display:block;">TARGET USER</label>
-          <select id="simUser">
-            <option value="jdoe">jdoe (John Doe - Engineer)</option>
-            <option value="msmith">msmith (Mary Smith - Director)</option>
-            <option value="admin">admin (Administrator)</option>
+          <h2>Virtual Print Queue Management</h2>
+          <p>Multi-Queue PaperCut Find-Me Pull Print Architecture &amp; Physical MFP Pool Assignment</p>
+        </div>
+        <div style="display:flex; gap:8px; flex-wrap:wrap;">
+          <button type="button" id="btnOpenCreateVq" class="btn btn-primary" onclick="window.openCreateVirtualQueueModal()">➕ Create Virtual Queue</button>
+          <button type="button" class="btn btn-secondary" onclick="window.refreshVirtualQueuePrinters()">🔄 Scan Local Printers</button>
+          <button type="button" class="btn btn-secondary" onclick="window.sendSimulatedJobToVirtualQueue()">📄 Send Test Print</button>
+          <button type="button" id="vqLiveModeBtnTop" class="btn btn-primary" onclick="window.toggleLivePrintingMode()">Mode: Hardware Live</button>
+        </div>
+      </div>
+
+      <!-- VIRTUAL QUEUES SELECTOR ROW (Multiple Virtual Queues Support) -->
+      <div class="card" style="margin-bottom:20px; border-left:4px solid var(--primary); background:#FFFFFF;">
+        <div class="card-head" style="background:#F8FAFC;">
+          <div style="display:flex; align-items:center; gap:8px;">
+            <strong style="font-size:13px; color:#1E3A8A; text-transform:uppercase; letter-spacing:0.4px;">🌐 Active Virtual Queues</strong>
+            <span id="vqTotalQueuesBadge" class="badge" style="background:#EFF6FF; color:#1D4ED8; font-weight:700;">1 Queue</span>
+          </div>
+          <div style="display:flex; gap:6px;">
+            <button type="button" class="btn btn-secondary btn-sm" onclick="window.openEditCurrentVirtualQueueModal()" id="btnEditVq">✏️ Edit Queue</button>
+            <button type="button" class="btn btn-secondary btn-sm" onclick="window.handleSetDefaultVirtualQueue()" id="btnDefaultVq" style="color:#1D4ED8;">⭐ Set as Default</button>
+            <button type="button" class="btn btn-secondary btn-sm" onclick="window.handleDeleteVirtualQueue()" id="btnDeleteVq" style="color:#DC2626;">🗑️ Delete</button>
+          </div>
+        </div>
+        <div class="card-body-pad" style="padding:14px 18px;">
+          <div id="vqQueuesTabsContainer" style="display:flex; gap:10px; flex-wrap:wrap; width:100%;">
+            <!-- Rendered dynamically by admin-app.js -->
+          </div>
+        </div>
+      </div>
+
+      <!-- Current Virtual Queue Overview Stats Row -->
+      <div class="stats-row">
+        <div class="stat-card">
+          <div class="stat-label">Active Virtual Queue</div>
+          <div id="statVqName" class="stat-val" style="font-size:18px; color:#1D4ED8;">QOA_Printer</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Windows Spooler Share</div>
+          <div id="statVqShare" class="stat-val" style="font-size:13px; word-break:break-all; font-family:monospace; color:#0F172A;">\\SERVER\QOA_Printer</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Spool Quarantine</div>
+          <div id="statVqStatus" class="stat-val green" style="font-size:18px;">Active Hold</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Physical MFPs in Pool</div>
+          <div id="statVqPoolCount" class="stat-val" style="font-size:22px; color:#1E40AF;">0 MFPs</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Execution Mode</div>
+          <div id="statVqMode" class="stat-val" style="font-size:18px; color:#16A34A;">Live (Port 9100)</div>
+        </div>
+      </div>
+
+      <!-- Current Virtual Queue Configuration & Windows Binding Card -->
+      <div class="card" style="margin-bottom:20px; border-left:4px solid #2563EB;">
+        <div class="card-head">
+          <h2 id="vqDetailsHeader">Virtual Queue Details &amp; Windows Binding</h2>
+          <span id="vqShareBadge" class="badge" style="background:#DCFCE7; color:#166534; font-weight:700; padding:3px 10px; border-radius:2px; font-size:11px;">🟢 Shared on Network</span>
+        </div>
+        <div class="card-body-pad" style="flex-direction:column; gap:16px;">
+          <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:20px;">
+            <div style="flex:1; min-width:320px;">
+              <div style="font-size:13px; color:#334155; line-height:1.7;">
+                <div style="margin-bottom:6px;"><strong>Virtual Queue Display Name:</strong> <span id="vqCurrentDisplayName" style="font-weight:700; color:#1E3A8A;">General Find-Me Virtual Queue</span></div>
+                <div style="margin-bottom:6px;"><strong>Designated Windows Spooler Queue:</strong> <code id="vqSelectedPrinter" style="background:#E0E7FF; padding:3px 8px; border-radius:2px; font-weight:700; font-size:13px; color:#1D4ED8;">QOA_Printer</code></div>
+                <div style="margin-bottom:6px;"><strong>Network SMB Share Path:</strong> <code id="vqNetworkShare" style="background:#F1F5F9; padding:3px 8px; border-radius:2px; font-size:12px; color:#0F172A; font-family:monospace;">\\SERVER\QOA_Printer</code></div>
+                <div style="margin-bottom:6px;"><strong>Driver Name:</strong> <span id="vqDriverName" style="color:#0F172A; font-weight:600;">TOSHIBA Universal Printer 2</span></div>
+                <div><strong>Spool Interception:</strong> <span id="vqHoldStatus" style="color:#059669; font-weight:600;">Active Hold (Paused)</span></div>
+              </div>
+            </div>
+
+            <!-- Server Printer Re-bind Selector -->
+            <div style="background:#F8FAFC; border:1px solid #CBD5E1; border-radius:2px; padding:16px 18px; min-width:340px; flex:1; max-width:440px;">
+              <div style="font-size:11px; font-weight:700; color:#1E3A8A; margin-bottom:8px; text-transform:uppercase; letter-spacing:0.5px;">
+                🖨️ Re-bind this Queue to Local Windows Printer:
+              </div>
+              <div style="display:flex; gap:8px; align-items:center; margin-bottom:8px;">
+                <select id="selectServerVirtualPrinter" class="form-input" style="flex:1; height:36px; padding:4px 8px; font-size:12.5px;">
+                  <option value="QOA_Printer">QOA_Printer (Designated Virtual Queue)</option>
+                </select>
+                <button type="button" class="btn btn-primary" onclick="window.handleSaveVirtualQueuePrinter()" style="height:36px; white-space:nowrap; padding:0 14px; font-size:12px;">
+                  Save Queue
+                </button>
+              </div>
+              <div style="display:flex; justify-content:space-between; align-items:center;">
+                <span style="font-size:11px; color:#64748B;">Network users print to this Windows printer.</span>
+                <button type="button" class="btn btn-secondary btn-sm" onclick="window.refreshVirtualQueuePrinters()">🔄 Scan</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- =====================================================================
+           PHYSICAL RELEASE MFPS POOL MANAGEMENT (SCALABLE TO 100+ PRINTERS)
+           ===================================================================== -->
+      <div class="card" style="border-left:4px solid var(--primary); margin-bottom:20px;">
+        <div class="card-head" style="flex-wrap:wrap; gap:10px;">
+          <div>
+            <h2 id="poolTableTitle">Physical Release MFPs Linked to this Pool</h2>
+            <p id="poolTableSub" style="font-size:11.5px; color:#64748B; margin-top:2px;">Showing MFPs where users can walk up with PIN to release jobs from this virtual queue.</p>
+          </div>
+          <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+            <button type="button" class="btn btn-secondary btn-sm" onclick="window.handleSeedSamplePrinters()" title="Generate 20 test Toshiba MFPs across departments to test large fleet performance">
+              ⚡ Seed 20 Test MFPs
+            </button>
+            <button type="button" class="btn btn-primary btn-sm" onclick="openAddPrinterModal()">
+              ➕ Register New Physical MFP
+            </button>
+          </div>
+        </div>
+
+        <!-- SEARCH, FILTER & BULK CONTROLS (Handles 100+ Printers Effortlessly) -->
+        <div style="padding:14px 18px; background:#F8FAFC; border-bottom:1px solid #E2E8F0; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
+          <div style="display:flex; gap:10px; align-items:center; flex:1; min-width:320px; max-width:650px;">
+            <div style="position:relative; flex:1;">
+              <input type="text" id="vqPrinterSearchInput" class="form-input" placeholder="🔍 Search 100+ physical printers by name, IP, code, model, location..." oninput="window.handleVqPrinterSearch(this.value)" style="height:34px; padding-left:12px; font-size:12.5px;">
+            </div>
+            <select id="vqPoolFilterSelect" class="form-input" style="width:200px; height:34px; font-size:12px;" onchange="window.handleVqPoolFilterChange(this.value)">
+              <option value="ALL">All Physical MFPs</option>
+              <option value="IN_POOL" selected>In this Pool Only</option>
+              <option value="NOT_IN_POOL">Not in this Pool</option>
+            </select>
+          </div>
+
+          <!-- BULK SELECTION ACTION BUTTONS -->
+          <div style="display:flex; gap:8px; align-items:center;">
+            <button type="button" class="btn btn-secondary btn-sm" onclick="window.handleVqSelectAllFiltered()">
+              Select All
+            </button>
+            <button type="button" class="btn btn-primary btn-sm" onclick="window.handleVqBulkAddSelected()">
+              + Add Selected to Pool
+            </button>
+            <button type="button" class="btn btn-secondary btn-sm" onclick="window.handleVqBulkRemoveSelected()" style="color:#DC2626;">
+              Remove Selected
+            </button>
+          </div>
+        </div>
+
+        <!-- 100+ PRINTERS DATA TABLE -->
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th style="width:36px; text-align:center;">
+                  <input type="checkbox" id="vqCheckAllPrinters" onchange="window.handleVqToggleCheckAll(this.checked)">
+                </th>
+                <th>MFP Device Name</th>
+                <th>Device Code</th>
+                <th>Network IP : Port</th>
+                <th>Physical Location</th>
+                <th>Hardware Model</th>
+                <th>Pool Membership</th>
+                <th style="text-align:center;">Pool Action</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody id="vqPrintersTableBody">
+              <tr><td colspan="9" style="text-align:center;padding:30px;color:#64748B;">Loading physical printers pool...</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- PAGINATION BAR (Clean navigation for 100+ Printers) -->
+        <div style="padding:10px 18px; background:#F8FAFC; border-top:1px solid #E2E8F0; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+          <div style="font-size:12px; color:#64748B;">
+            <span id="vqPaginationInfo">Showing 0 of 0 printers</span> &nbsp;|&nbsp;
+            <span id="vqPoolSummaryInfo" style="font-weight:600; color:#1E3A8A;">0 MFPs currently in this pool</span>
+          </div>
+          <div style="display:flex; gap:8px; align-items:center;">
+            <span style="font-size:11.5px; color:#64748B;">Per Page:</span>
+            <select id="vqPerPageSelect" class="form-input" style="width:75px; height:28px; padding:2px 6px; font-size:12px;" onchange="window.handleVqPerPageChange(this.value)">
+              <option value="10">10</option>
+              <option value="25" selected>25</option>
+              <option value="50">50</option>
+              <option value="100">100</option>
+              <option value="ALL">All</option>
+            </select>
+            <button type="button" class="btn btn-secondary btn-sm" id="vqPrevPageBtn" onclick="window.handleVqPrevPage()">◀ Prev</button>
+            <span id="vqPageIndicator" style="font-size:12px; font-weight:600; padding:0 4px;">Page 1 of 1</span>
+            <button type="button" class="btn btn-secondary btn-sm" id="vqNextPageBtn" onclick="window.handleVqNextPage()">Next ▶</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Client Workstation Deployment Instructions Card -->
+      <div class="card" style="border-left:4px solid #3B82F6;">
+        <div class="card-head">
+          <h2>Client Workstation Connection &amp; Deployment Guide</h2>
+        </div>
+        <div class="card-body-pad" style="flex-direction:column; gap:12px;">
+          <p style="font-size:12.5px; color:#334155; line-height:1.6;">
+            Deploy this virtual queue to Windows workstations across your organization so users print to one unified destination:
+          </p>
+          <div style="background:#F8FAFC; border:1px solid #CBD5E1; border-radius:2px; padding:12px 16px; font-family:Consolas, monospace; font-size:12px; color:#0F172A; display:flex; justify-content:space-between; align-items:center;">
+            <code id="vqPowershellCmd">Add-Printer -ConnectionName "\\SERVER\QOA_Printer"</code>
+            <button type="button" class="btn btn-sm btn-secondary" onclick="navigator.clipboard.writeText(document.getElementById('vqPowershellCmd').textContent); showToast('Command copied to clipboard!', 'success');">Copy Command</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- =====================================================================
+         PAGE 3: PRINTER MANAGEMENT
+         ===================================================================== -->
+    <div id="page-printers" class="page-view" style="display:none;">
+      <div class="section-header">
+        <div>
+          <h2>Physical Printer Devices</h2>
+          <p>Register, monitor, and configure physical Toshiba MFPs and RAW/JetDirect Port 9100 devices.</p>
+        </div>
+        <div style="display:flex; gap:8px;">
+          <button class="btn btn-primary" onclick="window.pollFleetCopyJobs()" id="btnPollCopyFleet">📑 Poll Walk-Up Copy Jobs</button>
+          <button class="btn btn-yellow" onclick="openAddPrinterModal()">+ Register New Printer</button>
+          <button class="btn btn-secondary" onclick="loadPrinters()">Refresh</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <div style="padding:16px 20px; border-bottom:1px solid #E2E8F0; display:flex; justify-content:space-between; align-items:center;">
+          <div>
+            <strong style="font-size:14px; color:#0F172A;">Physical Release Stations (Toshiba MFPs)</strong>
+            <div style="font-size:12px; color:#64748B;">Registered hardware devices where users can authenticate with PIN and release held prints.</div>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>MFP Device Name</th>
+                <th>Device Code</th>
+                <th>Architecture</th>
+                <th>Network IP : Port</th>
+                <th>Location</th>
+                <th>Hardware Model</th>
+                <th>Release Role</th>
+                <th>EWB Terminal</th>
+                <th>Status</th>
+                <th style="text-align:right;">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="printersTableBody">
+              <tr><td colspan="10" style="text-align:center;padding:30px;color:#6B7299;">Loading registered printers...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- =====================================================================
+         PAGE 3: USER MANAGEMENT
+         ===================================================================== -->
+    <div id="page-users" class="page-view" style="display:none;">
+      <div class="section-header">
+        <div>
+          <h2>User &amp; Identity Management</h2>
+          <p>Manage employee credentials, touch terminal PINs, badge RFID IDs, and security roles.</p>
+        </div>
+        <div>
+          <button class="btn btn-primary" onclick="openAddUserModal()">+ Add New User</button>
+          <button class="btn btn-secondary" onclick="loadUsers()">Refresh</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Username</th>
+                <th>Display Name</th>
+                <th>Department</th>
+                <th>Security Role</th>
+                <th>Touch PIN</th>
+                <th>Badge / RFID ID</th>
+                <th>Print Pages</th>
+                <th>Copy Pages</th>
+                <th>Total Pages</th>
+                <th>Account Status</th>
+                <th style="text-align:right;">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="usersTableBody">
+              <tr><td colspan="11" style="text-align:center;padding:30px;color:#6B7299;">Loading users...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- =====================================================================
+         PAGE 4: PRINT QUEUE
+         ===================================================================== -->
+    <div id="page-queue" class="page-view" style="display:none;">
+      <div class="section-header">
+        <div>
+          <h2>Global Print Queue</h2>
+          <p>Secure held print jobs awaiting release at multifunction printer touchscreens.</p>
+        </div>
+        <div style="display:flex; gap:8px;">
+          <select id="queueStatusFilter" class="form-input" style="width:160px; height:34px; padding:4px 8px;" onchange="renderJobs()">
+            <option value="ALL">All Statuses</option>
+            <option value="HELD" selected>Held (Active)</option>
+            <option value="COMPLETED">Completed</option>
+            <option value="CANCELLED">Cancelled</option>
+            <option value="EXPIRED">Expired</option>
           </select>
+          <button class="btn btn-secondary" onclick="loadJobs()">Refresh Queue</button>
         </div>
-        <div style="flex-grow:1;">
-          <label style="color:#8b949e;font-size:11px;display:block;">DOCUMENT NAME</label>
-          <input type="text" id="simDocName" value="Site-Inspection-Checklist-A3.pdf" style="width:100%;">
-        </div>
-        <div style="width:90px;">
-          <label style="color:#8b949e;font-size:11px;display:block;">PAGES</label>
-          <input type="number" id="simPages" value="6" style="width:100%;">
-        </div>
-        <div style="margin-top:16px;">
-          <button class="btn" onclick="submitSimulatedJob()">+ Inject Spool Job</button>
+      </div>
+
+      <div class="card">
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Job #</th>
+                <th>Document Name</th>
+                <th>Owner (User)</th>
+                <th>Target Printer</th>
+                <th>Pages</th>
+                <th>Attributes</th>
+                <th>File Size</th>
+                <th>Status</th>
+                <th>Submitted</th>
+                <th style="text-align:right;">Admin Actions</th>
+              </tr>
+            </thead>
+            <tbody id="jobsTableBody">
+              <tr><td colspan="10" style="text-align:center;padding:30px;color:#6B7299;">Loading print queue...</td></tr>
+            </tbody>
+          </table>
         </div>
       </div>
     </div>
 
-    <!-- Active & Historical Jobs Table -->
-    <div class="card">
-      <div class="card-header">
-        <h2>🗂️ Global Print Queue (All User SIDs)</h2>
-        <button class="btn btn-secondary" onclick="loadJobs()">Refresh Jobs</button>
+    <!-- =====================================================================
+         PAGE: PHOTOCOPY LOGS (WALK-UP MFP COPIES)
+         ===================================================================== -->
+    <div id="page-copy-logs" class="page-view" style="display:none;">
+      <div class="section-header">
+        <div>
+          <h2>Walk-Up Photocopy Logs</h2>
+          <p>Real-time hardware copy accounting captured from Toshiba e-BRIDGE Next MFPs via TopAccess XML.</p>
+        </div>
+        <div style="display:flex; gap:8px;">
+          <button type="button" class="btn btn-primary" onclick="pollFleetCopyJobs()" id="btnPollCopyFleetLogs">🔄 Poll MFPs Now</button>
+          <button type="button" class="btn btn-secondary" onclick="loadCopyJobs()">Refresh</button>
+        </div>
       </div>
-      <div class="table-responsive">
-        <table>
-          <thead>
-            <tr>
-              <th>Job #</th>
-              <th>Document Name</th>
-              <th>User &amp; SID</th>
-              <th>Pages &amp; Duplex</th>
-              <th>File Size</th>
-              <th>Status</th>
-              <th>Submitted Time</th>
-            </tr>
-          </thead>
-          <tbody id="jobsTableBody">
-            <tr><td colspan="7" style="text-align:center;">Loading print jobs...</td></tr>
-          </tbody>
-        </table>
+
+      <div class="card">
+        <div style="padding:16px 20px; border-bottom:1px solid #E2E8F0; display:flex; justify-content:space-between; align-items:center;">
+          <div>
+            <strong style="font-size:14px; color:#0F172A;">Recent Photocopy Activity (Top 50 Jobs)</strong>
+            <div style="font-size:12px; color:#64748B;">Monitors walk-up copies made directly on the glass/feeder and attributes them to the authenticated user.</div>
+          </div>
+          <div style="font-size:12px; color:#64748B;">
+            Auto-polled every 60 seconds
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Timestamp</th>
+                <th>User Account</th>
+                <th>MFP Device</th>
+                <th>Printer IP</th>
+                <th>Total Pages</th>
+                <th>Mono Pages</th>
+                <th>Color Pages</th>
+                <th>Device Job ID</th>
+              </tr>
+            </thead>
+            <tbody id="copyJobsTableBody">
+              <tr><td colspan="8" style="text-align:center;padding:30px;color:#6B7299;">Loading photocopy logs...</td></tr>
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
 
-    <!-- Managed Toshiba MFPs -->
-    <div class="card">
-      <div class="card-header">
-        <h2>🏢 Registered Toshiba MFPs</h2>
-        <button class="btn btn-secondary" onclick="loadPrinters()">Refresh Printers</button>
+    <!-- =====================================================================
+         PAGE 5: SECURITY AUDIT TRAIL
+         ===================================================================== -->
+    <div id="page-audit" class="page-view" style="display:none;">
+      <div class="section-header">
+        <div>
+          <h2>Security Audit Trail</h2>
+          <p>Complete regulatory tracking of print events, releases, PIN authentications, and configuration changes.</p>
+        </div>
+        <div>
+          <button class="btn btn-secondary" onclick="loadAudit()">Refresh Trail</button>
+        </div>
       </div>
-      <div class="table-responsive">
-        <table>
-          <thead>
-            <tr>
-              <th>Printer Name &amp; Code</th>
-              <th>IP &amp; Raw Port</th>
-              <th>Location</th>
-              <th>Model</th>
-              <th>Status</th>
-            </tr>
-          </thead>
-          <tbody id="printersTableBody">
-            <tr><td colspan="5" style="text-align:center;">Loading printers...</td></tr>
-          </tbody>
-        </table>
+
+      <div class="card">
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Timestamp</th>
+                <th>Event Type</th>
+                <th>User</th>
+                <th>Target Device</th>
+                <th>Action Details</th>
+                <th>Client IP</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody id="auditTableBody">
+              <tr><td colspan="7" style="text-align:center;padding:30px;color:#6B7299;">Loading security audit logs...</td></tr>
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
 
-    <!-- Security Audit Logs -->
-    <div class="card">
-      <div class="card-header">
-        <h2>🔒 Security Audit Trail (Authentication &amp; Release Events)</h2>
-        <button class="btn btn-secondary" onclick="loadAudit()">Refresh Audit</button>
+    <!-- =====================================================================
+         PAGE 8: SYSTEM SETTINGS & BRANDING
+         ===================================================================== -->
+    <div id="page-settings" class="page-view" style="display:none;">
+      <div class="section-header">
+        <div>
+          <h2>System Settings & Corporate Branding</h2>
+          <p>Customize corporate identity, upload enterprise logos, and configure global system preferences.</p>
+        </div>
+        <div>
+          <button class="btn btn-secondary" onclick="loadSettings()">🔄 Reload Settings</button>
+        </div>
       </div>
-      <div class="table-responsive">
-        <table>
-          <thead>
-            <tr>
-              <th>Timestamp</th>
-              <th>Event</th>
-              <th>User</th>
-              <th>Details</th>
-              <th>Client IP</th>
-              <th>Status</th>
-            </tr>
-          </thead>
-          <tbody id="auditTableBody">
-            <tr><td colspan="6" style="text-align:center;">Loading audit logs...</td></tr>
-          </tbody>
-        </table>
+
+      <!-- 2-COLUMN SETTINGS GRID -->
+      <div style="display: grid; grid-template-columns: 1fr 1.25fr; gap: 24px; align-items: start;">
+
+        <!-- LEFT COLUMN: LOGO MANAGEMENT CARD -->
+        <div class="card" style="border-top: 4px solid var(--primary);">
+          <div class="card-head">
+            <div>
+              <strong style="font-size: 14px; color: #1E3A8A;">Corporate Logo & Identity</strong>
+              <div style="font-size: 11px; color: var(--text-muted); margin-top: 2px;">
+                Displayed on Admin Panel top-left corner and Physical Touchscreen MFPs
+              </div>
+            </div>
+            <span id="logoStatusBadge" class="badge badge-online">Default Logo</span>
+          </div>
+
+          <div style="padding: 20px;">
+            <!-- Logo Preview Container with Transparency Checkerboard -->
+            <label class="form-label" style="margin-bottom: 8px;">Active Logo Preview</label>
+            <div style="background-color: #f8fafc; background-image: linear-gradient(45deg, #e2e8f0 25%, transparent 25%), linear-gradient(-45deg, #e2e8f0 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #e2e8f0 75%), linear-gradient(-45deg, transparent 75%, #e2e8f0 75%); background-size: 16px 16px; background-position: 0 0, 0 8px, 8px -8px, -8px 0px; border: 2px dashed #CBD5E1; min-height: 140px; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 16px; margin-bottom: 16px; text-align: center;">
+              
+              <!-- Default Icon Fallback -->
+              <div id="settingsLogoDefaultMark" class="brand-mark" style="width: 56px; height: 56px; font-size: 22px; margin-bottom: 8px;">nP</div>
+              
+              <!-- Custom Image Preview (Supports 350x106 wide banner ratio) -->
+              <img id="settingsLogoPreviewImg" src="" alt="Custom Logo Preview" style="display: none; max-height: 96px; max-width: 320px; width: auto; height: auto; object-fit: contain; margin-bottom: 8px; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.1));" />
+              
+              <div id="settingsLogoInfo" style="font-size: 12px; color: #475569; font-weight: 500;">
+                Default nexPrint Branding
+              </div>
+            </div>
+
+            <!-- Upload File Picker Area -->
+            <div class="form-group">
+              <label class="form-label" for="logoFileInput">Select New Logo File</label>
+              <input type="file" id="logoFileInput" accept="image/png, image/jpeg, image/jpg, image/svg+xml, image/webp, image/gif" class="form-input" onchange="handleLogoFileSelect(event)" style="padding: 7px 10px; cursor: pointer;">
+              <div class="form-hint" style="margin-top: 6px;">
+                Supported: <strong>PNG, SVG, JPG, WebP</strong>. Recommended ratio: <strong>~350x106</strong> (horizontal banner). Transparent backgrounds recommended.
+              </div>
+            </div>
+
+            <!-- Action Buttons for Logo -->
+            <div style="display: flex; gap: 10px; margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--border);">
+              <button type="button" id="btnSaveLogo" class="btn btn-primary" onclick="handleSaveLogo()" disabled>
+                💾 Save Logo
+              </button>
+              <button type="button" id="btnResetLogo" class="btn btn-secondary" onclick="handleResetLogo()" style="color: #DC2626;">
+                🗑️ Reset to Default
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- RIGHT COLUMN: GENERAL SETTINGS CARD -->
+        <div class="card" style="border-top: 4px solid var(--yellow);">
+          <div class="card-head">
+            <div>
+              <strong style="font-size: 14px; color: #1E3A8A;">Enterprise System Settings</strong>
+              <div style="font-size: 11px; color: var(--text-muted); margin-top: 2px;">
+                Organization branding titles, inactivity lock, and support details
+              </div>
+            </div>
+            <span id="settingsSaveStatus" class="badge" style="background:#F0FDF4; color:#15803D;">Ready</span>
+          </div>
+
+          <form id="generalSettingsForm" onsubmit="handleSaveGeneralSettings(event)" style="padding: 20px;">
+            <div class="form-row">
+              <div class="form-group flex-1">
+                <label class="form-label" for="settingOrgName">Organization / Company Name *</label>
+                <input type="text" id="settingOrgName" class="form-input" placeholder="e.g. Acme Corporation" required>
+                <div class="form-hint">Displayed on terminal login headers and audit reports.</div>
+              </div>
+            </div>
+
+            <div class="form-row">
+              <div class="form-group flex-1">
+                <label class="form-label" for="settingSystemTitle">System Title *</label>
+                <input type="text" id="settingSystemTitle" class="form-input" placeholder="nexPrint" required>
+                <div class="form-hint">Application brand displayed on sidebar header.</div>
+              </div>
+              <div class="form-group flex-1">
+                <label class="form-label" for="settingSystemSubtitle">System Subtitle</label>
+                <input type="text" id="settingSystemSubtitle" class="form-input" placeholder="Secure Enterprise Print Management">
+                <div class="form-hint">Secondary label displayed under system title.</div>
+              </div>
+            </div>
+
+            <div class="form-row">
+              <div class="form-group flex-1">
+                <label class="form-label" for="settingInactivityTimeout">Terminal Inactivity Timeout (Seconds) *</label>
+                <input type="number" id="settingInactivityTimeout" class="form-input" min="15" max="600" value="60" required>
+                <div class="form-hint">Touchscreen automatically locks and logs out after this idle period.</div>
+              </div>
+              <div class="form-group flex-1">
+                <label class="form-label" for="settingSupportContact">IT Support Contact / Helpdesk</label>
+                <input type="text" id="settingSupportContact" class="form-input" placeholder="e.g. IT Helpdesk (helpdesk@company.com / Ext 4357)">
+                <div class="form-hint">Shown on physical touch terminals during assistance prompts.</div>
+              </div>
+            </div>
+
+            <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; padding-top: 14px; border-top: 1px solid var(--border);">
+              <button type="submit" id="btnSaveGeneralSettings" class="btn btn-primary">
+                💾 Save General Settings
+              </button>
+            </div>
+          </form>
+        </div>
+
       </div>
     </div>
 
-  </main>
+  </div>
+</div>
 
-  <script src="/js/admin-app.js"></script>
+<!-- =========================================================================
+     MODAL 1: ADD / EDIT PRINTER MODAL
+     ========================================================================= -->
+<div id="printerModal" class="modal-backdrop" style="display:none;">
+  <div class="modal-box">
+    <div class="modal-head">
+      <h3 id="printerModalTitle">Register New Printer</h3>
+      <button class="modal-close-btn" onclick="closePrinterModal()">X</button>
+    </div>
+    <form id="printerForm" onsubmit="handleSavePrinter(event)">
+      <div class="modal-body">
+        <input type="hidden" id="printerFormId">
+
+        <div class="form-row">
+          <div class="form-group flex-1">
+            <label class="form-label" for="printerName">Printer Friendly Name *</label>
+            <input type="text" id="printerName" class="form-input" placeholder="e.g. Toshiba e-STUDIO 306SE" required>
+          </div>
+          <div class="form-group flex-1">
+            <label class="form-label" for="printerCode">Unique Printer Code *</label>
+            <input type="text" id="printerCode" class="form-input" placeholder="e.g. PCT0001" required>
+            <span class="form-hint">Used by embedded terminals &amp; spool routing</span>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group flex-1">
+            <label class="form-label" for="printerDeviceGeneration">Toshiba MFP Architecture / Generation *</label>
+            <select id="printerDeviceGeneration" class="form-input" onchange="handleDeviceGenerationChange()" style="font-weight:600; cursor:pointer;">
+              <option value="TOSHIBA_NEW">Toshiba New (e-BRIDGE Next: 2518A, 3518A, 4508A, AC Series)</option>
+              <option value="TOSHIBA_OLD">Toshiba Old (e-BRIDGE Legacy: e-STUDIO 306SE, 256, 356, 456, 506)</option>
+            </select>
+          </div>
+          <div class="form-group flex-1">
+            <label class="form-label" for="printerModel">Hardware Model</label>
+            <input type="text" id="printerModel" class="form-input" value="Toshiba e-STUDIO 4508A" list="printerModelSuggestions">
+            <datalist id="printerModelSuggestions">
+              <option value="Toshiba e-STUDIO 306SE">
+              <option value="Toshiba e-STUDIO 256">
+              <option value="Toshiba e-STUDIO 356">
+              <option value="Toshiba e-STUDIO 456">
+              <option value="Toshiba e-STUDIO 506">
+              <option value="Toshiba e-STUDIO 2518A">
+              <option value="Toshiba e-STUDIO 3518A">
+              <option value="Toshiba e-STUDIO 4508A">
+              <option value="Toshiba e-STUDIO 5018A">
+              <option value="Toshiba e-STUDIO 2010AC">
+              <option value="Toshiba e-STUDIO 3015AC">
+            </datalist>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group flex-1">
+            <label class="form-label" for="printerIp">IP Address *</label>
+            <input type="text" id="printerIp" class="form-input" placeholder="e.g. 192.168.1.11" required>
+          </div>
+          <div class="form-group" style="width:140px;">
+            <label class="form-label" for="printerPort">RAW Port *</label>
+            <input type="number" id="printerPort" class="form-input" value="9100" required>
+          </div>
+          <div class="form-group flex-1">
+            <label class="form-label" for="printerLocation">Physical Location *</label>
+            <input type="text" id="printerLocation" class="form-input" placeholder="e.g. Main Office - Ground Floor Print Bay" required>
+          </div>
+        </div>
+
+        <div class="form-group" style="margin-top:10px;">
+          <label class="form-label">Printer Capabilities &amp; Queue Role</label>
+          <div style="display:flex; gap:20px; margin-top:6px; flex-wrap:wrap;">
+            <label class="checkbox-label">
+              <input type="checkbox" id="printerDuplex" checked> Duplex (Double-Sided) Supported
+            </label>
+            <label class="checkbox-label">
+              <input type="checkbox" id="printerColor"> Color Supported
+            </label>
+            <label class="checkbox-label">
+              <input type="checkbox" id="printerActive" checked> Enabled &amp; Active
+            </label>
+          </div>
+        </div>
+
+        <!-- Toshiba EWB Integration (PaperCut MF Style) -->
+        <div class="ewb-config-card" id="ewbConfigCard">
+          <div class="ewb-config-head">
+            <span class="ewb-config-title">
+              <span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:var(--amber);"></span>
+              Toshiba EWB Integration (PaperCut MF Style)
+            </span>
+            <span id="ewbArchBadge" class="badge" style="background:#E0F2FE; color:#0369A1; font-size:11px;">e-BRIDGE Next Only</span>
+          </div>
+          <div id="ewbLegacyNotice" style="display:none; background:#FFFBEB; border:1px solid #FDE68A; padding:10px 14px; border-radius:6px; margin-bottom:12px; font-size:12px; color:#92400E; line-height:1.4;">
+            <strong>Legacy Device Selected (Toshiba Old - e-STUDIO 306SE / e-BRIDGE 3/X/4):</strong><br>
+            Older Toshiba MFPs do not include modern HTML5 Embedded WebKit browsers. Secure print release is handled automatically via <strong>RAW Port 9100 Print Spooling</strong>, <strong>Mobile / Tablet Web Station</strong>, or <strong>External Touch Terminal</strong>. Remote EWB push is disabled for this model.
+          </div>
+          <div id="ewbConfigFields">
+            <p style="font-size:11px; color:#475569; margin-bottom:10px; line-height:1.4;">
+              Automatically configures the printer's TopAccess EWB settings so the physical touchscreen directly displays the nexPrint touch terminal on boot and walk-up.
+            </p>
+            <div class="form-row">
+              <div class="form-group flex-1">
+                <label class="form-label" for="printerAdminUser">Printer Admin User</label>
+                <input type="text" id="printerAdminUser" class="form-input" value="admin" placeholder="admin">
+              </div>
+              <div class="form-group flex-1">
+                <label class="form-label" for="printerAdminPass">Printer Admin Password</label>
+                <div style="position:relative;">
+                  <input type="password" id="printerAdminPass" class="form-input" value="123456" placeholder="Password">
+                  <button type="button" onclick="togglePassVisibility('printerAdminPass')" style="position:absolute; right:8px; top:7px; background:none; border:none; color:#64748B; cursor:pointer; font-size:10px;">SHOW</button>
+                </div>
+              </div>
+            </div>
+            <div class="form-group" style="margin-top:8px;">
+              <label class="form-label" for="printerTerminalUrl">Terminal Screen URL to Push</label>
+              <input type="text" id="printerTerminalUrl" class="form-input" placeholder="http://192.168.1.100:8080/">
+              <span class="form-hint" style="color:#0284C7; font-weight:500;">nexPrint Server PC URL (e.g. http://192.168.1.100:8080/). Do NOT use printer's own IP or https.</span>
+            </div>
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-top:10px;">
+              <label class="checkbox-label" style="font-weight:500;">
+                <input type="checkbox" id="printerAutoEwb" checked> Push EWB settings to device automatically
+              </label>
+              <button type="button" class="btn btn-sm btn-secondary" onclick="testEwbInModal()" id="btnModalTestEwb">
+                Test &amp; Push EWB Now
+              </button>
+            </div>
+            <div id="modalEwbLog" class="ewb-log-box"></div>
+          </div>
+        </div>
+      </div>
+      <div class="modal-foot">
+        <button type="button" class="btn btn-secondary" onclick="closePrinterModal()">Cancel</button>
+        <button type="submit" class="btn btn-primary" id="printerSubmitBtn">Save Printer</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- =========================================================================
+     MODAL 2: ADD / EDIT USER MODAL
+     ========================================================================= -->
+<div id="userModal" class="modal-backdrop" style="display:none;">
+  <div class="modal-box">
+    <div class="modal-head">
+      <h3 id="userModalTitle">Add New User</h3>
+      <button class="modal-close-btn" onclick="closeUserModal()">X</button>
+    </div>
+    <form id="userForm" onsubmit="handleSaveUser(event)">
+      <div class="modal-body">
+        <input type="hidden" id="userFormId">
+
+        <div class="form-row">
+          <div class="form-group flex-1">
+            <label class="form-label" for="userUsername">Username (Windows Account) *</label>
+            <input type="text" id="userUsername" class="form-input" placeholder="e.g. jsmith or rr" required>
+          </div>
+          <div class="form-group flex-1">
+            <label class="form-label" for="userDisplayName">Full Display Name *</label>
+            <input type="text" id="userDisplayName" class="form-input" placeholder="e.g. John Smith" required>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group flex-1">
+            <label class="form-label" for="userDepartment">Department</label>
+            <input type="text" id="userDepartment" class="form-input" placeholder="e.g. Operations, Engineering, Finance">
+          </div>
+          <div class="form-group flex-1">
+            <label class="form-label" for="userRole">Security Role *</label>
+            <select id="userRole" class="form-input">
+              <option value="USER" selected>USER (Standard Employee)</option>
+              <option value="ADMIN">ADMIN (System Administrator)</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group flex-1">
+            <label class="form-label" for="userPin">Touchscreen PIN Code</label>
+            <input type="password" id="userPin" class="form-input" maxlength="8" placeholder="4 to 8 digits (e.g. 1234)">
+            <span class="form-hint" id="userPinHint">PIN entered at the MFP touchscreen to release print jobs</span>
+          </div>
+          <div class="form-group flex-1">
+            <label class="form-label" for="userBadge">Badge / RFID Card Number</label>
+            <input type="text" id="userBadge" class="form-input" placeholder="e.g. BADGE-1002">
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group flex-1">
+            <label class="form-label" for="userEmail">Email Address</label>
+            <input type="email" id="userEmail" class="form-input" placeholder="e.g. jsmith@rrconstruction.local">
+          </div>
+          <div class="form-group flex-1">
+            <label class="form-label" for="userSid">Windows Security SID (Optional)</label>
+            <input type="text" id="userSid" class="form-input" placeholder="Leave blank to auto-generate">
+          </div>
+        </div>
+
+        <div class="form-group" style="margin-top:8px;">
+          <label class="checkbox-label">
+            <input type="checkbox" id="userActive" checked> Account Active
+          </label>
+        </div>
+      </div>
+      <div class="modal-foot">
+        <button type="button" class="btn btn-secondary" onclick="closeUserModal()">Cancel</button>
+        <button type="submit" class="btn btn-primary" id="userSubmitBtn">Save User</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- =========================================================================
+     MODAL 3: RESET PIN MODAL
+     ========================================================================= -->
+<div id="resetPinModal" class="modal-backdrop" style="display:none;">
+  <div class="modal-box" style="max-width:440px;">
+    <div class="modal-head">
+      <h3>Reset User PIN</h3>
+      <button class="modal-close-btn" onclick="closeResetPinModal()">X</button>
+    </div>
+    <form id="resetPinForm" onsubmit="handleSavePin(event)">
+      <div class="modal-body">
+        <input type="hidden" id="resetPinUserId">
+        <p style="margin-bottom:12px; color:#475569;">
+          Set a new touchscreen release PIN for user: <strong id="resetPinUsername" style="color:#242C6B;">-</strong>
+        </p>
+        <div class="form-group">
+          <label class="form-label" for="newPinInput">New 4-8 Digit PIN *</label>
+          <input type="password" id="newPinInput" class="form-input" maxlength="8" placeholder="Enter new PIN (e.g. 1234)" required autocomplete="off">
+        </div>
+      </div>
+      <div class="modal-foot">
+        <button type="button" class="btn btn-secondary" onclick="closeResetPinModal()">Cancel</button>
+        <button type="submit" class="btn btn-primary">Update PIN</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- =========================================================================
+     MODAL 4: QUICK PUSH EWB MODAL
+     ========================================================================= -->
+<div id="quickEwbModal" class="modal-backdrop" style="display:none;">
+  <div class="modal-box" style="max-width:520px;">
+    <div class="modal-head">
+      <h3 id="quickEwbTitle">Push EWB Settings to Printer</h3>
+      <button class="modal-close-btn" onclick="closeQuickEwbModal()">X</button>
+    </div>
+    <form id="quickEwbForm" onsubmit="handleQuickEwbSubmit(event)">
+      <div class="modal-body">
+        <input type="hidden" id="quickEwbPrinterId">
+        <p style="font-size:12px; color:#475569; margin-bottom:12px; line-height:1.4;">
+          Connect to Toshiba TopAccess and configure the Embedded Web Browser (EWB) Home Page to load the nexPrint terminal.
+        </p>
+        <div class="form-row">
+          <div class="form-group flex-1">
+            <label class="form-label" for="quickEwbIp">Printer IP</label>
+            <input type="text" id="quickEwbIp" class="form-input" readonly style="background:#F1F5F9;">
+          </div>
+          <div class="form-group flex-1">
+            <label class="form-label" for="quickEwbUser">Admin Username</label>
+            <input type="text" id="quickEwbUser" class="form-input" value="admin" required>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group flex-1">
+            <label class="form-label" for="quickEwbPass">Admin Password</label>
+            <input type="password" id="quickEwbPass" class="form-input" value="123456" required>
+          </div>
+          <div class="form-group flex-1">
+            <label class="form-label" for="quickEwbUrl">Terminal URL</label>
+            <input type="text" id="quickEwbUrl" class="form-input" required>
+            <span class="form-hint" style="color:#0284C7; font-weight:500;">nexPrint Server PC URL (e.g. http://192.168.1.80:8080/). Do NOT use printer IP or https.</span>
+          </div>
+        </div>
+        <div id="quickEwbLog" class="ewb-log-box" style="display:block; min-height:80px;">Ready to configure Toshiba EWB. Click "Push EWB Now".</div>
+      </div>
+      <div class="modal-foot">
+        <a id="quickEwbTopAccessLink" href="#" target="_blank" class="btn btn-secondary" style="margin-right:8px;">Open TopAccess</a>
+        <button type="button" class="btn btn-secondary" onclick="handleQuickEwbReset()" id="btnQuickEwbReset" style="color:#D97706; margin-right:4px;">Reset EWB (Home)</button>
+        <button type="button" class="btn btn-secondary" onclick="handleQuickEwbReboot()" id="btnQuickEwbReboot" style="color:#B91C1C; margin-right:auto;">Reboot MFP</button>
+        <button type="button" class="btn btn-secondary" onclick="closeQuickEwbModal()">Close</button>
+        <button type="submit" class="btn btn-primary" id="btnQuickEwbSubmit">Push EWB Now</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- =========================================================================
+     MODAL: CREATE VIRTUAL PRINT QUEUE
+     ========================================================================= -->
+<div id="modalCreateVirtualQueue" class="modal-backdrop" style="display:none; z-index:9999;">
+  <div class="modal-box" style="max-width:560px; border-radius:4px;">
+    <div class="modal-head">
+      <h3>➕ Create New Virtual Print Queue</h3>
+      <button class="modal-close-btn" onclick="window.closeCreateVirtualQueueModal()">X</button>
+    </div>
+    <form onsubmit="window.handleCreateVirtualQueueSubmit(event)">
+      <div class="modal-body">
+        <div class="form-row">
+          <div class="form-group flex-1">
+            <label class="form-label" for="newVqName">Queue Display Name *</label>
+            <input type="text" id="newVqName" class="form-input" placeholder="e.g. Executive Color Queue" required>
+          </div>
+          <div class="form-group flex-1">
+            <label class="form-label" for="newVqCode">Queue Code *</label>
+            <input type="text" id="newVqCode" class="form-input" placeholder="e.g. VQ-COLOR" required>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group flex-1">
+            <label class="form-label" for="newVqWindowsPrinter">Windows Spooler Printer *</label>
+            <input type="text" id="newVqWindowsPrinter" class="form-input" placeholder="e.g. Toshiba_Color_Queue" required>
+            <span class="form-hint">Name of Windows printer queue on server.</span>
+          </div>
+          <div class="form-group flex-1">
+            <label class="form-label" for="newVqShareName">SMB Share Name</label>
+            <input type="text" id="newVqShareName" class="form-input" placeholder="e.g. Toshiba_Color_Queue">
+            <span class="form-hint">Path: \\SERVER\&lt;ShareName&gt;</span>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="newVqDriver">Printer Driver</label>
+          <input type="text" id="newVqDriver" class="form-input" value="TOSHIBA Universal Printer 2">
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="newVqDescription">Description / Usage</label>
+          <input type="text" id="newVqDescription" class="form-input" placeholder="e.g. High-speed release pool for 2nd floor engineering">
+        </div>
+
+        <div class="form-group">
+          <label class="checkbox-label" style="font-weight:600; color:#1E3A8A;">
+            <input type="checkbox" id="newVqIsDefault"> Set as Primary Default Virtual Queue
+          </label>
+        </div>
+
+        <div class="form-group" style="margin-top:14px;">
+          <label class="form-label">Assign Initial Physical MFPs to this Pool (Select from Fleet)</label>
+          <div style="margin-bottom:6px;">
+            <input type="text" class="form-input" placeholder="Filter physical printers..." oninput="window.filterModalPrinters('newVqPrintersList', this.value)" style="height:30px; font-size:12px;">
+          </div>
+          <div id="newVqPrintersList" style="max-height:160px; overflow-y:auto; border:1px solid #CBD5E1; padding:8px 12px; background:#F8FAFC; border-radius:2px;">
+            <!-- Populated dynamically -->
+          </div>
+        </div>
+      </div>
+      <div class="modal-foot">
+        <button type="button" class="btn btn-secondary" onclick="window.closeCreateVirtualQueueModal()">Cancel</button>
+        <button type="submit" class="btn btn-primary">Create Virtual Queue</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- =========================================================================
+     MODAL: EDIT VIRTUAL PRINT QUEUE
+     ========================================================================= -->
+<div id="modalEditVirtualQueue" class="modal-backdrop" style="display:none; z-index:9999;">
+  <div class="modal-box" style="max-width:560px; border-radius:4px;">
+    <div class="modal-head">
+      <h3>✏️ Edit Virtual Print Queue</h3>
+      <button class="modal-close-btn" onclick="window.closeEditVirtualQueueModal()">X</button>
+    </div>
+    <form onsubmit="window.handleEditVirtualQueueSubmit(event)">
+      <input type="hidden" id="editVqId">
+      <div class="modal-body">
+        <div class="form-row">
+          <div class="form-group flex-1">
+            <label class="form-label" for="editVqName">Queue Display Name *</label>
+            <input type="text" id="editVqName" class="form-input" required>
+          </div>
+          <div class="form-group flex-1">
+            <label class="form-label" for="editVqCode">Queue Code</label>
+            <input type="text" id="editVqCode" class="form-input" readonly style="background:#F1F5F9;">
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group flex-1">
+            <label class="form-label" for="editVqWindowsPrinter">Windows Spooler Printer *</label>
+            <input type="text" id="editVqWindowsPrinter" class="form-input" required>
+          </div>
+          <div class="form-group flex-1">
+            <label class="form-label" for="editVqShareName">SMB Share Name</label>
+            <input type="text" id="editVqShareName" class="form-input">
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="editVqDriver">Printer Driver</label>
+          <input type="text" id="editVqDriver" class="form-input">
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="editVqDescription">Description</label>
+          <input type="text" id="editVqDescription" class="form-input">
+        </div>
+
+        <div class="form-group">
+          <label class="checkbox-label" style="font-weight:600; color:#1E3A8A;">
+            <input type="checkbox" id="editVqIsDefault"> Set as Primary Default Virtual Queue
+          </label>
+        </div>
+      </div>
+      <div class="modal-foot">
+        <button type="button" class="btn btn-secondary" onclick="window.closeEditVirtualQueueModal()">Cancel</button>
+        <button type="submit" class="btn btn-primary">Save Changes</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- =========================================================================
+     MODAL 5: CUSTOM MODERN CONFIRMATION DIALOG (No Browser Popups)
+     ========================================================================= -->
+<div id="confirmModal" class="modal-backdrop" style="display:none; z-index:99999;">
+  <div class="modal-box" style="max-width:420px; border-radius:4px;">
+    <div class="modal-head">
+      <h3 id="confirmModalTitle">Confirmation</h3>
+      <button class="modal-close-btn" onclick="closeConfirmModal(false)">X</button>
+    </div>
+    <div class="modal-body" style="padding:16px 20px;">
+      <p id="confirmModalMsg" style="font-size:13px; color:#334155; line-height:1.5; margin:0;"></p>
+    </div>
+    <div class="modal-foot" style="padding:12px 20px; display:flex; justify-content:flex-end; gap:8px;">
+      <button type="button" class="btn btn-secondary" id="confirmModalCancelBtn" onclick="closeConfirmModal(false)">Cancel</button>
+      <button type="button" class="btn btn-primary" id="confirmModalOkBtn" onclick="closeConfirmModal(true)">Confirm</button>
+    </div>
+  </div>
+</div>
+
+<script src="/js/admin-app.js?v=20261020_50"></script>
 </body>
 </html>

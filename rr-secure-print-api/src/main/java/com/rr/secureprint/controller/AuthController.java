@@ -32,8 +32,10 @@ public class AuthController {
     }
 
     @PostMapping("/logout")
-    public ResponseEntity<Void> logout(HttpServletRequest httpRequest) {
-        authService.logout(httpRequest);
+    public ResponseEntity<Void> logout(@RequestBody(required = false) java.util.Map<String, String> body, HttpServletRequest httpRequest) {
+        String printerIp = (body != null) ? body.get("printerIp") : null;
+        String printerCode = (body != null) ? body.get("printerCode") : null;
+        authService.logout(httpRequest, printerIp, printerCode);
         return ResponseEntity.noContent().build();
     }
 
@@ -47,7 +49,9 @@ public class AuthController {
                     user.getDisplayName(),
                     user.getUserSid(),
                     user.getDepartment(),
-                    user.getRole()
+                    user.getRole(),
+                    user.getPrintCount(),
+                    user.getCopyCount()
             ));
         }
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();

@@ -12,11 +12,19 @@
      SIDEBAR NAVIGATION (Clean nexPrint Admin)
      ========================================================================= -->
 <div class="sidebar">
-  <div class="sidebar-brand">
-    <div class="brand-mark">nP</div>
-    <div class="brand-words">
-      <span class="brand-name">nexPrint</span>
-      <span class="brand-sub">Print Management</span>
+  <div class="sidebar-brand" id="sidebarBrandContainer">
+    <!-- Default Branding (nP icon + title/sub) when no custom logo is uploaded -->
+    <div class="brand-default-group" id="sidebarBrandDefaultGroup">
+      <div class="brand-mark" id="sidebarBrandMark">nP</div>
+      <div class="brand-words" id="sidebarBrandWords">
+        <span class="brand-name" id="sidebarBrandName">nex<span>Print</span></span>
+        <span class="brand-sub" id="sidebarBrandSub">Print Management</span>
+      </div>
+    </div>
+
+    <!-- Full-Width Horizontal Logo Container (350x106 ratio) -->
+    <div class="sidebar-logo-wrap" id="sidebarLogoWrap" style="display:none;">
+      <img id="sidebarLogoImg" class="sidebar-logo-img" src="" alt="Organization Logo">
     </div>
   </div>
 
@@ -36,8 +44,14 @@
     <a class="sidebar-item" data-page="queue" onclick="navigatePage('queue')">
       Print Queue
     </a>
+    <a class="sidebar-item" data-page="copy-logs" onclick="navigatePage('copy-logs')">
+      Photocopy Logs
+    </a>
     <a class="sidebar-item" data-page="audit" onclick="navigatePage('audit')">
       Audit Trail
+    </a>
+    <a class="sidebar-item" data-page="settings" onclick="navigatePage('settings')">
+      System Settings
     </a>
 
     <div class="sidebar-divider"></div>
@@ -368,8 +382,9 @@
           <h2>Physical Printer Devices</h2>
           <p>Register, monitor, and configure physical Toshiba MFPs and RAW/JetDirect Port 9100 devices.</p>
         </div>
-        <div>
-          <button class="btn btn-primary" onclick="openAddPrinterModal()">+ Register New Printer</button>
+        <div style="display:flex; gap:8px;">
+          <button class="btn btn-primary" onclick="window.pollFleetCopyJobs()" id="btnPollCopyFleet">📑 Poll Walk-Up Copy Jobs</button>
+          <button class="btn btn-yellow" onclick="openAddPrinterModal()">+ Register New Printer</button>
           <button class="btn btn-secondary" onclick="loadPrinters()">Refresh</button>
         </div>
       </div>
@@ -387,6 +402,7 @@
               <tr>
                 <th>MFP Device Name</th>
                 <th>Device Code</th>
+                <th>Architecture</th>
                 <th>Network IP : Port</th>
                 <th>Location</th>
                 <th>Hardware Model</th>
@@ -397,7 +413,7 @@
               </tr>
             </thead>
             <tbody id="printersTableBody">
-              <tr><td colspan="9" style="text-align:center;padding:30px;color:#6B7299;">Loading registered printers...</td></tr>
+              <tr><td colspan="10" style="text-align:center;padding:30px;color:#6B7299;">Loading registered printers...</td></tr>
             </tbody>
           </table>
         </div>
@@ -430,13 +446,15 @@
                 <th>Security Role</th>
                 <th>Touch PIN</th>
                 <th>Badge / RFID ID</th>
-                <th>Windows SID</th>
+                <th>Print Pages</th>
+                <th>Copy Pages</th>
+                <th>Total Pages</th>
                 <th>Account Status</th>
                 <th style="text-align:right;">Actions</th>
               </tr>
             </thead>
             <tbody id="usersTableBody">
-              <tr><td colspan="9" style="text-align:center;padding:30px;color:#6B7299;">Loading users...</td></tr>
+              <tr><td colspan="11" style="text-align:center;padding:30px;color:#6B7299;">Loading users...</td></tr>
             </tbody>
           </table>
         </div>
@@ -490,6 +508,53 @@
     </div>
 
     <!-- =====================================================================
+         PAGE: PHOTOCOPY LOGS (WALK-UP MFP COPIES)
+         ===================================================================== -->
+    <div id="page-copy-logs" class="page-view" style="display:none;">
+      <div class="section-header">
+        <div>
+          <h2>Walk-Up Photocopy Logs</h2>
+          <p>Real-time hardware copy accounting captured from Toshiba e-BRIDGE Next MFPs via TopAccess XML.</p>
+        </div>
+        <div style="display:flex; gap:8px;">
+          <button type="button" class="btn btn-primary" onclick="pollFleetCopyJobs()" id="btnPollCopyFleetLogs">🔄 Poll MFPs Now</button>
+          <button type="button" class="btn btn-secondary" onclick="loadCopyJobs()">Refresh</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <div style="padding:16px 20px; border-bottom:1px solid #E2E8F0; display:flex; justify-content:space-between; align-items:center;">
+          <div>
+            <strong style="font-size:14px; color:#0F172A;">Recent Photocopy Activity (Top 50 Jobs)</strong>
+            <div style="font-size:12px; color:#64748B;">Monitors walk-up copies made directly on the glass/feeder and attributes them to the authenticated user.</div>
+          </div>
+          <div style="font-size:12px; color:#64748B;">
+            Auto-polled every 60 seconds
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Timestamp</th>
+                <th>User Account</th>
+                <th>MFP Device</th>
+                <th>Printer IP</th>
+                <th>Total Pages</th>
+                <th>Mono Pages</th>
+                <th>Color Pages</th>
+                <th>Device Job ID</th>
+              </tr>
+            </thead>
+            <tbody id="copyJobsTableBody">
+              <tr><td colspan="8" style="text-align:center;padding:30px;color:#6B7299;">Loading photocopy logs...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- =====================================================================
          PAGE 5: SECURITY AUDIT TRAIL
          ===================================================================== -->
     <div id="page-audit" class="page-view" style="display:none;">
@@ -525,6 +590,130 @@
       </div>
     </div>
 
+    <!-- =====================================================================
+         PAGE 8: SYSTEM SETTINGS & BRANDING
+         ===================================================================== -->
+    <div id="page-settings" class="page-view" style="display:none;">
+      <div class="section-header">
+        <div>
+          <h2>System Settings & Corporate Branding</h2>
+          <p>Customize corporate identity, upload enterprise logos, and configure global system preferences.</p>
+        </div>
+        <div>
+          <button class="btn btn-secondary" onclick="loadSettings()">🔄 Reload Settings</button>
+        </div>
+      </div>
+
+      <!-- 2-COLUMN SETTINGS GRID -->
+      <div style="display: grid; grid-template-columns: 1fr 1.25fr; gap: 24px; align-items: start;">
+
+        <!-- LEFT COLUMN: LOGO MANAGEMENT CARD -->
+        <div class="card" style="border-top: 4px solid var(--primary);">
+          <div class="card-head">
+            <div>
+              <strong style="font-size: 14px; color: #1E3A8A;">Corporate Logo & Identity</strong>
+              <div style="font-size: 11px; color: var(--text-muted); margin-top: 2px;">
+                Displayed on Admin Panel top-left corner and Physical Touchscreen MFPs
+              </div>
+            </div>
+            <span id="logoStatusBadge" class="badge badge-online">Default Logo</span>
+          </div>
+
+          <div style="padding: 20px;">
+            <!-- Logo Preview Container with Transparency Checkerboard -->
+            <label class="form-label" style="margin-bottom: 8px;">Active Logo Preview</label>
+            <div style="background-color: #f8fafc; background-image: linear-gradient(45deg, #e2e8f0 25%, transparent 25%), linear-gradient(-45deg, #e2e8f0 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #e2e8f0 75%), linear-gradient(-45deg, transparent 75%, #e2e8f0 75%); background-size: 16px 16px; background-position: 0 0, 0 8px, 8px -8px, -8px 0px; border: 2px dashed #CBD5E1; min-height: 140px; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 16px; margin-bottom: 16px; text-align: center;">
+              
+              <!-- Default Icon Fallback -->
+              <div id="settingsLogoDefaultMark" class="brand-mark" style="width: 56px; height: 56px; font-size: 22px; margin-bottom: 8px;">nP</div>
+              
+              <!-- Custom Image Preview (Supports 350x106 wide banner ratio) -->
+              <img id="settingsLogoPreviewImg" src="" alt="Custom Logo Preview" style="display: none; max-height: 96px; max-width: 320px; width: auto; height: auto; object-fit: contain; margin-bottom: 8px; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.1));" />
+              
+              <div id="settingsLogoInfo" style="font-size: 12px; color: #475569; font-weight: 500;">
+                Default nexPrint Branding
+              </div>
+            </div>
+
+            <!-- Upload File Picker Area -->
+            <div class="form-group">
+              <label class="form-label" for="logoFileInput">Select New Logo File</label>
+              <input type="file" id="logoFileInput" accept="image/png, image/jpeg, image/jpg, image/svg+xml, image/webp, image/gif" class="form-input" onchange="handleLogoFileSelect(event)" style="padding: 7px 10px; cursor: pointer;">
+              <div class="form-hint" style="margin-top: 6px;">
+                Supported: <strong>PNG, SVG, JPG, WebP</strong>. Recommended ratio: <strong>~350x106</strong> (horizontal banner). Transparent backgrounds recommended.
+              </div>
+            </div>
+
+            <!-- Action Buttons for Logo -->
+            <div style="display: flex; gap: 10px; margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--border);">
+              <button type="button" id="btnSaveLogo" class="btn btn-primary" onclick="handleSaveLogo()" disabled>
+                💾 Save Logo
+              </button>
+              <button type="button" id="btnResetLogo" class="btn btn-secondary" onclick="handleResetLogo()" style="color: #DC2626;">
+                🗑️ Reset to Default
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- RIGHT COLUMN: GENERAL SETTINGS CARD -->
+        <div class="card" style="border-top: 4px solid var(--yellow);">
+          <div class="card-head">
+            <div>
+              <strong style="font-size: 14px; color: #1E3A8A;">Enterprise System Settings</strong>
+              <div style="font-size: 11px; color: var(--text-muted); margin-top: 2px;">
+                Organization branding titles, inactivity lock, and support details
+              </div>
+            </div>
+            <span id="settingsSaveStatus" class="badge" style="background:#F0FDF4; color:#15803D;">Ready</span>
+          </div>
+
+          <form id="generalSettingsForm" onsubmit="handleSaveGeneralSettings(event)" style="padding: 20px;">
+            <div class="form-row">
+              <div class="form-group flex-1">
+                <label class="form-label" for="settingOrgName">Organization / Company Name *</label>
+                <input type="text" id="settingOrgName" class="form-input" placeholder="e.g. Acme Corporation" required>
+                <div class="form-hint">Displayed on terminal login headers and audit reports.</div>
+              </div>
+            </div>
+
+            <div class="form-row">
+              <div class="form-group flex-1">
+                <label class="form-label" for="settingSystemTitle">System Title *</label>
+                <input type="text" id="settingSystemTitle" class="form-input" placeholder="nexPrint" required>
+                <div class="form-hint">Application brand displayed on sidebar header.</div>
+              </div>
+              <div class="form-group flex-1">
+                <label class="form-label" for="settingSystemSubtitle">System Subtitle</label>
+                <input type="text" id="settingSystemSubtitle" class="form-input" placeholder="Secure Enterprise Print Management">
+                <div class="form-hint">Secondary label displayed under system title.</div>
+              </div>
+            </div>
+
+            <div class="form-row">
+              <div class="form-group flex-1">
+                <label class="form-label" for="settingInactivityTimeout">Terminal Inactivity Timeout (Seconds) *</label>
+                <input type="number" id="settingInactivityTimeout" class="form-input" min="15" max="600" value="60" required>
+                <div class="form-hint">Touchscreen automatically locks and logs out after this idle period.</div>
+              </div>
+              <div class="form-group flex-1">
+                <label class="form-label" for="settingSupportContact">IT Support Contact / Helpdesk</label>
+                <input type="text" id="settingSupportContact" class="form-input" placeholder="e.g. IT Helpdesk (helpdesk@company.com / Ext 4357)">
+                <div class="form-hint">Shown on physical touch terminals during assistance prompts.</div>
+              </div>
+            </div>
+
+            <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; padding-top: 14px; border-top: 1px solid var(--border);">
+              <button type="submit" id="btnSaveGeneralSettings" class="btn btn-primary">
+                💾 Save General Settings
+              </button>
+            </div>
+          </form>
+        </div>
+
+      </div>
+    </div>
+
   </div>
 </div>
 
@@ -544,12 +733,39 @@
         <div class="form-row">
           <div class="form-group flex-1">
             <label class="form-label" for="printerName">Printer Friendly Name *</label>
-            <input type="text" id="printerName" class="form-input" placeholder="e.g. Toshiba e-STUDIO 4508A" required>
+            <input type="text" id="printerName" class="form-input" placeholder="e.g. Toshiba e-STUDIO 306SE" required>
           </div>
           <div class="form-group flex-1">
             <label class="form-label" for="printerCode">Unique Printer Code *</label>
             <input type="text" id="printerCode" class="form-input" placeholder="e.g. PCT0001" required>
             <span class="form-hint">Used by embedded terminals &amp; spool routing</span>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group flex-1">
+            <label class="form-label" for="printerDeviceGeneration">Toshiba MFP Architecture / Generation *</label>
+            <select id="printerDeviceGeneration" class="form-input" onchange="handleDeviceGenerationChange()" style="font-weight:600; cursor:pointer;">
+              <option value="TOSHIBA_NEW">Toshiba New (e-BRIDGE Next: 2518A, 3518A, 4508A, AC Series)</option>
+              <option value="TOSHIBA_OLD">Toshiba Old (e-BRIDGE Legacy: e-STUDIO 306SE, 256, 356, 456, 506)</option>
+            </select>
+          </div>
+          <div class="form-group flex-1">
+            <label class="form-label" for="printerModel">Hardware Model</label>
+            <input type="text" id="printerModel" class="form-input" value="Toshiba e-STUDIO 4508A" list="printerModelSuggestions">
+            <datalist id="printerModelSuggestions">
+              <option value="Toshiba e-STUDIO 306SE">
+              <option value="Toshiba e-STUDIO 256">
+              <option value="Toshiba e-STUDIO 356">
+              <option value="Toshiba e-STUDIO 456">
+              <option value="Toshiba e-STUDIO 506">
+              <option value="Toshiba e-STUDIO 2518A">
+              <option value="Toshiba e-STUDIO 3518A">
+              <option value="Toshiba e-STUDIO 4508A">
+              <option value="Toshiba e-STUDIO 5018A">
+              <option value="Toshiba e-STUDIO 2010AC">
+              <option value="Toshiba e-STUDIO 3015AC">
+            </datalist>
           </div>
         </div>
 
@@ -562,16 +778,9 @@
             <label class="form-label" for="printerPort">RAW Port *</label>
             <input type="number" id="printerPort" class="form-input" value="9100" required>
           </div>
-        </div>
-
-        <div class="form-row">
           <div class="form-group flex-1">
             <label class="form-label" for="printerLocation">Physical Location *</label>
             <input type="text" id="printerLocation" class="form-input" placeholder="e.g. Main Office - Ground Floor Print Bay" required>
-          </div>
-          <div class="form-group flex-1">
-            <label class="form-label" for="printerModel">Hardware Model</label>
-            <input type="text" id="printerModel" class="form-input" value="Toshiba e-STUDIO 4508A">
           </div>
         </div>
 
@@ -591,44 +800,50 @@
         </div>
 
         <!-- Toshiba EWB Integration (PaperCut MF Style) -->
-        <div class="ewb-config-card">
+        <div class="ewb-config-card" id="ewbConfigCard">
           <div class="ewb-config-head">
             <span class="ewb-config-title">
               <span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:var(--amber);"></span>
               Toshiba EWB Integration (PaperCut MF Style)
             </span>
-            <span style="font-size:11px; color:#64748B;">Embedded Web Browser</span>
+            <span id="ewbArchBadge" class="badge" style="background:#E0F2FE; color:#0369A1; font-size:11px;">e-BRIDGE Next Only</span>
           </div>
-          <p style="font-size:11px; color:#475569; margin-bottom:10px; line-height:1.4;">
-            Automatically configures the printer's TopAccess EWB settings so the physical touchscreen directly displays the nexPrint touch terminal on boot and walk-up.
-          </p>
-          <div class="form-row">
-            <div class="form-group flex-1">
-              <label class="form-label" for="printerAdminUser">Printer Admin User</label>
-              <input type="text" id="printerAdminUser" class="form-input" value="admin" placeholder="admin">
-            </div>
-            <div class="form-group flex-1">
-              <label class="form-label" for="printerAdminPass">Printer Admin Password</label>
-              <div style="position:relative;">
-                <input type="password" id="printerAdminPass" class="form-input" value="123456" placeholder="Password">
-                <button type="button" onclick="togglePassVisibility('printerAdminPass')" style="position:absolute; right:8px; top:7px; background:none; border:none; color:#64748B; cursor:pointer; font-size:10px;">SHOW</button>
+          <div id="ewbLegacyNotice" style="display:none; background:#FFFBEB; border:1px solid #FDE68A; padding:10px 14px; border-radius:6px; margin-bottom:12px; font-size:12px; color:#92400E; line-height:1.4;">
+            <strong>Legacy Device Selected (Toshiba Old - e-STUDIO 306SE / e-BRIDGE 3/X/4):</strong><br>
+            Older Toshiba MFPs do not include modern HTML5 Embedded WebKit browsers. Secure print release is handled automatically via <strong>RAW Port 9100 Print Spooling</strong>, <strong>Mobile / Tablet Web Station</strong>, or <strong>External Touch Terminal</strong>. Remote EWB push is disabled for this model.
+          </div>
+          <div id="ewbConfigFields">
+            <p style="font-size:11px; color:#475569; margin-bottom:10px; line-height:1.4;">
+              Automatically configures the printer's TopAccess EWB settings so the physical touchscreen directly displays the nexPrint touch terminal on boot and walk-up.
+            </p>
+            <div class="form-row">
+              <div class="form-group flex-1">
+                <label class="form-label" for="printerAdminUser">Printer Admin User</label>
+                <input type="text" id="printerAdminUser" class="form-input" value="admin" placeholder="admin">
+              </div>
+              <div class="form-group flex-1">
+                <label class="form-label" for="printerAdminPass">Printer Admin Password</label>
+                <div style="position:relative;">
+                  <input type="password" id="printerAdminPass" class="form-input" value="123456" placeholder="Password">
+                  <button type="button" onclick="togglePassVisibility('printerAdminPass')" style="position:absolute; right:8px; top:7px; background:none; border:none; color:#64748B; cursor:pointer; font-size:10px;">SHOW</button>
+                </div>
               </div>
             </div>
+            <div class="form-group" style="margin-top:8px;">
+              <label class="form-label" for="printerTerminalUrl">Terminal Screen URL to Push</label>
+              <input type="text" id="printerTerminalUrl" class="form-input" placeholder="http://192.168.1.100:8080/">
+              <span class="form-hint" style="color:#0284C7; font-weight:500;">nexPrint Server PC URL (e.g. http://192.168.1.100:8080/). Do NOT use printer's own IP or https.</span>
+            </div>
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-top:10px;">
+              <label class="checkbox-label" style="font-weight:500;">
+                <input type="checkbox" id="printerAutoEwb" checked> Push EWB settings to device automatically
+              </label>
+              <button type="button" class="btn btn-sm btn-secondary" onclick="testEwbInModal()" id="btnModalTestEwb">
+                Test &amp; Push EWB Now
+              </button>
+            </div>
+            <div id="modalEwbLog" class="ewb-log-box"></div>
           </div>
-          <div class="form-group" style="margin-top:8px;">
-            <label class="form-label" for="printerTerminalUrl">Terminal Screen URL to Push</label>
-            <input type="text" id="printerTerminalUrl" class="form-input" placeholder="http://192.168.1.80:8080/">
-            <span class="form-hint" style="color:#0284C7; font-weight:500;">nexPrint Server PC URL (e.g. http://192.168.1.80:8080/). Do NOT use printer's own IP or https.</span>
-          </div>
-          <div style="display:flex; justify-content:space-between; align-items:center; margin-top:10px;">
-            <label class="checkbox-label" style="font-weight:500;">
-              <input type="checkbox" id="printerAutoEwb" checked> Push EWB settings to device automatically
-            </label>
-            <button type="button" class="btn btn-sm btn-secondary" onclick="testEwbInModal()" id="btnModalTestEwb">
-              Test &amp; Push EWB Now
-            </button>
-          </div>
-          <div id="modalEwbLog" class="ewb-log-box"></div>
         </div>
       </div>
       <div class="modal-foot">

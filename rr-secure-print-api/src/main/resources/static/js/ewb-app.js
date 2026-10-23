@@ -7,6 +7,24 @@
 (function () {
   'use strict';
 
+  // Bulletproof ES5 String Trim Polyfill / Safe Trimmer
+  function safeTrim(s) {
+    if (s === null || s === undefined) return '';
+    return ('' + s).replace(/^\s+|\s+$/g, '');
+  }
+
+  // Toshiba EWB Global Diagnostic Catch
+  window.onerror = function (msg, url, line) {
+    var errText = 'EWB Script Notice: ' + msg + ' (L:' + line + ')';
+    if (window.console && window.console.error) window.console.error(errText);
+    var alertEl = document.getElementById('alertBox');
+    if (alertEl) {
+      alertEl.textContent = errText;
+      alertEl.className = 'pc-alert-strip pc-alert-error';
+      alertEl.style.display = 'block';
+    }
+  };
+
   var state = {
     currentUser: null,
     pinBuffer: '',
@@ -65,19 +83,51 @@
     document.body.onmousedown  = resetInactivityTimer;
     document.body.ontouchstart = resetInactivityTimer;
 
-    // Wake / sleep / reconnect handlers (auto-heal when waking from energy saver)
+    // Immediate Hardware Sleep / Energy Saver / Hide Event Handlers
+    if (document.addEventListener) {
+      document.addEventListener('visibilitychange', function () {
+        if (document.visibilityState === 'hidden') {
+          // Hardware Sleep button pressed OR panel turned off into Energy Saver!
+          window.emergencyLockAndLogout('HARDWARE_SLEEP_BUTTON');
+        } else if (document.visibilityState === 'visible') {
+          // Machine woke up from sleep - enforce lock and show PIN pad
+          window.emergencyLockAndLogout('HARDWARE_WAKE_VERIFY');
+        }
+      });
+    }
+
     if (window.addEventListener) {
+      window.addEventListener('pagehide', function () {
+        window.emergencyLockAndLogout('PAGE_HIDE');
+      });
+      window.addEventListener('blur', function () {
+        if (state.currentUser) {
+          window.emergencyLockAndLogout('WINDOW_BLUR_SLEEP');
+        }
+      });
+      window.addEventListener('focus', function () {
+        if (!state.currentUser) {
+          window.emergencyLockAndLogout('WINDOW_FOCUS_WAKE');
+        }
+      });
       window.addEventListener('online', onWakeOrReconnect);
-      window.addEventListener('focus', onWakeOrReconnect);
       window.addEventListener('pageshow', onWakeOrReconnect);
-      if (document.addEventListener) {
-        document.addEventListener('visibilitychange', function () {
-          if (document.visibilityState === 'visible') {
-            onWakeOrReconnect();
-          }
+    }
+
+    // Hook into Toshiba OpenPlatform injected system sleep events
+    try {
+      if (window.topaccess && window.topaccess.system && window.topaccess.system.addEventListener) {
+        window.topaccess.system.addEventListener('sleep', function () {
+          window.emergencyLockAndLogout('TOPACCESS_SYSTEM_SLEEP');
+        });
+        window.topaccess.system.addEventListener('powersave', function () {
+          window.emergencyLockAndLogout('TOPACCESS_SYSTEM_POWERSAVE');
+        });
+        window.topaccess.system.addEventListener('autoclear', function () {
+          window.emergencyLockAndLogout('TOPACCESS_SYSTEM_AUTOCLEAR');
         });
       }
-    }
+    } catch (e) {}
 
     // Check existing session
     checkCurrentSession();
@@ -88,12 +138,117 @@
 
 
   /* ------------------------------------------------------------------ */
+  /* Emergency Sleep Auto-Lock & Device Security                        */
+  /* ------------------------------------------------------------------ */
+  window.emergencyLockAndLogout = function (reason) {
+    var stationCode = (state.station && state.station.printerCode) ? state.station.printerCode : null;
+    var stationIp = (state.station && state.station.ipAddress) ? state.station.ipAddress : null;
+    var payload = JSON.stringify({
+      printerCode: stationCode,
+      printerIp: stationIp,
+      reason: reason || 'SLEEP_MODE'
+    });
+
+    // 1. Send beacon immediately (guaranteed delivery across page freeze/sleep)
+    if (navigator.sendBeacon) {
+      try {
+        var blob = new Blob([payload], { type: 'application/json' });
+        navigator.sendBeacon('/api/station/auto-lock', blob);
+      } catch (e) {}
+    }
+
+    // 2. Fetch with keepalive fallback
+    try {
+      if (window.fetch) {
+        fetch('/api/station/auto-lock', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: payload,
+          keepalive: true
+        });
+      }
+    } catch (e) {}
+
+    // 3. Reset local UI state to locked PIN pad
+    state.currentUser = null;
+    state.pinBuffer = '';
+    stopHeartbeat();
+    stopInactivityTimer();
+    window.hideCopySessionModal();
+    showAuthScreen();
+    showAlert('Device locked & secured. Enter PIN to start.', 'info');
+  };
+
+  /* ------------------------------------------------------------------ */
+  /* Touch Terminal Heartbeat (Keeps session alive while active)        */
+  /* ------------------------------------------------------------------ */
+  var heartbeatTimer = null;
+  function startHeartbeat() {
+    stopHeartbeat();
+    sendHeartbeat();
+    heartbeatTimer = setInterval(sendHeartbeat, 8000); // Send heartbeat every 8 seconds
+  }
+
+  function stopHeartbeat() {
+    if (heartbeatTimer) {
+      clearInterval(heartbeatTimer);
+      heartbeatTimer = null;
+    }
+  }
+
+  function sendHeartbeat() {
+    if (!state.currentUser) {
+      stopHeartbeat();
+      return;
+    }
+    var stationCode = (state.station && state.station.printerCode) ? state.station.printerCode : null;
+    var stationIp = (state.station && state.station.ipAddress) ? state.station.ipAddress : null;
+    apiRequest('POST', '/api/station/heartbeat', { printerCode: stationCode, printerIp: stationIp }, function (status, data) {
+      if (status === 401 || (data && data.locked)) {
+        window.emergencyLockAndLogout('HEARTBEAT_EXPIRED');
+      }
+    });
+  }
+
+
+  /* ------------------------------------------------------------------ */
   /* Physical Station Management (PaperCut Find-Me Architecture)       */
   /* ------------------------------------------------------------------ */
+  function applyEwbBranding(branding) {
+    if (!branding) return;
+    var defaultGroup = document.getElementById('ewbDefaultBrandGroup');
+    var logoImg = document.getElementById('ewbLogoImg');
+    var brandName = document.getElementById('ewbBrandName');
+    var brandSub  = document.getElementById('ewbBrandSubtitle');
+
+    if (branding.hasCustomLogo && branding.logoData) {
+      if (logoImg) {
+        logoImg.src = branding.logoData;
+        logoImg.style.display = 'inline-block';
+      }
+      if (defaultGroup) defaultGroup.style.display = 'none';
+    } else {
+      if (logoImg) {
+        logoImg.src = '';
+        logoImg.style.display = 'none';
+      }
+      if (defaultGroup) defaultGroup.style.display = 'inline-flex';
+      if (brandName && branding.systemTitle) {
+        brandName.textContent = branding.systemTitle;
+      }
+      if (brandSub && branding.organizationName) {
+        brandSub.textContent = branding.organizationName;
+      }
+    }
+  }
+
   function initStationInfo() {
     var params = window.location.search || '';
     apiRequest('GET', '/api/station/current' + params, null, function (status, data) {
       if (status === 200 && data && data.currentStation) {
+        if (data.branding) {
+          applyEwbBranding(data.branding);
+        }
         state.station = data.currentStation;
         var nameEl = document.getElementById('stationNameHeader');
         var ipEl = document.getElementById('stationIpHeader');
@@ -127,7 +282,11 @@
 
   function onWakeOrReconnect() {
     sessionRetryCount = 0;
-    checkCurrentSession();
+    if (state.currentUser) {
+      window.emergencyLockAndLogout('HARDWARE_WAKE_VERIFY');
+    } else {
+      checkCurrentSession();
+    }
   }
 
   /* ------------------------------------------------------------------ */
@@ -148,7 +307,9 @@
             json = { message: xhr.responseText };
           }
         }
-        callback(xhr.status, json);
+        if (typeof callback === 'function') {
+          callback(xhr.status, json);
+        }
       }
     };
     xhr.send(data ? JSON.stringify(data) : null);
@@ -212,7 +373,14 @@
     state.isBusy = true;
     showAlert('Authenticating with secure print server...', 'info');
 
-    apiRequest('POST', '/api/auth/login', { pin: state.pinBuffer }, function (status, data) {
+    var stationCode = (state.station && state.station.printerCode) ? state.station.printerCode : null;
+    var stationIp = (state.station && state.station.ipAddress) ? state.station.ipAddress : null;
+
+    apiRequest('POST', '/api/auth/login', {
+      pin: state.pinBuffer,
+      printerCode: stationCode,
+      printerIp: stationIp
+    }, function (status, data) {
       state.isBusy = false;
       state.pinBuffer = '';
       refreshPinDisplay();
@@ -229,7 +397,15 @@
     state.isBusy = true;
     showAlert('Signing in as ' + username.toUpperCase() + '...', 'info');
 
-    apiRequest('POST', '/api/auth/login', { username: username, pin: pin }, function (status, data) {
+    var stationCode = (state.station && state.station.printerCode) ? state.station.printerCode : null;
+    var stationIp = (state.station && state.station.ipAddress) ? state.station.ipAddress : null;
+
+    apiRequest('POST', '/api/auth/login', {
+      username: username,
+      pin: pin,
+      printerCode: stationCode,
+      printerIp: stationIp
+    }, function (status, data) {
       state.isBusy = false;
       state.pinBuffer = '';
       refreshPinDisplay();
@@ -241,30 +417,142 @@
     });
   };
 
+  /* ------------------------------------------------------------------ */
+  /* PaperCut MF Username & Password Authentication                     */
+  /* ------------------------------------------------------------------ */
+  state.authMode = 'PIN';
+
+  window.switchAuthMode = function (mode) {
+    state.authMode = mode;
+    var tabPin = document.getElementById('tabAuthPin');
+    var tabUserPass = document.getElementById('tabAuthUserPass');
+    var viewPin = document.getElementById('authViewPin');
+    var viewUserPass = document.getElementById('authViewUserPass');
+
+    if (mode === 'USER_PASS') {
+      if (tabPin) tabPin.className = 'pc-auth-tab';
+      if (tabUserPass) tabUserPass.className = 'pc-auth-tab active';
+      if (viewPin) viewPin.style.display = 'none';
+      if (viewUserPass) viewUserPass.style.display = 'block';
+      var inpUser = document.getElementById('inputUsername');
+      if (inpUser) {
+        setTimeout(function () {
+          try { inpUser.focus(); } catch (err) {}
+        }, 120);
+      }
+    } else {
+      if (tabPin) tabPin.className = 'pc-auth-tab active';
+      if (tabUserPass) tabUserPass.className = 'pc-auth-tab';
+      if (viewPin) viewPin.style.display = 'block';
+      if (viewUserPass) viewUserPass.style.display = 'none';
+    }
+  };
+
+  window.clearUserPass = function () {
+    var inpUser = document.getElementById('inputUsername');
+    var inpPass = document.getElementById('inputPassword');
+    if (inpUser) {
+      inpUser.value = '';
+      try { inpUser.focus(); } catch (err) {}
+    }
+    if (inpPass) inpPass.value = '';
+  };
+
+  window.quickFillUserPass = function (username, password) {
+    var inpUser = document.getElementById('inputUsername');
+    var inpPass = document.getElementById('inputPassword');
+    if (inpUser) inpUser.value = username;
+    if (inpPass) inpPass.value = password;
+    window.submitUserPass();
+  };
+
+  window.submitUserPass = function (e) {
+    if (e && e.preventDefault) {
+      try { e.preventDefault(); } catch (err) {}
+    }
+    if (state.isBusy) return;
+
+    var inpUser = document.getElementById('inputUsername');
+    var inpPass = document.getElementById('inputPassword');
+    var username = inpUser ? safeTrim(inpUser.value) : '';
+    var password = inpPass ? inpPass.value : '';
+
+    if (!username) {
+      showAlert('Please enter your username.', 'error');
+      if (inpUser) {
+        try { inpUser.focus(); } catch (err) {}
+      }
+      return;
+    }
+    if (!password) {
+      showAlert('Please enter your password.', 'error');
+      if (inpPass) {
+        try { inpPass.focus(); } catch (err) {}
+      }
+      return;
+    }
+
+    state.isBusy = true;
+    showAlert('Authenticating ' + username.toUpperCase() + ' with Active Directory...', 'info');
+
+    var stationCode = (state.station && state.station.printerCode) ? state.station.printerCode : null;
+    var stationIp = (state.station && state.station.ipAddress) ? state.station.ipAddress : null;
+
+    apiRequest('POST', '/api/auth/login', {
+      username: username,
+      password: password,
+      printerCode: stationCode,
+      printerIp: stationIp
+    }, function (status, data) {
+      state.isBusy = false;
+      if (status === 200 && data && data.authenticated) {
+        if (inpPass) inpPass.value = '';
+        onLoginSuccess(data);
+      } else {
+        var msg = (data && data.message) ? data.message : 'Invalid credentials. Please verify your Active Directory username and password.';
+        showAlert(msg, 'error');
+      }
+    });
+  };
+
+  function updateUserCounters(user) {
+    if (!user) return;
+    state.currentUser = user;
+    var userPrintCount = document.getElementById('userPrintCount');
+    if (userPrintCount) userPrintCount.textContent = (user.printCount != null) ? user.printCount : '0';
+    var userCopyCount = document.getElementById('userCopyCount');
+    if (userCopyCount) userCopyCount.textContent = (user.copyCount != null) ? user.copyCount : '0';
+  }
+
   function onLoginSuccess(user) {
     state.currentUser = user;
 
     var displayName = user.displayName || user.username || 'User';
     if (userBadgeText) userBadgeText.textContent = displayName;
     if (userDeptText) userDeptText.textContent = user.department || 'Staff';
+    updateUserCounters(user);
 
     if (userHeaderSection) userHeaderSection.style.display = 'block';
     if (deviceStatusHeader) deviceStatusHeader.style.display = 'none';
 
     showQueueScreen();
     startInactivityTimer();
+    startHeartbeat();
     window.loadJobs();
   }
 
   window.handleLogout = function () {
     if (state.isBusy) return;
     state.isBusy = true;
-    apiRequest('POST', '/api/auth/logout', null, function () {
+    stopHeartbeat();
+    stopInactivityTimer();
+    var stationCode = (state.station && state.station.printerCode) ? state.station.printerCode : null;
+    var stationIp = (state.station && state.station.ipAddress) ? state.station.ipAddress : null;
+    apiRequest('POST', '/api/auth/logout', { printerCode: stationCode, printerIp: stationIp }, function () {
       state.isBusy = false;
       state.currentUser = null;
       state.jobs = [];
       state.selectedJobIds = {};
-      stopInactivityTimer();
 
       if (userHeaderSection) userHeaderSection.style.display = 'none';
       if (deviceStatusHeader) deviceStatusHeader.style.display = 'block';
@@ -276,24 +564,86 @@
 
   /* Open Native Toshiba Device Functions (Copy / Scan / Home) */
   window.handleOpenDeviceFunctions = function () {
-    showAlert('Exiting to Toshiba Device Functions (Copy / Scan)...', 'info');
-    // 1. In Toshiba e-BRIDGE Next Open Platform EWB, window.close() drops to native UI
+    showAlert('Unlocking Photocopy functions on this Toshiba MFP...', 'info');
+
+    // Notify backend that user opened device functions so copy tracking window is active
+    var stationCode = (state.station && state.station.printerCode) ? state.station.printerCode : null;
+    var stationIp = (state.station && state.station.ipAddress) ? state.station.ipAddress : null;
+    try {
+      apiRequest('POST', '/api/station/device-functions', { printerCode: stationCode, printerIp: stationIp }, function (status, data) {
+        if (status === 200) {
+          showAlert('Walk-up photocopy unlocked! Press [Copy] or use feeder.', 'success');
+        }
+        window.showCopySessionModal();
+      });
+    } catch (e) {
+      window.showCopySessionModal();
+    }
+
+    // 1. Toshiba e-BRIDGE OpenPlatform injected system hooks
+    try {
+      if (window.topaccess && window.topaccess.system) {
+        if (typeof window.topaccess.system.openHomeScreen === 'function') {
+          window.topaccess.system.openHomeScreen();
+          return;
+        } else if (typeof window.topaccess.system.openCopyScreen === 'function') {
+          window.topaccess.system.openCopyScreen();
+          return;
+        }
+      }
+    } catch (e) {}
+
+    // 2. Check top/parent window hooks
+    try {
+      if (window.top && window.top.topaccess && window.top.topaccess.system && typeof window.top.topaccess.system.openHomeScreen === 'function') {
+        window.top.topaccess.system.openHomeScreen();
+        return;
+      }
+    } catch (e) {}
+
+    // 3. In Toshiba e-BRIDGE Next EWB, window.close() / top.close() drops browser overlay to native UI
     try {
       if (window.close) {
         window.close();
       }
     } catch (e) {}
-    // 2. Toshiba EWB topaccess system hook
     try {
-      if (window.topaccess && window.topaccess.system && typeof window.topaccess.system.openHomeScreen === 'function') {
-        window.topaccess.system.openHomeScreen();
+      if (window.top && window.top !== window && window.top.close) {
+        window.top.close();
       }
     } catch (e) {}
     try {
-      if (window.parent && window.parent.close) {
+      if (window.parent && window.parent !== window && window.parent.close) {
         window.parent.close();
       }
     } catch (e) {}
+  };
+
+  window.showCopySessionModal = function () {
+    var modal = document.getElementById('copySessionModal');
+    var usernameSpan = document.getElementById('copyModalUsername');
+    if (usernameSpan && state.currentUser) {
+      usernameSpan.textContent = (state.currentUser.fullName || state.currentUser.displayName || state.currentUser.username || 'User').toUpperCase();
+    }
+    if (modal) {
+      modal.style.display = 'flex';
+    }
+  };
+
+  window.hideCopySessionModal = function () {
+    var modal = document.getElementById('copySessionModal');
+    if (modal) {
+      modal.style.display = 'none';
+    }
+    // Re-lock copy restriction on the Toshiba MFP if modal was dismissed
+    var stationCode = (state.station && state.station.printerCode) ? state.station.printerCode : null;
+    var stationIp = (state.station && state.station.ipAddress) ? state.station.ipAddress : null;
+    apiRequest('POST', '/api/station/auto-lock', { printerCode: stationCode, printerIp: stationIp, reason: 'MODAL_DISMISSED' }, function () {});
+  };
+
+  window.handleFinishCopying = function () {
+    window.hideCopySessionModal();
+    window.emergencyLockAndLogout('FINISH_COPYING_BUTTON');
   };
 
   function showAuthScreen() {
@@ -370,16 +720,16 @@
           '<input type="checkbox" class="pc-checkbox-touch" ' + (isSelected ? 'checked' : '') + ' onclick="event.stopPropagation(); window.toggleJobSelection(\'' + job.id + '\');">' +
         '</td>' +
         '<td>' +
-          '<div class="pc-doc-title">' + esc(job.documentName) + '</div>' +
+          '<div class="pc-doc-title" title="' + esc(job.documentName) + '">' + esc(job.documentName) + '</div>' +
         '</td>' +
-        '<td style="color:#5E678A; font-size:12px;">' + timeStr + '</td>' +
-        '<td style="text-align:center; font-weight:bold;">' + job.pageCount + ' ' + (job.pageCount === 1 ? 'page' : 'pgs') + '</td>' +
-        '<td>' +
+        '<td class="pc-col-hide-sm" style="color:#5E678A; font-size:11.5px;">' + timeStr + '</td>' +
+        '<td style="text-align:center; font-weight:bold;">' + job.pageCount + ' ' + (job.pageCount === 1 ? 'pg' : 'pgs') + '</td>' +
+        '<td class="pc-col-hide-sm">' +
           '<span class="pc-attr-tag">' + (job.color ? 'Color' : 'B&W') + '</span>' +
           '<span class="pc-attr-tag">' + (job.duplex ? '2-Sided' : '1-Sided') + '</span>' +
         '</td>' +
-        '<td style="text-align:right; font-weight:bold; color:#242C6B;">LKR 0.00</td>' +
-        '<td style="text-align:right; padding-right:16px;">' +
+        '<td class="pc-col-hide-sm" style="text-align:right; font-weight:bold; color:#242C6B;">LKR 0.00</td>' +
+        '<td style="text-align:right; padding-right:12px;">' +
           '<span class="pc-badge-held">' + esc(job.status || 'HELD') + '</span>' +
         '</td>';
 
@@ -430,10 +780,10 @@
     }
 
     if (selectedSummaryText) {
-      selectedSummaryText.textContent = selectedCount + ' of ' + totalCount + ' jobs selected';
+      selectedSummaryText.textContent = selectedCount + ' of ' + totalCount + ' selected';
     }
     if (selectedPagesText) {
-      selectedPagesText.textContent = selectedPages + ' ' + (selectedPages === 1 ? 'page' : 'pages');
+      selectedPagesText.textContent = selectedPages + ' ' + (selectedPages === 1 ? 'pg' : 'pgs');
     }
     if (selectedCostText) {
       selectedCostText.textContent = 'LKR 0.00';
@@ -452,10 +802,10 @@
     if (cancelBtn) {
       if (selectedCount > 0) {
         cancelBtn.className = 'pc-btn-dock-cancel';
-        cancelBtn.textContent = 'Delete Selected (' + selectedCount + ')';
+        cancelBtn.textContent = 'Delete (' + selectedCount + ')';
       } else {
         cancelBtn.className = 'pc-btn-dock-cancel pc-btn-disabled';
-        cancelBtn.textContent = 'Delete Selected';
+        cancelBtn.textContent = 'Delete';
       }
     }
 
@@ -515,6 +865,9 @@
             }
             showAlert(summary, successCount > 0 ? 'success' : 'error');
             window.loadJobs();
+            apiRequest('GET', '/api/auth/current', null, function (s, u) {
+              if (s === 200 && u) updateUserCounters(u);
+            });
           }
         });
       })(ids[i]);
@@ -551,7 +904,7 @@
   /* ------------------------------------------------------------------ */
   function startInactivityTimer() {
     stopInactivityTimer();
-    state.inactivitySeconds = 120;
+    state.inactivitySeconds = 60;
     updateTimerText();
 
     state.timerInterval = setInterval(function () {
@@ -560,8 +913,8 @@
 
       if (state.inactivitySeconds <= 0) {
         stopInactivityTimer();
-        showAlert('Session timed out due to inactivity.', 'error');
-        window.handleLogout();
+        showAlert('Session timed out due to inactivity. Device locked.', 'error');
+        window.emergencyLockAndLogout('INACTIVITY_TIMEOUT');
       }
     }, 1000);
   }
@@ -575,7 +928,7 @@
 
   function resetInactivityTimer() {
     if (state.currentUser) {
-      state.inactivitySeconds = 120;
+      state.inactivitySeconds = 60;
       updateTimerText();
     }
   }

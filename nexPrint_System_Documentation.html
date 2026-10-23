@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>nexPrint - Enterprise Pull-Print &amp; Device Accounting System</title>
+  <style>
+    @page {
+      size: A4;
+      margin: 18mm 16mm 18mm 16mm;
+      @bottom-right {
+        content: counter(page);
+      }
+    }
+    *, *:before, *:after {
+      box-sizing: border-box;
+    }
+    body {
+      font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, Helvetica, Arial, sans-serif;
+      color: #1e293b;
+      background: #ffffff;
+      line-height: 1.55;
+      font-size: 10.5pt;
+      margin: 0;
+      padding: 0;
+    }
+    .cover {
+      page-break-after: always;
+      padding-top: 60px;
+      text-align: left;
+    }
+    .badge-bar {
+      display: inline-block;
+      background: #1e3a8a;
+      color: #ffffff;
+      font-size: 9pt;
+      font-weight: 700;
+      padding: 4px 12px;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      border-radius: 3px;
+      margin-bottom: 24px;
+    }
+    h1.doc-title {
+      font-size: 28pt;
+      font-weight: 800;
+      color: #0f172a;
+      line-height: 1.15;
+      margin: 0 0 12px 0;
+      letter-spacing: -0.5px;
+    }
+    h2.doc-subtitle {
+      font-size: 14pt;
+      font-weight: 500;
+      color: #475569;
+      margin: 0 0 35px 0;
+      line-height: 1.4;
+    }
+    .meta-box {
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-left: 4px solid #2563eb;
+      padding: 18px 22px;
+      border-radius: 4px;
+      margin-top: 40px;
+    }
+    .meta-row {
+      display: flex;
+      margin-bottom: 8px;
+      font-size: 10pt;
+    }
+    .meta-row:last-child { margin-bottom: 0; }
+    .meta-label {
+      width: 180px;
+      font-weight: 700;
+      color: #334155;
+    }
+    .meta-value {
+      color: #0f172a;
+      flex: 1;
+    }
+    .section-title {
+      font-size: 16pt;
+      font-weight: 800;
+      color: #0f172a;
+      border-bottom: 2px solid #2563eb;
+      padding-bottom: 6px;
+      margin: 28px 0 14px 0;
+      page-break-after: avoid;
+    }
+    .sub-title {
+      font-size: 12pt;
+      font-weight: 700;
+      color: #1e3a8a;
+      margin: 18px 0 8px 0;
+      page-break-after: avoid;
+    }
+    p {
+      margin: 0 0 10px 0;
+      text-align: justify;
+    }
+    ul, ol {
+      margin: 0 0 12px 0;
+      padding-left: 22px;
+    }
+    li {
+      margin-bottom: 6px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 14px 0 20px 0;
+      font-size: 9.5pt;
+      page-break-inside: avoid;
+    }
+    th, td {
+      border: 1px solid #cbd5e1;
+      padding: 8px 10px;
+      text-align: left;
+      vertical-align: top;
+    }
+    th {
+      background-color: #f1f5f9;
+      color: #0f172a;
+      font-weight: 700;
+    }
+    tr:nth-child(even) td {
+      background-color: #f8fafc;
+    }
+    .tag {
+      display: inline-block;
+      padding: 2px 7px;
+      font-size: 8pt;
+      font-weight: 700;
+      border-radius: 3px;
+    }
+    .tag-blue { background: #dbeafe; color: #1e40af; }
+    .tag-green { background: #dcfce7; color: #15803d; }
+    .tag-amber { background: #fef3c7; color: #b45309; }
+    .callout {
+      background: #eff6ff;
+      border-left: 4px solid #3b82f6;
+      padding: 12px 16px;
+      margin: 14px 0;
+      border-radius: 0 4px 4px 0;
+      font-size: 9.5pt;
+    }
+    .diagram-box {
+      background: #0f172a;
+      color: #f8fafc;
+      padding: 16px;
+      border-radius: 6px;
+      font-family: Consolas, 'Courier New', monospace;
+      font-size: 8.5pt;
+      line-height: 1.4;
+      margin: 16px 0;
+      white-space: pre;
+      overflow-x: auto;
+      page-break-inside: avoid;
+    }
+    .page-break {
+      page-break-after: always;
+    }
+    .footer-note {
+      margin-top: 40px;
+      font-size: 8.5pt;
+      color: #64748B;
+      border-top: 1px solid #e2e8f0;
+      padding-top: 10px;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- COVER PAGE -->
+  <div class="cover">
+    <div class="badge-bar">nexPrint Technical Whitepaper &amp; System Specification</div>
+    <h1 class="doc-title">nexPrint Enterprise Pull-Print &amp; MFP Accounting System</h1>
+    <h2 class="doc-subtitle">Centralized Secure Spool Quarantine, Active Directory Integration, Walk-Up Touch Terminal &amp; Hardware Accounting for Toshiba e-BRIDGE Next Fleets</h2>
+
+    <div class="meta-box">
+      <div class="meta-row">
+        <div class="meta-label">Product Name:</div>
+        <div class="meta-value"><strong>nexPrint (RR Secure Print)</strong></div>
+      </div>
+      <div class="meta-row">
+        <div class="meta-label">Software Version:</div>
+        <div class="meta-value">1.0.0-MVP (Enterprise Fleet Edition)</div>
+      </div>
+      <div class="meta-row">
+        <div class="meta-label">Architecture Target:</div>
+        <div class="meta-value">Toshiba e-BRIDGE Next MFPs (e.g., e-STUDIO 2518A, 3518A, 4508A, etc.)</div>
+      </div>
+      <div class="meta-row">
+        <div class="meta-label">Engineered Scale:</div>
+        <div class="meta-value"><strong>13,000+ Enterprise Users</strong> across <strong>100+ Multifunction Printers (MFPs)</strong></div>
+      </div>
+      <div class="meta-row">
+        <div class="meta-label">Authentication Mode:</div>
+        <div class="meta-value"><strong>Method A (Active Directory / LDAP Thin-Client)</strong></div>
+      </div>
+      <div class="meta-row">
+        <div class="meta-label">Accounting Scope:</div>
+        <div class="meta-value"><strong>Print Pages &amp; Photocopy Pages</strong> (Scan count excluded)</div>
+      </div>
+      <div class="meta-row">
+        <div class="meta-label">Release Date:</div>
+        <div class="meta-value">October 2026</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SECTION 1 -->
+  <div class="section-title">1. Executive Overview &amp; Architecture Challenge</div>
+  <p>
+    In large-scale enterprise environments deploying 100+ multifunction printers (MFPs) with 13,000+ active directory users, traditional print management architectures face a critical hardware limitation:
+  </p>
+  <div class="callout">
+    <strong>Hardware Constraint:</strong> Toshiba e-BRIDGE Next controllers possess flash memory capacity for a maximum of <strong>1,000 local user accounts / department codes</strong>. Pushing 13,000 users onto each copier crashes controller memory or fails silently.
+  </div>
+  <p>
+    <strong>The nexPrint Solution:</strong> nexPrint operates as a centralized thin-client server. No user database is ever replicated to the physical copier hard drive. Instead, the copier acts purely as a terminal running an embedded web interface (EWB). All authentication (PIN/Badge), spool quarantine, and print/photocopy accounting is resolved centrally in milliseconds against Active Directory and nexPrint's high-speed SQL database.
+  </p>
+
+  <div class="diagram-box">
++-----------------------------------------------------------------------------------------+
+|                               SYSTEM ARCHITECTURE TOPOLOGY                              |
++-----------------------------------------------------------------------------------------+
+       [ 13,000+ Enterprise Client PCs ]
+                       |
+                       | 1. Prints to shared virtual queue (\\server\QOA_Printer)
+                       v
+       [ Windows Spooler & Spool Monitor Service ]
+                       |
+                       | 2. Intercepts raw Toshiba driver spool (.SPL), quarantines data
+                       v
+       [ nexPrint Central Server (:8080) ] <=======> [ Active Directory / LDAP ]
+          - SHA-256 Spool Storage                      - 13,000 Domain Accounts
+          - High-Speed Indexed PIN Auth                - Centralized User SIDs
+          - Print & Copy Accounting Counters
+                       |
+       +---------------+---------------+-----------------------+
+       | HTTP (EWB UI) | TopAccess XML | Port 9100 RAW Stream  |
+       v               v               v                       v
+[ Toshiba MFP #1 ]             [ Toshiba MFP #2 ]      ...     [ Toshiba MFP #100 ]
+(192.168.1.10 - 2518A)         (192.168.1.11 - 4508A)          (Fleet Enterprise)
+  - 1024x600 Touch Terminal      - 1024x600 Touch Terminal       - Thin-client hardware
+  - Walk-up PIN Login            - Walk-up PIN Login             - TopAccess XML Polled
+  - 1-Tap "Release All"          - Direct RAW Port 9100 Print    - User-wise Accounting
++-----------------------------------------------------------------------------------------+</div>
+
+  <div class="page-break"></div>
+
+  <!-- SECTION 2 -->
+  <div class="section-title">2. Core Functional Modules &amp; Capabilities</div>
+
+  <div class="sub-title">A. Virtual Print Queue &amp; Find-Me Pull Printing (PaperCut MF Architecture)</div>
+  <ul>
+    <li><strong>Universal Virtual Print Queue:</strong> Users print to a single shared network printer (e.g. <code>\\192.168.1.100\QOA_Printer</code>) using the Toshiba Universal 2 Driver. Users never have to select a physical device from their workstation.</li>
+    <li><strong>Immediate Spool Quarantine:</strong> The Windows spool monitor intercepts the raw spool data (<code>.SPL</code>), pauses and purges the job from the Windows spooler, preventing accidental unreleased output.</li>
+    <li><strong>Tamper-Evident SHA-256 Verification:</strong> Spool files are preserved on the server with cryptographic checksums. Files are re-verified prior to transmission to prevent tampering.</li>
+    <li><strong>Anywhere Walk-Up Release:</strong> The user can walk up to <em>any</em> of the 100+ Toshiba copiers in the building, authenticate with their PIN, and release their jobs instantly.</li>
+    <li><strong>Simultaneous Release Guard:</strong> Optimistic locking ensures a print job cannot be released at two printers simultaneously.</li>
+  </ul>
+
+  <div class="sub-title">B. Toshiba Embedded Web Browser (EWB) Touch Terminal Interface</div>
+  <ul>
+    <li><strong>Native Hardware Integration:</strong> Renders inside the Toshiba Open Platform Embedded Web Browser at <code>http://&lt;server-ip&gt;:8080/</code>.</li>
+    <li><strong>Zero-Scroll 1024x600 Display:</strong> Strict 0px square styling engineered specifically for Toshiba capacitive touchscreen dimensions without horizontal or vertical scrollbars.</li>
+    <li><strong>Dynamic Device Identification:</strong> Automatic device resolution using the client's network IP address or URL parameter (e.g., <code>?printer=PCT0002</code>).</li>
+    <li><strong>Interactive Touchpad Keypad:</strong> High-contrast touch numeric keypad for rapid PIN entry directly on the glass panel.</li>
+    <li><strong>Inactivity Auto-Logout Timer:</strong> Configurable countdown timer (120 seconds default) automatically clears the screen if a user leaves unattended.</li>
+    <li><strong>Comprehensive Job Release Controls:</strong>
+      <ul>
+        <li><strong>1-Tap "Release All":</strong> Releases all queued documents with a single touch.</li>
+        <li><strong>Multi-Select Checkboxes:</strong> Select specific jobs to print or delete.</li>
+        <li><strong>Job Details:</strong> Displays Document Title, Pages, Submission Time, and Cost.</li>
+      </ul>
+    </li>
+    <li><strong>Live Header Statistics:</strong> Touchscreen displays live employee stats upon login:
+      <br><code>User: Kamal Perera | Operations | 🖨️ 24 prints | 📄 8 copies</code>
+    </li>
+    <li><strong>Device Functions (Copy Mode) Shortcut:</strong> Dedicated "Copy / Scan (Home)" button interfaces with Toshiba TopAccess to unlock device copying for the authenticated user.</li>
+  </ul>
+
+  <div class="sub-title">C. User Identity Management &amp; Active Directory (Method A)</div>
+  <ul>
+    <li><strong>Thin-Client Enterprise Scale:</strong> Supports 13,000+ domain users centrally without touching the MFP controller's 1,000 user flash limit.</li>
+    <li><strong>High-Speed Indexed Authentication:</strong> SQL queries on indexed fields (<code>findByPinHash</code>, <code>findByUsernameIgnoreCase</code>) execute in under 10 milliseconds.</li>
+    <li><strong>PaperCut-Style Just-In-Time (JIT) Self-Enrollment:</strong> When a domain user prints for the first time, nexPrint auto-creates their user profile with a default PIN (e.g., <code>1234</code>), enabling walk-up release without administrator intervention.</li>
+    <li><strong>Multi-Credential Authentication:</strong> Supports PINs, Passwords, RFID Badge Card IDs, and Windows Security Identifiers (SIDs).</li>
+  </ul>
+
+  <div class="page-break"></div>
+
+  <div class="sub-title">D. Hardware Print &amp; Photocopy Accounting (User-Wise Tracking)</div>
+  <ul>
+    <li><strong>Print Count Attribution:</strong> Every page printed through raw socket transmission is recorded and atomically increments the user's <code>print_count</code>.</li>
+    <li><strong>Walk-Up Photocopy Tracking:</strong> A background daemon polls active Toshiba MFPs every 60 seconds via TopAccess XML endpoints (<code>/contentwebserver</code> -&gt; <code>JobManagement/JobLog</code> with <code>&lt;jobType&gt;COPY&lt;/jobType&gt;</code>).</li>
+    <li><strong>User Mapping:</strong> Walk-up usernames from the copier (e.g. <code>DOMAIN\kamal</code> or <code>kamal@domain.local</code>) are normalized and attributed to the user's <code>copy_count</code>.</li>
+    <li><strong>Idempotency:</strong> A database unique index on <code>(printer_ip, printer_job_id)</code> guarantees no photocopy job is ever counted twice.</li>
+    <li><strong>Scan Count Excluded:</strong> Scan counting is excluded per operational requirements, eliminating unnecessary log clutter.</li>
+    <li><strong>Page Quotas:</strong> Built-in database support for employee <code>page_quota</code> allocations.</li>
+  </ul>
+
+  <div class="sub-title">E. Security Audit Trail &amp; Regulatory Compliance</div>
+  <ul>
+    <li><strong>Permanent Audit Log:</strong> Every critical event (<code>LOGIN_SUCCESS</code>, <code>LOGIN_FAILED</code>, <code>JOB_HELD</code>, <code>JOB_RELEASED</code>, <code>JOB_CANCELLED</code>, <code>COPY_JOB_COMPLETED</code>, <code>LOGOUT</code>) is written to <code>audit_logs</code>.</li>
+    <li><strong>Forensic Metadata:</strong> Captures timestamp, actor SID, username, target printer code, client IP, action details, and result status.</li>
+    <li><strong>Audit Trail Viewer:</strong> Filterable and searchable in the Admin Web Console.</li>
+  </ul>
+
+  <div class="section-title">3. Web Administration Console Modules</div>
+  <table>
+    <thead>
+      <tr>
+        <th style="width:25%;">Administrative View</th>
+        <th>Capabilities &amp; Features</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>1. Dashboard Overview</strong></td>
+        <td>Live metric cards (Total Jobs, Held Jobs, Released, Managed Printers, Registered Users), quick action shortcuts, and recent print activity feed.</td>
+      </tr>
+      <tr>
+        <td><strong>2. Virtual Print Queue</strong></td>
+        <td>Configure Windows spooler share (<code>\\192.168.1.100\QOA_Printer</code>), printer driver (<code>TOSHIBA Universal Printer 2</code>), and release station pools.</td>
+      </tr>
+      <tr>
+        <td><strong>3. Printer Devices</strong></td>
+        <td>Fleet inventory of 100+ Toshiba MFPs with IP:Port, Model, Status indicators, and <strong>"📑 Poll Walk-Up Copy Jobs"</strong> button.</td>
+      </tr>
+      <tr>
+        <td><strong>4. User Management</strong></td>
+        <td>Employee table displaying Username, Name, Department, Identity Source, PIN status, Badge ID, <strong>Print Pages</strong>, <strong>Copy Pages</strong>, <strong>Total Pages</strong>, and Actions (Reset PIN, Edit, Delete).</td>
+      </tr>
+      <tr>
+        <td><strong>5. Global Print Queue</strong></td>
+        <td>Comprehensive view of all held jobs across the enterprise with status filters (<code>HELD</code>, <code>COMPLETED</code>, <code>CANCELLED</code>, <code>EXPIRED</code>).</td>
+      </tr>
+      <tr>
+        <td><strong>6. Photocopy Logs</strong></td>
+        <td>Dedicated hardware copy accounting log. Displays Timestamp, User Account, MFP Device, IP, Total Pages, Mono Pages, Color Pages, and Device Job ID with instant <strong>"🔄 Poll MFPs Now"</strong> trigger.</td>
+      </tr>
+      <tr>
+        <td><strong>7. Security Audit Trail</strong></td>
+        <td>Regulatory compliance log recording all authentications, releases, cancellations, and system events.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="page-break"></div>
+
+  <!-- SECTION 4 -->
+  <div class="section-title">4. Technology Stack Specification</div>
+  <table>
+    <thead>
+      <tr>
+        <th style="width:30%;">Component Layer</th>
+        <th>Technologies Used</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>Backend Core Framework</strong></td>
+        <td>Java 21 LTS, Spring Boot 3.4.2, Spring MVC, Spring Data JPA</td>
+      </tr>
+      <tr>
+        <td><strong>Database &amp; Migrations</strong></td>
+        <td>Hibernate 6.x, Flyway DB (Versioned SQL Migrations V1 through V8), H2 / PostgreSQL</td>
+      </tr>
+      <tr>
+        <td><strong>Spool Intercept &amp; Monitoring</strong></td>
+        <td>Win32 Print Spooler API, PowerShell 5.1/7+ Background Watcher, Raw <code>.SPL</code> parser</td>
+      </tr>
+      <tr>
+        <td><strong>MFP Direct Delivery Engine</strong></td>
+        <td>Direct RAW Socket TCP client on Port 9100 with simulation guard fallback</td>
+      </tr>
+      <tr>
+        <td><strong>Directory Services</strong></td>
+        <td>Active Directory / LDAP (JNDI, UnboundID LDAP SDK), BCrypt PIN hashing</td>
+      </tr>
+      <tr>
+        <td><strong>Frontend Touch Terminal UI</strong></td>
+        <td>Pure HTML5, CSS3, ES5 JavaScript (Optimized for Toshiba Embedded Web Browser)</td>
+      </tr>
+      <tr>
+        <td><strong>Hardware Communication</strong></td>
+        <td>Toshiba TopAccess REST/XML Web Server API (<code>/contentwebserver</code>)</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="section-title">5. Production Verification &amp; Testing Status</div>
+  <p>
+    The system has undergone rigorous automated and integration testing to ensure zero failure rates:
+  </p>
+  <ul>
+    <li><strong>Automated Test Suite:</strong> 12 Unit and Integration tests passing (<code>BUILD SUCCESS</code>).</li>
+    <li><strong>Copy Tracking Verification:</strong> Unit tests verified user copy count increments, duplicate job ID rejection (idempotency), and UPN/Domain username normalization.</li>
+    <li><strong>Tested Toshiba Hardware:</strong>
+      <ul>
+        <li><strong>Toshiba e-STUDIO 2518A:</strong> <code>192.168.1.10:9100</code> (Code: <code>PCT0002</code>) — Ready &amp; Verified.</li>
+        <li><strong>Toshiba e-STUDIO 4508A:</strong> <code>192.168.1.11:9100</code> (Code: <code>PCT0001</code>) — Ready &amp; Verified.</li>
+      </ul>
+    </li>
+    <li><strong>Spool Monitor Agent:</strong> Background task active and monitoring <code>QOA_Printer</code>.</li>
+    <li><strong>Active Dev Server:</strong> Background service running on Port <code>8080</code>.</li>
+  </ul>
+
+  <div class="footer-note">
+    nexPrint &copy; 2026. All rights reserved. Confidential technical specification and system manual.
+  </div>
+
+</body>
+</html>

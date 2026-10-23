@@ -42,7 +42,10 @@ public class ToshibaEwbService {
         String cleanIp = printerIp != null ? printerIp.trim() : "";
         String username = (adminUsername != null && !adminUsername.isBlank()) ? adminUsername.trim() : "admin";
         String password = (adminPassword != null && !adminPassword.isBlank()) ? adminPassword.trim() : "123456";
-        String targetUrl = (terminalUrl != null && !terminalUrl.isBlank()) ? terminalUrl.trim() : "http://localhost:8080/";
+        String targetUrl = (terminalUrl != null && !terminalUrl.isBlank()) ? terminalUrl.trim() : "http://192.168.1.100:8080/";
+        if (targetUrl.contains("localhost") || targetUrl.contains("127.0.0.1")) {
+            targetUrl = targetUrl.replace("localhost", "192.168.1.100").replace("127.0.0.1", "192.168.1.100");
+        }
 
         if (cleanIp.isEmpty()) {
             return new EwbConfigResult(false, "Printer IP address is required.", null, null, false, Instant.now());
@@ -109,7 +112,8 @@ public class ToshibaEwbService {
 
             boolean setSuccess = setBody.contains("Normal") || setBody.contains("STATUS_OK");
 
-            // Commit Controller with DefaultScreen = Home and ProgrammableKey #1 = EWB
+            // Commit Controller with DefaultScreen = EWB (so machine boots directly to EWB, NOT native Home screen)
+            // Note: MDS Authentication is kept false because true requires a proprietary Toshiba MDS directory server daemon
             String setUiXml = "<DeviceInformationModel>" +
                     "<Command>" +
                     "<Set>" +
@@ -118,8 +122,9 @@ public class ToshibaEwbService {
                     "<Controller>" +
                     "<Settings>" +
                     "<UI>" +
-                    "<DefaultScreen>Home</DefaultScreen>" +
+                    "<DefaultScreen>EWB</DefaultScreen>" +
                     "</UI>" +
+                    "<autoClear>15</autoClear>" +
                     "<Functions>" +
                     "<MDS>" +
                     "<Authentication>false</Authentication>" +
@@ -150,9 +155,10 @@ public class ToshibaEwbService {
                         .header("Referer", "http://" + cleanIp + "/Administration/Setup/General.html")
                         .POST(HttpRequest.BodyPublishers.ofString(setUiXml))
                         .build();
-                session.client().send(setUiReq, HttpResponse.BodyHandlers.ofString());
+                HttpResponse<String> uiResp = session.client().send(setUiReq, HttpResponse.BodyHandlers.ofString());
+                log.info("Toshiba setUiXml committed on {}: status={}, body={}", cleanIp, uiResp.statusCode(), uiResp.body());
             } catch (Exception ex) {
-                log.warn("Could not commit DefaultScreen to EWB on {}: {}", cleanIp, ex.getMessage());
+                log.warn("Could not commit DefaultScreen=EWB and MDS Authentication on {}: {}", cleanIp, ex.getMessage());
             }
 
             // Query current EWB configuration to verify
@@ -350,6 +356,48 @@ public class ToshibaEwbService {
                 return true;
             }
             log.error("Failed to reboot printer {}: {}", cleanIp, e.getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * Dynamically locks or unlocks native walk-up copying on the Toshiba MFP via CWS.
+     * When restricted=false, authenticated LDAP users who tapped "Copy / Scan" can make copies.
+     * When restricted=true, unauthorized walk-up users are blocked by Toshiba panel authentication.
+     */
+    public boolean setCopyRestriction(String printerIp, String adminUsername, String adminPassword, boolean restricted) {
+        String cleanIp = printerIp != null ? printerIp.trim() : "";
+        String username = (adminUsername != null && !adminUsername.isBlank()) ? adminUsername.trim() : "admin";
+        String password = (adminPassword != null && !adminPassword.isBlank()) ? adminPassword.trim() : "123456";
+
+        try {
+            TopAccessSession session = loginToTopAccess(cleanIp, username, password);
+            String copyVal = restricted ? "true" : "false";
+            String setXml = "<DeviceInformationModel>" +
+                    "<SetValue overrideDelta='false'>" +
+                    "<Payload><path>Authentication/AuthenticationSettings/AuthenticatedTarget/copy</path><value>" + copyVal + "</value></Payload>" +
+                    "</SetValue>" +
+                    "<Command>" +
+                    "<AuthSettings><commandNode>Authentication/AuthenticationSettings</commandNode></AuthSettings>" +
+                    "</Command>" +
+                    "</DeviceInformationModel>";
+
+            HttpRequest req = HttpRequest.newBuilder()
+                    .uri(URI.create("http://" + cleanIp + "/contentwebserver"))
+                    .timeout(TIMEOUT)
+                    .header("Content-Type", "text/plain; charset=utf-8")
+                    .header("csrfpId", session.sessionCookie() != null ? session.sessionCookie() : "")
+                    .header("Cache-Control", "no-cache")
+                    .header("Pragma", "no-cache")
+                    .POST(HttpRequest.BodyPublishers.ofString(setXml))
+                    .build();
+
+            HttpResponse<String> resp = session.client().send(req, HttpResponse.BodyHandlers.ofString());
+            boolean ok = resp.body() != null && resp.body().contains("STATUS_OK");
+            log.info("[TOSHIBA CWS] setCopyRestriction on {} -> restricted={} : {}", cleanIp, restricted, ok);
+            return ok;
+        } catch (Exception e) {
+            log.warn("[TOSHIBA CWS] setCopyRestriction on {} failed: {}", printerIp, e.getMessage());
             return false;
         }
     }

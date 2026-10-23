@@ -3,13 +3,28 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
   <title>nexPrint - Touch Terminal</title>
-  <link rel="stylesheet" href="/css/ewb-touch.css?v=16">
+  <link rel="stylesheet" href="/css/ewb-touch.css?v=17">
   <style>
     /* Inline fail-safe overrides for instant cache-free rendering */
     * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    /* Universal Strict Square Reset - 0px Radius Throughout */
+    button, input, select, textarea, table, thead, tbody, th, td,
+    .pc-logo-box, .pc-device-ready, .pc-user-info, .pc-btn-logout,
+    .pc-auth-table, .pc-pin-box, .pc-kbtn, .pc-kbtn-clear,
+    .pc-kbtn-enter, .pc-tab-bar, .pc-tab-active, .pc-tab-link, .pc-count-tag,
+    .pc-btn-print-all, .pc-btn-refresh, .pc-table-wrap, .pc-checkbox-touch,
+    .pc-badge-tag, .pc-action-dock, .pc-btn-dock-cancel, .pc-btn-dock-print,
+    .pc-alert-strip, #dockDeviceFuncBtn, #deviceFuncBtn {
+      border-radius: 0px !important;
+    }
+
     body {
-      font-family: Arial, "Helvetica Neue", Helvetica, sans-serif;
+      font-family: -apple-system, BlinkMacSystemFont, Arial, "Helvetica Neue", Helvetica, sans-serif;
       background-color: #F1F5F9;
       color: #0F172A;
       margin: 0;
@@ -22,43 +37,44 @@
       touch-action: manipulation;
       min-height: 100vh;
     }
-    strong, b { font-weight: 600; color: #0F172A; }
+    strong, b { font-weight: 700; color: #0F172A; }
 
     /* Top Header */
     .pc-header {
-      height: 56px;
+      height: 46px;
       background-color: #FFFFFF;
-      border-bottom: 2px solid #FDAF17;
-      padding: 0 24px;
-      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
+      border-bottom: 2px solid #F59E0B;
+      padding: 0 16px;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
     }
     .pc-logo-box {
       display: inline-block;
-      width: 36px;
-      height: 36px;
-      line-height: 36px;
-      background-color: #FDAF17;
-      color: #0F172A;
-      font-weight: 700;
-      font-size: 15px;
+      width: 30px;
+      height: 30px;
+      line-height: 26px;
+      background-color: #1D4ED8;
+      border: 2px solid #F59E0B;
+      color: #FFFFFF;
+      font-weight: 800;
+      font-size: 13px;
       text-align: center;
-      border-radius: 6px;
+      border-radius: 0px !important;
       vertical-align: middle;
-      margin-right: 10px;
+      margin-right: 8px;
       letter-spacing: -0.5px;
     }
     .pc-brand-info { display: inline-block; vertical-align: middle; }
-    .pc-brand-name { display: block; color: #0F172A; font-size: 15px; font-weight: 600; letter-spacing: -0.2px; line-height: 1.2; }
-    .pc-brand-subtitle { display: block; color: #64748B; font-size: 11px; font-weight: 400; }
+    .pc-brand-name { display: block; color: #0F172A; font-size: 15px; font-weight: 800; letter-spacing: -0.2px; line-height: 1.2; }
+    .pc-brand-subtitle { display: block; color: #64748B; font-size: 11px; font-weight: 500; }
     .pc-device-ready {
       display: inline-block;
       background-color: #F0FDF4;
       border: 1px solid #86EFAC;
       padding: 5px 12px;
-      border-radius: 20px;
+      border-radius: 0px !important;
       color: #14532D;
       font-size: 11px;
-      font-weight: 500;
+      font-weight: 600;
       vertical-align: middle;
     }
     .pc-status-dot {
@@ -66,18 +82,18 @@
       width: 7px;
       height: 7px;
       background-color: #16A34A;
-      border-radius: 50%;
+      border-radius: 50% !important;
       margin-right: 6px;
       vertical-align: middle;
     }
     .pc-user-info {
       display: inline-block;
       background-color: #F8FAFC;
-      border: 1px solid #E2E8F0;
+      border: 1px solid #CBD5E1;
       padding: 6px 12px;
-      border-radius: 6px;
+      border-radius: 0px !important;
       font-size: 12px;
-      color: #64748B;
+      color: #334155;
       margin-right: 8px;
       vertical-align: middle;
     }
@@ -87,13 +103,15 @@
       border: 1px solid #CBD5E1;
       color: #0F172A;
       font-size: 12px;
-      font-weight: 500;
-      padding: 6px 12px;
-      border-radius: 6px;
+      font-weight: 600;
+      padding: 6px 14px;
+      border-radius: 0px !important;
       cursor: pointer;
       vertical-align: middle;
       text-transform: uppercase;
+      transition: all 0.15s ease;
     }
+    .pc-btn-logout:hover { background-color: #EFF6FF; border-color: #1D4ED8; color: #1D4ED8; }
     .pc-btn-logout:active { background-color: #FEE2E2; border-color: #F87171; color: #991B1B; }
 
     /* Alert Banner (Centered, Compact) */
@@ -103,9 +121,9 @@
       margin: 12px auto 0 auto;
       padding: 8px 16px;
       font-size: 12px;
-      font-weight: 500;
+      font-weight: 600;
       text-align: center;
-      border-radius: 6px;
+      border-radius: 0px !important;
       border: 1px solid transparent;
     }
     .pc-alert-strip.pc-alert-info { display: block; background-color: #EFF6FF; border-color: #BFDBFE; color: #1E40AF; }
@@ -115,108 +133,91 @@
     .pc-screen { display: none; }
     .pc-screen.pc-active { display: block; }
 
-    /* SCREEN 1: Centered Auth Card */
+    /* SCREEN 1: Centered Auth Card (Ultra-Compact for 100% Zero-Scroll on Toshiba Panels) */
     .pc-auth-screen {
-      padding: 24px 20px 40px 20px;
+      padding: 8px 12px 14px 12px;
     }
     .pc-auth-wrapper {
-      max-width: 820px;
+      max-width: 780px;
       margin: 0 auto;
     }
     .pc-auth-table {
       width: 100%;
       background-color: #FFFFFF;
-      border: 1px solid #E2E8F0;
-      border-radius: 12px;
-      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+      border: 1px solid #CBD5E1;
+      border-top: 3px solid #1D4ED8;
+      border-radius: 0px !important;
+      box-shadow: 0 2px 8px rgba(15, 23, 42, 0.05);
       border-collapse: separate;
       overflow: hidden;
     }
     .pc-col-left {
-      width: 54%;
-      padding: 34px 32px;
+      width: 50%;
+      padding: 16px 20px;
     }
     .pc-col-left h2 {
-      font-size: 19px;
-      font-weight: 600;
+      font-size: 16px;
+      font-weight: 700;
       color: #0F172A;
       letter-spacing: -0.3px;
-      margin-bottom: 6px;
+      margin-bottom: 4px;
     }
     .pc-col-left p {
       color: #64748B;
-      font-size: 13px;
-      line-height: 1.4;
-      margin-bottom: 20px;
+      font-size: 11.5px;
+      line-height: 1.35;
+      margin-bottom: 12px;
     }
     .pc-pin-label {
-      font-size: 11px;
-      font-weight: 600;
+      font-size: 10px;
+      font-weight: 700;
       color: #64748B;
       text-transform: uppercase;
       letter-spacing: 0.5px;
-      margin-bottom: 6px;
+      margin-bottom: 4px;
     }
     .pc-pin-box {
       width: 100%;
-      height: 48px;
-      line-height: 48px;
+      height: 40px;
+      line-height: 38px;
       background-color: #F8FAFC;
       border: 1.5px solid #CBD5E1;
-      border-radius: 8px;
+      border-radius: 0px !important;
       text-align: center;
-      margin-bottom: 18px;
+      margin-bottom: 12px;
     }
-    .pc-pin-placeholder { color: #94A3B8; font-size: 13px; font-weight: 500; letter-spacing: 2px; }
+    .pc-pin-placeholder { color: #94A3B8; font-size: 12px; font-weight: 600; letter-spacing: 2px; }
     .pc-pin-dot {
       display: inline-block;
-      width: 12px;
-      height: 12px;
+      width: 10px;
+      height: 10px;
       background-color: #0F172A;
-      border-radius: 50%;
-      margin: 0 5px;
+      border-radius: 50% !important;
+      margin: 0 4px;
       vertical-align: middle;
     }
-    .pc-quick-chip {
-      width: 100%;
-      padding: 11px 14px;
-      background-color: #FFFFFF;
-      border: 1px solid #CBD5E1;
-      border-radius: 8px;
-      color: #0F172A;
-      font-size: 13px;
-      text-align: left;
-      cursor: pointer;
-      margin-bottom: 18px;
-      display: block;
-      transition: all 0.15s ease;
-    }
-    .pc-quick-chip:hover { background-color: #FFFBEB; border-color: #FDAF17; }
-    .pc-quick-chip:active { background-color: #FDAF17; border-color: #D48E06; }
-    .pc-quick-title { display: block; font-weight: 600; font-size: 13px; color: #0F172A; }
-    .pc-quick-sub { display: block; font-size: 11px; color: #64748B; font-weight: 400; margin-top: 2px; }
-    .pc-auth-foot { font-size: 11px; color: #94A3B8; font-weight: 400; }
+    .pc-auth-foot { font-size: 10px; color: #94A3B8; font-weight: 500; }
 
     /* Right Column: 3x4 Touch Numeric Keypad */
     .pc-col-right {
-      width: 46%;
+      width: 50%;
       background-color: #F8FAFC;
       border-left: 1px solid #E2E8F0;
-      padding: 30px 24px;
+      padding: 14px 18px;
     }
     .pc-keypad-title {
-      font-size: 11px;
-      font-weight: 600;
+      font-size: 10px;
+      font-weight: 700;
       color: #64748B;
       text-transform: uppercase;
       letter-spacing: 0.5px;
-      margin-bottom: 12px;
+      margin-bottom: 8px;
       text-align: center;
     }
     .pc-keypad-tbl {
       width: 100%;
       border-collapse: separate;
-      border-spacing: 8px;
+      border-spacing: 6px;
     }
     .pc-keypad-tbl td {
       width: 33.33%;
@@ -224,159 +225,273 @@
     }
     .pc-kbtn {
       width: 100%;
-      height: 48px;
-      line-height: 46px;
+      height: 38px;
+      line-height: 36px;
       background-color: #FFFFFF;
       border: 1px solid #CBD5E1;
-      border-radius: 8px;
+      border-radius: 0px !important;
       color: #0F172A;
-      font-size: 20px;
-      font-weight: 500;
+      font-size: 18px;
+      font-weight: 600;
       text-align: center;
       cursor: pointer;
       display: block;
-      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+      transition: all 0.1s ease;
     }
-    .pc-kbtn:hover { background-color: #F1F5F9; border-color: #94A3B8; }
-    .pc-kbtn:active { background-color: #FDAF17; border-color: #D48E06; }
-    .pc-kbtn-clear { background-color: #F1F5F9; color: #475569; font-size: 11px; font-weight: 600; }
+    .pc-kbtn:hover { background-color: #EFF6FF; border-color: #1D4ED8; color: #1D4ED8; }
+    .pc-kbtn:active { background-color: #1D4ED8; border-color: #1E40AF; color: #FFFFFF; }
+    .pc-kbtn-clear { background-color: #F8FAFC; border: 1px solid #CBD5E1; color: #475569; font-size: 11px; font-weight: 700; border-radius: 0px !important; }
     .pc-kbtn-clear:hover { background-color: #FEE2E2; border-color: #F87171; color: #991B1B; }
-    .pc-kbtn-enter { background-color: #FDAF17; border-color: #D48E06; color: #0F172A; font-size: 12px; font-weight: 600; }
-    .pc-kbtn-enter:hover { background-color: #D48E06; }
+    .pc-kbtn-enter { background-color: #F59E0B !important; border: 1px solid #D97706 !important; color: #0F172A !important; font-size: 11.5px; font-weight: 800; border-radius: 0px !important; letter-spacing: 0.5px; }
+    .pc-kbtn-enter:hover { background-color: #D97706 !important; border-color: #B45309 !important; color: #FFFFFF !important; }
 
-    /* SCREEN 2: QUEUE */
-    .pc-queue-screen { padding: 24px 30px 90px; }
-    .pc-queue-wrapper { max-width: 1100px; margin: 0 auto; }
+    /* Auth Navigation Tabs (PIN vs Username/Password) */
+    .pc-auth-nav-tabs {
+      display: table !important;
+      width: 100% !important;
+      table-layout: fixed !important;
+      margin-bottom: 0px !important;
+      border: 1px solid #CBD5E1 !important;
+      border-bottom: none !important;
+      background: #F1F5F9 !important;
+      border-collapse: collapse !important;
+    }
+    .pc-auth-tab {
+      display: block;
+      width: 100%;
+      height: 38px;
+      line-height: 38px;
+      padding: 0 12px;
+      background: #E2E8F0;
+      color: #475569;
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+      border: none;
+      border-right: 1px solid #CBD5E1;
+      cursor: pointer;
+      text-align: center;
+      transition: all 0.15s ease;
+      border-radius: 0px !important;
+      box-sizing: border-box;
+    }
+    .pc-auth-tab:last-child {
+      border-right: none;
+    }
+    .pc-auth-tab:hover {
+      background: #EFF6FF;
+      color: #1D4ED8;
+    }
+    .pc-auth-tab.active {
+      background: #FFFFFF;
+      color: #1D4ED8;
+      border-top: 3px solid #1D4ED8;
+    }
+
+    /* Input touch fields */
+    .pc-input-touch {
+      width: 100%;
+      height: 38px;
+      line-height: 36px;
+      padding: 0 12px;
+      font-size: 13px;
+      font-weight: 600;
+      color: #0F172A;
+      background: #F8FAFC;
+      border: 1.5px solid #CBD5E1;
+      border-radius: 0px !important;
+      margin-bottom: 8px;
+      transition: all 0.15s ease;
+      font-family: inherit;
+    }
+    .pc-input-touch:focus, .pc-input-touch.pc-input-active {
+      background: #FFFFFF;
+      border-color: #1D4ED8;
+      outline: none;
+      box-shadow: 0 0 0 1px #1D4ED8;
+    }
+
+    /* SCREEN 2: QUEUE (Compact & Fully Responsive for Toshiba e-STUDIO Panels) */
+    .pc-queue-screen {
+      padding: 6px 12px 56px 12px;
+      max-width: 1050px;
+      margin: 0 auto;
+    }
+    .pc-queue-wrapper { width: 100%; margin: 0 auto; }
     .pc-tab-bar {
       width: 100%;
       background-color: #FFFFFF;
-      border: 1px solid #E2E8F0;
+      border: 1px solid #CBD5E1;
       border-bottom: none;
-      border-radius: 8px 8px 0 0;
-      padding: 8px 16px;
+      border-radius: 0px !important;
+      padding: 4px 10px;
     }
     .pc-tab-active {
       display: inline-block;
-      padding: 8px 16px;
+      padding: 6px 12px;
       font-size: 12px;
-      font-weight: 600;
-      color: #0F172A;
+      font-weight: 700;
+      color: #1D4ED8;
       text-transform: uppercase;
       letter-spacing: 0.3px;
-      border-bottom: 2px solid #FDAF17;
+      border-bottom: 2px solid #F59E0B;
       vertical-align: middle;
-    }
-    .pc-tab-link {
-      display: inline-block;
-      padding: 8px 14px;
-      font-size: 12px;
-      font-weight: 500;
-      color: #64748B;
-      text-transform: uppercase;
-      letter-spacing: 0.3px;
-      text-decoration: none;
-      vertical-align: middle;
+      border-radius: 0px !important;
     }
     .pc-count-tag {
-      background-color: #F1F5F9;
-      color: #0F172A;
+      background-color: #EFF6FF;
+      color: #1D4ED8;
       font-size: 11px;
-      font-weight: 600;
-      padding: 1px 7px;
-      border-radius: 12px;
+      font-weight: 700;
+      padding: 1px 6px;
+      border-radius: 0px !important;
       margin-left: 4px;
     }
     .pc-btn-print-all {
       display: inline-block;
-      background-color: #FDAF17;
-      border: 1px solid #D48E06;
-      color: #0F172A;
+      background-color: #F59E0B !important;
+      border: 1px solid #D97706 !important;
+      color: #0F172A !important;
       font-size: 12px;
-      font-weight: 600;
-      padding: 7px 16px;
-      border-radius: 6px;
+      font-weight: 800;
+      padding: 6px 14px;
+      border-radius: 0px !important;
       cursor: pointer;
       text-transform: uppercase;
       margin-right: 6px;
       vertical-align: middle;
+      letter-spacing: 0.3px;
+      box-shadow: 0 1px 2px rgba(245, 158, 11, 0.25);
+      transition: all 0.15s ease;
+      white-space: nowrap;
     }
+    .pc-btn-print-all:hover { background-color: #D97706 !important; border-color: #B45309 !important; color: #FFFFFF !important; }
     .pc-btn-refresh {
       display: inline-block;
       background-color: #FFFFFF;
       border: 1px solid #CBD5E1;
       color: #334155;
-      font-size: 12px;
-      font-weight: 500;
-      padding: 7px 14px;
-      border-radius: 6px;
+      font-size: 11px;
+      font-weight: 600;
+      padding: 6px 10px;
+      border-radius: 0px !important;
       cursor: pointer;
       text-transform: uppercase;
       vertical-align: middle;
+      transition: all 0.15s ease;
+      white-space: nowrap;
     }
+    .pc-btn-refresh:hover { background-color: #EFF6FF; border-color: #1D4ED8; color: #1D4ED8; }
+
     .pc-table-wrap {
       background-color: #FFFFFF;
-      border: 1px solid #E2E8F0;
-      border-radius: 0 0 8px 8px;
-      min-height: 280px;
-      overflow: hidden;
+      border: 1px solid #CBD5E1;
+      border-radius: 0px !important;
+      max-height: calc(100vh - 165px);
+      min-height: 140px;
+      overflow-y: auto;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
       box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
     }
-    table.pc-job-table { width: 100%; border-collapse: collapse; font-size: 13px; }
-    table.pc-job-table thead tr { background-color: #F8FAFC; color: #64748B; border-bottom: 1px solid #E2E8F0; }
-    table.pc-job-table th { padding: 10px 14px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.4px; text-align: left; }
-    table.pc-job-table td { padding: 12px 14px; border-bottom: 1px solid #F1F5F9; color: #1E293B; vertical-align: middle; }
+    table.pc-job-table { width: 100%; border-collapse: collapse; font-size: 12px; border-radius: 0px !important; }
+    table.pc-job-table thead tr { background-color: #F8FAFC; color: #1E3A8A; border-bottom: 1px solid #E2E8F0; }
+    table.pc-job-table th { padding: 8px 10px; font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; text-align: left; }
+    table.pc-job-table td { padding: 8px 10px; border-bottom: 1px solid #F1F5F9; color: #1E293B; vertical-align: middle; }
     table.pc-job-table tbody tr { cursor: pointer; }
-    table.pc-job-table tbody tr:hover { background-color: #F8FAFC; }
-    table.pc-job-table tbody tr.pc-row-selected { background-color: #FFFBEB; border-left: 3px solid #FDAF17; }
-    .pc-checkbox-touch { width: 18px; height: 18px; cursor: pointer; accent-color: #FDAF17; border-radius: 4px; }
-    .pc-badge-tag { display: inline-block; padding: 2px 7px; font-size: 10px; font-weight: 500; text-transform: uppercase; border-radius: 4px; border: 1px solid transparent; }
-    .pc-badge-held { background-color: #FFFBEB; border-color: #FCD34D; color: #92400E; }
-    .pc-empty-queue { text-align: center; padding: 60px 20px; }
-    .pc-empty-queue h3 { font-size: 15px; font-weight: 600; color: #0F172A; margin-bottom: 5px; }
-    .pc-empty-queue p { color: #64748B; font-size: 13px; }
+    table.pc-job-table tbody tr:hover { background-color: #EFF6FF; }
+    table.pc-job-table tbody tr.pc-row-selected { background-color: #FEF9C3; border-left: 4px solid #F59E0B; }
+    .pc-doc-title { font-weight: 600; color: #0F172A; max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .pc-checkbox-touch { width: 18px; height: 18px; cursor: pointer; accent-color: #1D4ED8; border-radius: 0px !important; }
+    .pc-badge-tag { display: inline-block; padding: 2px 6px; font-size: 10px; font-weight: 700; text-transform: uppercase; border-radius: 0px !important; border: 1px solid transparent; }
+    .pc-badge-held { background-color: #FEF3C7; border-color: #FDE68A; color: #92400E; }
+    .pc-attr-tag { display: inline-block; padding: 1px 5px; font-size: 10px; background: #F1F5F9; border: 1px solid #E2E8F0; color: #475569; margin-right: 3px; }
+    .pc-empty-queue { text-align: center; padding: 40px 16px; }
+    .pc-empty-queue h3 { font-size: 14px; font-weight: 700; color: #0F172A; margin-bottom: 4px; }
+    .pc-empty-queue p { color: #64748B; font-size: 12px; }
 
     /* Bottom Action Dock */
     .pc-action-dock {
       position: fixed;
       bottom: 0; left: 0; right: 0;
-      height: 60px;
+      height: 48px;
       background-color: #FFFFFF;
-      border-top: 1px solid #E2E8F0;
-      padding: 10px 28px;
-      box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.04);
+      border-top: 2px solid #CBD5E1;
+      padding: 6px 14px;
+      box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.05);
+      border-radius: 0px !important;
       z-index: 100;
     }
-    .pc-selection-summary { font-size: 13px; font-weight: 500; color: #0F172A; }
-    .pc-summary-sep { margin: 0 6px; color: #CBD5E1; }
-    .pc-target-printer-badge { font-size: 11px; color: #64748B; margin-top: 2px; }
+    .pc-selection-summary { font-size: 12px; font-weight: 600; color: #0F172A; }
+    .pc-summary-sep { margin: 0 5px; color: #CBD5E1; }
+    .pc-target-printer-badge { font-size: 10.5px; color: #64748B; margin-top: 1px; }
     .pc-btn-dock-cancel {
       display: inline-block;
       background-color: #FFFFFF;
       border: 1px solid #CBD5E1;
       color: #991B1B;
-      font-size: 12px;
-      font-weight: 500;
-      padding: 8px 16px;
-      border-radius: 6px;
+      font-size: 11px;
+      font-weight: 600;
+      padding: 6px 12px;
+      border-radius: 0px !important;
       cursor: pointer;
       text-transform: uppercase;
       margin-right: 6px;
       vertical-align: middle;
+      transition: all 0.15s ease;
+      white-space: nowrap;
     }
+    .pc-btn-dock-cancel:hover { background-color: #FEF2F2; border-color: #F87171; }
     .pc-btn-dock-print {
       display: inline-block;
-      background-color: #FDAF17;
-      border: 1px solid #D48E06;
-      color: #0F172A;
-      font-size: 12px;
-      font-weight: 600;
-      padding: 8px 20px;
-      border-radius: 6px;
+      background-color: #1D4ED8 !important;
+      border: 1px solid #1E40AF !important;
+      color: #FFFFFF !important;
+      font-size: 11.5px;
+      font-weight: 700;
+      padding: 6px 18px;
+      border-radius: 0px !important;
       cursor: pointer;
       text-transform: uppercase;
       vertical-align: middle;
+      letter-spacing: 0.3px;
+      box-shadow: 0 1px 3px rgba(29, 78, 216, 0.25);
+      transition: all 0.15s ease;
+      white-space: nowrap;
     }
+    .pc-btn-dock-print:hover { background-color: #1E40AF !important; border-color: #1E3A8A !important; }
     .pc-btn-disabled { opacity: 0.35 !important; cursor: not-allowed !important; pointer-events: none !important; }
+
+    /* Responsive Adaptation for Toshiba e-STUDIO Panels (4508A / 3508A / 800x480 / 1024x600) */
+    @media (max-width: 860px) {
+      .pc-col-hide-sm { display: none !important; }
+      .pc-doc-title { max-width: 220px; }
+      .pc-target-printer-badge { display: none !important; }
+      .pc-btn-dock-print { padding: 6px 12px; }
+      .pc-btn-dock-cancel { padding: 6px 8px; }
+    }
+
+    @media (max-height: 580px) {
+      .pc-header { height: 40px; padding: 0 10px; }
+      .pc-logo-box { width: 26px; height: 26px; line-height: 22px; font-size: 11px; margin-right: 6px; }
+      .pc-brand-name { font-size: 13px; }
+      .pc-brand-subtitle { display: none; }
+      .pc-user-info { padding: 3px 6px; font-size: 10.5px; }
+      .pc-btn-logout { padding: 3px 8px; font-size: 10.5px; }
+      .pc-auth-screen { padding: 8px 8px 16px 8px; }
+      .pc-col-left { padding: 14px 16px; }
+      .pc-col-left h2 { font-size: 16px; margin-bottom: 4px; }
+      .pc-col-left p { font-size: 11.5px; margin-bottom: 12px; }
+      .pc-pin-box { height: 38px; line-height: 36px; margin-bottom: 10px; }
+      .pc-kbtn { height: 38px; line-height: 36px; font-size: 17px; }
+      .pc-queue-screen { padding: 4px 8px 52px 8px; }
+      .pc-tab-bar { padding: 3px 8px; }
+      .pc-tab-active { padding: 4px 8px; font-size: 11px; }
+      .pc-table-wrap { max-height: calc(100vh - 140px); }
+      .pc-action-dock { height: 44px; padding: 4px 10px; }
+    }
   </style>
 </head>
 <body>
@@ -388,21 +503,24 @@
     <table style="width:100%; height:100%; border-collapse:collapse;" cellpadding="0" cellspacing="0">
       <tr>
         <td style="vertical-align:middle; text-align:left;">
-          <div class="pc-header-brand">
-            <div class="pc-logo-box">nP</div>
-            <div class="pc-brand-info">
-              <span class="pc-brand-name">nexPrint</span>
-              <span class="pc-brand-subtitle">Secure Touch Release</span>
+          <div class="pc-header-brand" id="ewbBrandContainer" style="display:inline-flex; align-items:center;">
+            <div id="ewbDefaultBrandGroup" style="display:inline-flex; align-items:center;">
+              <div class="pc-logo-box" id="ewbLogoBox">nP</div>
+              <div class="pc-brand-info" id="ewbBrandInfo">
+                <span class="pc-brand-name" id="ewbBrandName">nexPrint</span>
+                <span class="pc-brand-subtitle" id="ewbBrandSubtitle">Secure Touch Release</span>
+              </div>
             </div>
+            <img id="ewbLogoImg" style="display:none; max-height:36px; max-width:150px; height:auto; width:auto; object-fit:contain; vertical-align:middle;" src="" alt="Logo">
           </div>
         </td>
         <td style="vertical-align:middle; text-align:right;">
           <!-- Active User & Session Control (visible when logged in) -->
           <div id="userHeaderSection" style="display:none;">
             <span class="pc-user-info">
-              User: <strong id="userBadgeText">User</strong> | <span id="userDeptText">Operations</span>
+              User: <strong id="userBadgeText">User</strong> | <span id="userDeptText">Operations</span> | <span style="color:#1D4ED8; font-weight:700;">🖨️ <span id="userPrintCount">0</span> prints</span> | <span style="color:#16A34A; font-weight:700;">📄 <span id="userCopyCount">0</span> copies</span>
             </span>
-            <button type="button" class="pc-btn-secondary" id="deviceFuncBtn" onclick="window.handleOpenDeviceFunctions()" style="margin-right:8px; padding:6px 14px; font-size:12px; font-weight:600; background:#E2E8F0; color:#0F172A; border:1px solid #CBD5E1; border-radius:6px; cursor:pointer;">
+            <button type="button" class="pc-btn-secondary" id="deviceFuncBtn" onclick="window.handleOpenDeviceFunctions()" style="margin-right:8px; padding:6px 14px; font-size:12px; font-weight:600; background:#E2E8F0; color:#0F172A; border:1px solid #CBD5E1; border-radius:0px; cursor:pointer;">
               Copy / Scan (Home)
             </button>
             <button class="pc-btn-logout" id="logoutBtn" onclick="window.handleLogout()">
@@ -427,57 +545,124 @@
        ============================================================ -->
   <div id="screenAuth" class="pc-screen pc-auth-screen pc-active">
     <div class="pc-auth-wrapper">
-      <table class="pc-auth-table" cellpadding="0" cellspacing="0">
+
+      <!-- Authentication Method Switcher Tabs (Pure Table for 100% Embedded EWB Compatibility) -->
+      <table class="pc-auth-nav-tabs" cellpadding="0" cellspacing="0">
         <tr>
-          <!-- Left Column: Identity & PIN Prompt Card -->
-          <td class="pc-col-left" valign="top">
-            <h2>Log In to Print</h2>
-            <p>Enter your 4-digit employee PIN code to release held print jobs at this Toshiba printer.</p>
-
-            <div class="pc-pin-label">EMPLOYEE PIN NUMBER</div>
-            <div id="pinDisplay" class="pc-pin-box">
-              <span class="pc-pin-placeholder">ENTER PIN</span>
-            </div>
-
-            <!-- Quick 1-Tap Login for RR -->
-            <button class="pc-quick-chip" onclick="window.quickDemoLogin('rr', '1234')">
-              <span class="pc-quick-title">Quick Sign In: RR</span>
-              <span class="pc-quick-sub">Operations Department - PIN: 1234</span>
+          <td style="width:50%; padding:0;">
+            <button type="button" id="tabAuthPin" class="pc-auth-tab active" onclick="window.switchAuthMode('PIN')">
+              PIN / ID CODE
             </button>
-
-            <div class="pc-auth-foot">
-              Authenticated via Windows Active Directory SID
-            </div>
           </td>
-
-          <!-- Right Column: 3x4 Touch Numeric Keypad -->
-          <td class="pc-col-right" valign="top">
-            <div class="pc-keypad-title">TOUCH NUMERIC KEYPAD</div>
-            <table class="pc-keypad-tbl" cellpadding="0" cellspacing="8">
-              <tr>
-                <td><button type="button" class="pc-kbtn" onclick="window.handleKeypad('1')">1</button></td>
-                <td><button type="button" class="pc-kbtn" onclick="window.handleKeypad('2')">2</button></td>
-                <td><button type="button" class="pc-kbtn" onclick="window.handleKeypad('3')">3</button></td>
-              </tr>
-              <tr>
-                <td><button type="button" class="pc-kbtn" onclick="window.handleKeypad('4')">4</button></td>
-                <td><button type="button" class="pc-kbtn" onclick="window.handleKeypad('5')">5</button></td>
-                <td><button type="button" class="pc-kbtn" onclick="window.handleKeypad('6')">6</button></td>
-              </tr>
-              <tr>
-                <td><button type="button" class="pc-kbtn" onclick="window.handleKeypad('7')">7</button></td>
-                <td><button type="button" class="pc-kbtn" onclick="window.handleKeypad('8')">8</button></td>
-                <td><button type="button" class="pc-kbtn" onclick="window.handleKeypad('9')">9</button></td>
-              </tr>
-              <tr>
-                <td><button type="button" class="pc-kbtn pc-kbtn-clear" onclick="window.handleKeypad('CLEAR')">CLEAR</button></td>
-                <td><button type="button" class="pc-kbtn" onclick="window.handleKeypad('0')">0</button></td>
-                <td><button type="button" class="pc-kbtn pc-kbtn-enter" onclick="window.handleKeypad('ENTER')">LOG IN</button></td>
-              </tr>
-            </table>
+          <td style="width:50%; padding:0;">
+            <button type="button" id="tabAuthUserPass" class="pc-auth-tab" onclick="window.switchAuthMode('USER_PASS')">
+              USERNAME &amp; PASSWORD
+            </button>
           </td>
         </tr>
       </table>
+
+      <!-- VIEW 1: PIN AUTHENTICATION (Classic Keypad) -->
+      <div id="authViewPin">
+        <table class="pc-auth-table" cellpadding="0" cellspacing="0">
+          <tr>
+            <!-- Left Column: Identity & PIN Prompt Card -->
+            <td class="pc-col-left" valign="top">
+              <h2>Log In to Print</h2>
+              <p>Enter your 4-digit employee PIN code to release held print jobs at this Toshiba printer.</p>
+
+              <div class="pc-pin-label">EMPLOYEE PIN NUMBER</div>
+              <div id="pinDisplay" class="pc-pin-box">
+                <span class="pc-pin-placeholder">ENTER PIN</span>
+              </div>
+
+              <div class="pc-auth-foot" style="margin-top:10px;">
+                Authenticated via Windows Active Directory SID &bull; Secure Pull-Print
+              </div>
+            </td>
+
+            <!-- Right Column: 3x4 Touch Numeric Keypad -->
+            <td class="pc-col-right" valign="top">
+              <div class="pc-keypad-title">TOUCH NUMERIC KEYPAD</div>
+              <table class="pc-keypad-tbl" cellpadding="0" cellspacing="6">
+                <tr>
+                  <td><button type="button" class="pc-kbtn" onclick="window.handleKeypad('1')">1</button></td>
+                  <td><button type="button" class="pc-kbtn" onclick="window.handleKeypad('2')">2</button></td>
+                  <td><button type="button" class="pc-kbtn" onclick="window.handleKeypad('3')">3</button></td>
+                </tr>
+                <tr>
+                  <td><button type="button" class="pc-kbtn" onclick="window.handleKeypad('4')">4</button></td>
+                  <td><button type="button" class="pc-kbtn" onclick="window.handleKeypad('5')">5</button></td>
+                  <td><button type="button" class="pc-kbtn" onclick="window.handleKeypad('6')">6</button></td>
+                </tr>
+                <tr>
+                  <td><button type="button" class="pc-kbtn" onclick="window.handleKeypad('7')">7</button></td>
+                  <td><button type="button" class="pc-kbtn" onclick="window.handleKeypad('8')">8</button></td>
+                  <td><button type="button" class="pc-kbtn" onclick="window.handleKeypad('9')">9</button></td>
+                </tr>
+                <tr>
+                  <td><button type="button" class="pc-kbtn pc-kbtn-clear" onclick="window.handleKeypad('CLEAR')">CLEAR</button></td>
+                  <td><button type="button" class="pc-kbtn" onclick="window.handleKeypad('0')">0</button></td>
+                  <td><button type="button" class="pc-kbtn pc-kbtn-enter" onclick="window.handleKeypad('ENTER')">LOG IN</button></td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+        </table>
+      </div>
+
+      <!-- VIEW 2: USERNAME & PASSWORD AUTHENTICATION (Toshiba Native Touch Keyboard) -->
+      <div id="authViewUserPass" style="display:none;">
+        <table class="pc-auth-table" cellpadding="0" cellspacing="0">
+          <tr>
+            <!-- Left Column: Instructions & Security Info -->
+            <td class="pc-col-left" valign="top">
+              <h2>Account Log In</h2>
+              <p style="margin-bottom:10px;">Type your Active Directory, LDAP, or local account credentials to release held prints.</p>
+
+              <div style="background:#F8FAFC; border:1px solid #E2E8F0; padding:10px 12px; margin-bottom:10px;">
+                <div style="font-size:10.5px; font-weight:700; color:#1E3A8A; text-transform:uppercase; margin-bottom:3px; letter-spacing:0.5px;">Corporate Directory Login</div>
+                <div style="font-size:11.5px; color:#334155; line-height:1.4;">
+                  Sign in using your Windows login (qoa.local) or enterprise credentials. Your held prints will appear immediately.
+                </div>
+              </div>
+
+              <div class="pc-auth-foot">
+                Active Directory (qoa.local) &bull; Windows Security
+              </div>
+            </td>
+
+            <!-- Right Column: Clean Credentials Input Panel (Triggers Toshiba Built-In Soft Keyboard) -->
+            <td class="pc-col-right" valign="top" style="padding:14px 18px;">
+              <form id="userPassForm" onsubmit="window.submitUserPass(event); return false;">
+                <div class="pc-keypad-title" style="text-align:left; margin-bottom:8px;">ENTER ACCOUNT CREDENTIALS</div>
+
+                <div class="pc-pin-label">USERNAME (OR DOMAIN\USER)</div>
+                <input type="text" id="inputUsername" class="pc-input-touch" placeholder="e.g. chiran or administrator" autocomplete="off" autocapitalize="none">
+
+                <div class="pc-pin-label">PASSWORD</div>
+                <input type="password" id="inputPassword" class="pc-input-touch" placeholder="Enter password" autocomplete="off">
+
+                <table style="width:100%; border-collapse:collapse; margin-top:4px;" cellpadding="0" cellspacing="0">
+                  <tr>
+                    <td style="width:32%; padding-right:6px;">
+                      <button type="button" class="pc-kbtn pc-kbtn-clear" style="width:100%; height:38px; font-size:11px;" onclick="window.clearUserPass()">CLEAR</button>
+                    </td>
+                    <td style="width:68%;">
+                      <button type="submit" id="btnSubmitUserPass" class="pc-kbtn pc-kbtn-enter" style="width:100%; height:38px; font-size:13px; font-weight:800;">LOG IN</button>
+                    </td>
+                  </tr>
+                </table>
+
+                <div style="font-size:10px; color:#64748B; margin-top:8px; text-align:center; line-height:1.3;">
+                  Tap either field to open the Toshiba touchscreen keyboard.
+                </div>
+              </form>
+            </td>
+          </tr>
+        </table>
+      </div>
+
     </div>
   </div>
 
@@ -487,20 +672,20 @@
   <div id="screenQueue" class="pc-screen pc-queue-screen">
 
     <div class="pc-queue-wrapper">
-      <!-- Sub-Header Tab Bar -->
+      <!-- Sub-Header Tab Bar (PaperCut MF Compact Single-Line Toolbar) -->
       <table class="pc-tab-bar" cellpadding="0" cellspacing="0">
         <tr>
-          <td style="vertical-align:middle; text-align:left;">
+          <td style="vertical-align:middle; text-align:left; white-space:nowrap;">
             <div class="pc-tab-active">
               Print Release <span id="queueCountBadge" class="pc-count-tag">(0)</span>
             </div>
-            <a class="pc-tab-link" href="/admin.html" target="_blank">
-              Admin Portal
-            </a>
+            <button type="button" class="pc-btn-secondary" onclick="window.toggleSelectAllCheckbox(true)" style="margin-left:6px; padding:3px 8px; font-size:11px; font-weight:600; background:#F8FAFC; color:#334155; border:1px solid #CBD5E1; cursor:pointer;">
+              Select All
+            </button>
           </td>
-          <td style="vertical-align:middle; text-align:right;">
-            <button id="printAllBtn" class="pc-btn-print-all" onclick="window.printAllJobs()">
-              Print All <span id="printAllCountText">(0)</span>
+          <td style="vertical-align:middle; text-align:right; white-space:nowrap;">
+            <button id="printAllBtn" class="pc-btn-print-all" onclick="window.printAllJobs()" title="Release all held print jobs in 1-tap">
+              Release All <span id="printAllCountText">(0)</span>
             </button>
             <button class="pc-btn-refresh" onclick="window.loadJobs()" title="Refresh Queue">
               Refresh
@@ -509,20 +694,20 @@
         </tr>
       </table>
 
-      <!-- Table of Held Print Jobs -->
+      <!-- Table of Held Print Jobs (Scrolls internally to fit 100% within Toshiba screens) -->
       <div class="pc-table-wrap">
         <table class="pc-job-table" cellpadding="0" cellspacing="0">
           <thead>
             <tr>
-              <th style="width:44px; text-align:center;">
+              <th style="width:38px; text-align:center;">
                 <input type="checkbox" id="selectAllCheckbox" class="pc-checkbox-touch" onchange="window.toggleSelectAllCheckbox(this.checked)" title="Select All">
               </th>
               <th>DOCUMENT NAME</th>
-              <th style="width:160px;">SUBMITTED</th>
-              <th style="width:80px; text-align:center;">PAGES</th>
-              <th style="width:140px;">ATTRIBUTES</th>
-              <th style="width:90px; text-align:right;">COST</th>
-              <th style="width:100px; text-align:right; padding-right:16px;">STATUS</th>
+              <th class="pc-col-hide-sm" style="width:130px;">SUBMITTED</th>
+              <th style="width:65px; text-align:center;">PAGES</th>
+              <th class="pc-col-hide-sm" style="width:95px;">ATTRIBUTES</th>
+              <th class="pc-col-hide-sm" style="width:80px; text-align:right;">COST</th>
+              <th style="width:85px; text-align:right; padding-right:12px;">STATUS</th>
             </tr>
           </thead>
           <tbody id="jobListTableBody">
@@ -537,29 +722,29 @@
     </div>
 
     <!-- ============================================================
-         BOTTOM ACTION DOCK (PaperCut MF Bottom Control Bar)
+         BOTTOM ACTION DOCK (PaperCut MF Always-Visible Bottom Bar)
          ============================================================ -->
     <div class="pc-action-dock">
       <table style="width:100%; border-collapse:collapse;" cellpadding="0" cellspacing="0">
         <tr>
-          <td style="vertical-align:middle; text-align:left;">
+          <td style="vertical-align:middle; text-align:left; white-space:nowrap;">
             <div class="pc-selection-summary">
-              <span id="selectedSummaryText">0 jobs selected</span>
+              <span id="selectedSummaryText" style="color:#1D4ED8; font-weight:700;">0 selected</span>
               <span class="pc-summary-sep">|</span>
-              <span id="selectedPagesText">0 pages</span>
-              <span class="pc-summary-sep">|</span>
-              <span id="selectedCostText">LKR 0.00</span>
+              <span id="selectedPagesText">0 pgs</span>
+              <span class="pc-summary-sep pc-col-hide-sm">|</span>
+              <span id="selectedCostText" class="pc-col-hide-sm">LKR 0.00</span>
             </div>
-            <div class="pc-target-printer-badge">
-              Target Device: <strong>Toshiba e-STUDIO 3518A (192.168.1.8:9100)</strong>
+            <div class="pc-target-printer-badge pc-col-hide-sm">
+              Device: <strong>Toshiba e-STUDIO (Ready)</strong>
             </div>
           </td>
-          <td style="vertical-align:middle; text-align:right;">
-            <button id="dockDeviceFuncBtn" class="pc-btn-dock-cancel" onclick="window.handleOpenDeviceFunctions()" style="background:#E2E8F0; color:#0F172A; border-color:#CBD5E1; margin-right:8px;">
+          <td style="vertical-align:middle; text-align:right; white-space:nowrap;">
+            <button id="dockDeviceFuncBtn" class="pc-btn-dock-cancel" onclick="window.handleOpenDeviceFunctions()" style="background:#E2E8F0; color:#0F172A; border-color:#CBD5E1; margin-right:6px;">
               Copy / Scan
             </button>
             <button id="cancelBtn" class="pc-btn-dock-cancel pc-btn-disabled" onclick="window.cancelSelectedJobs()">
-              Delete Selected
+              Delete
             </button>
             <button id="releaseBtn" class="pc-btn-dock-print pc-btn-disabled" onclick="window.releaseSelectedJobs()">
               Print Selected
@@ -571,6 +756,27 @@
 
   </div>
 
-  <script src="/js/ewb-app.js?v=20"></script>
+  <!-- Photocopy Active Modal for Toshiba MFP Panel -->
+  <div id="copySessionModal" class="pc-modal-backdrop" style="display:none;">
+    <div class="pc-modal-box">
+      <div style="font-size:42px; margin-bottom:12px;">📄🖨️</div>
+      <h2 style="margin:0 0 8px 0; font-size:20px; color:#0F172A; font-weight:700;">Walk-Up Copy Mode Active</h2>
+      <p style="margin:0 0 16px 0; font-size:14px; color:#475569; line-height:1.5;">
+        Photocopy functions have been unlocked for <strong><span id="copyModalUsername" style="color:#1D4ED8;">User</span></strong>.<br>
+        You can now press the physical <strong>[Copy]</strong> or <strong>[Home]</strong> button on the Toshiba panel to make your copies.<br>
+        All pages will be automatically logged to your account.
+      </p>
+      <div style="display:flex; gap:12px; justify-content:center; margin-top:24px; flex-wrap:wrap;">
+        <button type="button" onclick="window.handleFinishCopying()" style="padding:12px 24px; font-size:14px; font-weight:700; background:#16A34A; color:#FFFFFF; border:none; border-radius:3px; cursor:pointer;">
+          ✅ Finish Copying &amp; Logout
+        </button>
+        <button type="button" onclick="window.hideCopySessionModal()" style="padding:12px 20px; font-size:14px; font-weight:600; background:#E2E8F0; color:#0F172A; border:1px solid #CBD5E1; border-radius:3px; cursor:pointer;">
+          Return to Print Queue
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/js/ewb-app.js?v=38"></script>
 </body>
 </html>

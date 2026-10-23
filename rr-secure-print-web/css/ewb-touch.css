@@ -1,454 +1,745 @@
 /* ==========================================================================
-   RR Secure Print — Toshiba e-STUDIO 3518A EWB Touchscreen Stylesheet
-   Engine Target: Embedded WebKit / EWB Browser (ES5 / CSS2.1 / CSS3 Conservative)
-   Optimized for 10.1" WSVGA Touch Panel (1024 x 600)
+   nexPrint - Toshiba Touch Terminal Pure CSS v17
+   Enterprise Architecture - Authority Blue & Enterprise Gold/Yellow Synergy
+   Strict Square Modern Corners - 0px Radius Throughout
    ========================================================================== */
 
 * {
   box-sizing: border-box;
-  -webkit-box-sizing: border-box;
   margin: 0;
   padding: 0;
 }
 
+/* Universal Square / Sharp Reset */
+button, input, select, textarea, table, thead, tbody, th, td,
+.pc-logo-box, .pc-device-ready, .pc-user-info, .pc-btn-logout,
+.pc-auth-table, .pc-pin-box, .pc-quick-chip, .pc-kbtn, .pc-kbtn-clear,
+.pc-kbtn-enter, .pc-tab-bar, .pc-tab-active, .pc-tab-link, .pc-count-tag,
+.pc-btn-print-all, .pc-btn-refresh, .pc-table-wrap, .pc-checkbox-touch,
+.pc-badge-tag, .pc-action-dock, .pc-btn-dock-cancel, .pc-btn-dock-print,
+.pc-alert-strip, #dockDeviceFuncBtn, #deviceFuncBtn {
+  border-radius: 0px !important;
+}
+
 body {
-  font-family: Arial, Helvetica, sans-serif;
-  background-color: #1a2232;
-  color: #ffffff;
+  font-family: -apple-system, BlinkMacSystemFont, Arial, "Helvetica Neue", Helvetica, sans-serif;
+  background-color: #F1F5F9;
+  color: #0F172A;
   margin: 0;
   padding: 0;
-  font-size: 16px;
+  font-size: 13px;
+  font-weight: 400;
   line-height: 1.4;
   -webkit-user-select: none;
   user-select: none;
   touch-action: manipulation;
+  min-height: 100vh;
 }
 
-/* Header & Branding */
-.header-bar {
-  background: #0f1622;
-  border-bottom: 3px solid #ff7700;
-  padding: 12px 20px;
-  display: block;
-  overflow: hidden;
+strong, b {
+  font-weight: 700;
+  color: #0F172A;
 }
 
-.brand-title {
-  float: left;
-  font-size: 22px;
-  font-weight: bold;
-  letter-spacing: 1px;
-  color: #ffffff;
+/* ==========================================================================
+   1. TOP HEADER BAR
+   ========================================================================== */
+.pc-header {
+  height: 56px;
+  background-color: #FFFFFF;
+  border-bottom: 2px solid #F59E0B;
+  padding: 0 24px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
 }
 
-.brand-subtitle {
-  float: left;
-  font-size: 13px;
-  color: #ff9933;
-  margin-left: 12px;
-  margin-top: 6px;
-}
-
-.header-right {
-  float: right;
-  text-align: right;
-}
-
-.user-badge-info {
+.pc-header-brand {
   display: inline-block;
+  vertical-align: middle;
+}
+
+.pc-logo-box {
+  display: inline-block;
+  width: 36px;
+  height: 36px;
+  line-height: 32px;
+  background-color: #1D4ED8;
+  border: 2px solid #F59E0B;
+  color: #FFFFFF;
+  font-weight: 800;
   font-size: 15px;
-  margin-right: 15px;
-  color: #a0c0e8;
+  text-align: center;
+  border-radius: 0px !important;
+  vertical-align: middle;
+  margin-right: 10px;
+  letter-spacing: -0.5px;
 }
 
-.session-timer {
+.pc-brand-info {
   display: inline-block;
-  background: #2a3b53;
-  color: #ffea79;
-  padding: 4px 10px;
-  border-radius: 4px;
-  font-size: 14px;
-  font-weight: bold;
+  vertical-align: middle;
 }
 
-/* Clearfix */
-.clearfix:after {
-  content: "";
-  display: table;
-  clear: both;
+.pc-brand-name {
+  display: block;
+  color: #0F172A;
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: -0.2px;
+  line-height: 1.2;
 }
 
-/* Container */
-.container {
-  padding: 16px;
-  max-width: 1024px;
+.pc-brand-subtitle {
+  display: block;
+  color: #64748B;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+/* Device status pill */
+.pc-device-ready {
+  display: inline-block;
+  background-color: #F0FDF4;
+  border: 1px solid #86EFAC;
+  padding: 5px 12px;
+  border-radius: 0px !important;
+  color: #14532D;
+  font-size: 11px;
+  font-weight: 600;
+  vertical-align: middle;
+}
+
+.pc-status-dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  background-color: #16A34A;
+  border-radius: 50% !important;
+  margin-right: 6px;
+  vertical-align: middle;
+}
+
+/* User Session */
+.pc-user-info {
+  display: inline-block;
+  background-color: #F8FAFC;
+  border: 1px solid #CBD5E1;
+  padding: 6px 12px;
+  border-radius: 0px !important;
+  font-size: 12px;
+  color: #334155;
+  margin-right: 8px;
+  vertical-align: middle;
+}
+
+.pc-btn-logout {
+  display: inline-block;
+  background-color: #FFFFFF;
+  border: 1px solid #CBD5E1;
+  color: #0F172A;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 6px 14px;
+  border-radius: 0px !important;
+  cursor: pointer;
+  vertical-align: middle;
+  text-transform: uppercase;
+  transition: all 0.15s ease;
+}
+.pc-btn-logout:hover {
+  background-color: #EFF6FF;
+  border-color: #1D4ED8;
+  color: #1D4ED8;
+}
+.pc-btn-logout:active {
+  background-color: #FEE2E2;
+  border-color: #F87171;
+  color: #991B1B;
+}
+
+.pc-logout-timer {
+  color: #D97706;
+  font-size: 11px;
+  margin-left: 2px;
+}
+
+/* ==========================================================================
+   2. SCREEN SWITCHER
+   ========================================================================== */
+.pc-screen {
+  display: none;
+}
+
+.pc-screen.pc-active {
+  display: block;
+}
+
+/* ==========================================================================
+   3. SCREEN 1: AUTHENTICATION (Ultra-Compact for 100% Zero-Scroll on Toshiba Panels)
+   ========================================================================== */
+.pc-auth-screen {
+  padding: 8px 12px 14px 12px;
+}
+
+.pc-auth-wrapper {
+  max-width: 780px;
   margin: 0 auto;
 }
 
-/* Alerts and Notifications */
-.alert-box {
-  padding: 14px 18px;
-  margin-bottom: 15px;
-  border-radius: 6px;
-  font-size: 16px;
-  font-weight: bold;
-  display: none;
-}
-
-.alert-success {
-  background-color: #1b5e20;
-  border: 1px solid #4caf50;
-  color: #e8f5e9;
-}
-
-.alert-error {
-  background-color: #b71c1c;
-  border: 1px solid #f44336;
-  color: #ffebee;
-}
-
-.alert-info {
-  background-color: #0d47a1;
-  border: 1px solid #2196f3;
-  color: #e3f2fd;
-}
-
-.alert-simulated {
-  background-color: #e65100;
-  border: 1px solid #ff9800;
-  color: #fff3e0;
-}
-
-/* Screen Sections */
-.screen-panel {
-  display: none;
-}
-
-.screen-active {
-  display: block;
-}
-
-/* Card / Box */
-.card-box {
-  background: #232f42;
-  border: 1px solid #364863;
-  border-radius: 8px;
-  padding: 20px;
-  margin-bottom: 16px;
-}
-
-/* Auth / Keypad Screen */
-.auth-wrapper {
-  max-width: 480px;
-  margin: 20px auto;
-  text-align: center;
-}
-
-.auth-header {
-  margin-bottom: 20px;
-}
-
-.auth-header h2 {
-  font-size: 24px;
-  color: #ffffff;
-  margin-bottom: 6px;
-}
-
-.auth-header p {
-  color: #9cb3d0;
-  font-size: 15px;
-}
-
-.pin-display-box {
-  background: #0f1622;
-  border: 2px solid #364863;
-  border-radius: 6px;
-  height: 60px;
-  line-height: 60px;
-  font-size: 32px;
-  letter-spacing: 12px;
-  color: #ff9933;
-  margin-bottom: 18px;
-}
-
-/* Touch Keypad */
-.keypad-grid {
+.pc-auth-table {
   width: 100%;
-  margin-bottom: 15px;
-}
-
-.keypad-row {
-  margin-bottom: 10px;
+  background-color: #FFFFFF;
+  border: 1px solid #CBD5E1;
+  border-top: 3px solid #1D4ED8;
+  border-radius: 0px !important;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.05);
+  border-collapse: separate;
   overflow: hidden;
 }
 
-.keypad-btn {
-  float: left;
-  width: 31%;
-  margin: 1%;
-  height: 62px;
-  font-size: 24px;
-  font-weight: bold;
-  background: #31425c;
-  color: #ffffff;
-  border: 1px solid #485f83;
-  border-radius: 6px;
-  cursor: pointer;
-  touch-action: manipulation;
+.pc-col-left {
+  width: 50%;
+  padding: 16px 20px;
 }
 
-.keypad-btn:active {
-  background: #ff7700;
-  color: #000000;
-}
-
-.keypad-btn-clear {
-  background: #5a2e2e;
-  border-color: #8c4242;
-}
-
-.keypad-btn-enter {
-  background: #1b5e20;
-  border-color: #2e7d32;
-  color: #ffffff;
-}
-
-/* Demo Quick Login Buttons */
-.quick-login-section {
-  margin-top: 15px;
-  padding-top: 15px;
-  border-top: 1px solid #364863;
-  text-align: center;
-}
-
-.quick-login-title {
-  font-size: 13px;
-  color: #8fa5c2;
-  margin-bottom: 10px;
-  text-transform: uppercase;
-  letter-spacing: 1px;
-}
-
-.demo-chip-btn {
-  display: inline-block;
-  background: #19273c;
-  color: #a0c0e8;
-  border: 1px solid #3f5575;
-  border-radius: 4px;
-  padding: 8px 14px;
-  margin: 4px;
-  font-size: 14px;
-  font-weight: bold;
-  cursor: pointer;
-}
-
-.demo-chip-btn:active {
-  background: #ff7700;
-  color: #ffffff;
-}
-
-/* Queue Screen */
-.queue-toolbar {
-  background: #141d2b;
-  border: 1px solid #28374d;
-  border-radius: 6px;
-  padding: 12px 16px;
-  margin-bottom: 15px;
-  overflow: hidden;
-}
-
-.toolbar-left {
-  float: left;
-}
-
-.toolbar-right {
-  float: right;
-}
-
-/* Job List Table / Items */
-.job-list-container {
-  min-height: 220px;
-  margin-bottom: 15px;
-}
-
-.job-item {
-  background: #232f42;
-  border: 2px solid #364863;
-  border-radius: 6px;
-  padding: 14px 18px;
-  margin-bottom: 10px;
-  cursor: pointer;
-  overflow: hidden;
-  position: relative;
-}
-
-.job-item.selected {
-  background: #1d3655;
-  border-color: #0088ff;
-  box-shadow: 0 0 8px rgba(0, 136, 255, 0.4);
-}
-
-.job-checkbox-col {
-  float: left;
-  width: 44px;
-  padding-top: 6px;
-}
-
-.job-checkbox-touch {
-  width: 28px;
-  height: 28px;
-  cursor: pointer;
-}
-
-.job-details-col {
-  float: left;
-  width: calc(100% - 190px);
-}
-
-.job-name {
-  font-size: 18px;
-  font-weight: bold;
-  color: #ffffff;
+.pc-col-left h2 {
+  font-size: 16px;
+  font-weight: 700;
+  color: #0F172A;
+  letter-spacing: -0.3px;
   margin-bottom: 4px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
-.job-meta-row {
-  font-size: 14px;
-  color: #9cb3d0;
-}
-
-.job-meta-tag {
-  display: inline-block;
-  background: #151e2b;
-  color: #b0c8e6;
-  padding: 2px 8px;
-  border-radius: 3px;
-  margin-right: 8px;
-  font-size: 13px;
-}
-
-.job-status-col {
-  float: right;
-  width: 140px;
-  text-align: right;
-  padding-top: 4px;
-}
-
-.status-badge {
-  display: inline-block;
-  padding: 4px 10px;
-  border-radius: 4px;
-  font-size: 13px;
-  font-weight: bold;
-  text-transform: uppercase;
-}
-
-.badge-held {
-  background: #ff7700;
-  color: #000000;
-}
-
-.badge-releasing {
-  background: #0288d1;
-  color: #ffffff;
-}
-
-.badge-completed {
-  background: #2e7d32;
-  color: #ffffff;
-}
-
-.badge-cancelled {
-  background: #c62828;
-  color: #ffffff;
-}
-
-/* Empty Queue View */
-.empty-queue-box {
-  text-align: center;
-  padding: 40px 20px;
-  color: #8fa5c2;
-}
-
-.empty-queue-icon {
-  font-size: 48px;
+.pc-col-left p {
+  color: #64748B;
+  font-size: 11.5px;
+  line-height: 1.35;
   margin-bottom: 12px;
 }
 
-/* Touch Action Buttons */
-.btn-touch {
+.pc-pin-label {
+  font-size: 10px;
+  font-weight: 700;
+  color: #64748B;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 4px;
+}
+
+.pc-pin-box {
+  width: 100%;
+  height: 40px;
+  line-height: 38px;
+  background-color: #F8FAFC;
+  border: 1.5px solid #CBD5E1;
+  border-radius: 0px !important;
+  text-align: center;
+  margin-bottom: 12px;
+}
+
+.pc-pin-placeholder {
+  color: #94A3B8;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 2px;
+}
+
+.pc-pin-dot {
   display: inline-block;
-  height: 52px;
-  line-height: 50px;
-  padding: 0 20px;
-  font-size: 17px;
-  font-weight: bold;
-  border-radius: 6px;
-  border: 1px solid transparent;
+  width: 10px;
+  height: 10px;
+  background-color: #0F172A;
+  border-radius: 50% !important;
+  margin: 0 4px;
+  vertical-align: middle;
+}
+
+.pc-auth-foot {
+  font-size: 10px;
+  color: #94A3B8;
+  font-weight: 500;
+}
+
+/* Right Column: 3x4 Touch Numeric Keypad */
+.pc-col-right {
+  width: 50%;
+  background-color: #F8FAFC;
+  border-left: 1px solid #E2E8F0;
+  padding: 14px 18px;
+}
+
+.pc-keypad-title {
+  font-size: 10px;
+  font-weight: 700;
+  color: #64748B;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 8px;
+  text-align: center;
+}
+
+.pc-keypad-tbl {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 6px;
+}
+
+.pc-keypad-tbl td {
+  width: 33.33%;
+  padding: 0;
+}
+
+/* Numeric Keypad Buttons - STRICT SQUARE */
+.pc-kbtn {
+  width: 100%;
+  height: 38px;
+  line-height: 36px;
+  background-color: #FFFFFF;
+  border: 1px solid #CBD5E1;
+  border-radius: 0px !important;
+  color: #0F172A;
+  font-size: 18px;
+  font-weight: 600;
+  text-align: center;
   cursor: pointer;
+  display: block;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  transition: all 0.1s ease;
+}
+.pc-kbtn:hover {
+  background-color: #EFF6FF;
+  border-color: #1D4ED8;
+  color: #1D4ED8;
+}
+.pc-kbtn:active {
+  background-color: #1D4ED8;
+  border-color: #1E40AF;
+  color: #FFFFFF;
+}
+
+.pc-kbtn-clear {
+  background-color: #F8FAFC;
+  border: 1px solid #CBD5E1;
+  color: #475569;
+  font-size: 11px;
+  font-weight: 700;
+  border-radius: 0px !important;
+}
+.pc-kbtn-clear:hover {
+  background-color: #FEE2E2;
+  border-color: #F87171;
+  color: #991B1B;
+}
+
+/* LOG IN / ENTER - Enterprise Tech Gold / Yellow */
+.pc-kbtn-enter {
+  background-color: #F59E0B !important;
+  border: 1px solid #D97706 !important;
+  color: #0F172A !important;
+  font-size: 11.5px;
+  font-weight: 800;
+  border-radius: 0px !important;
+  letter-spacing: 0.5px;
+}
+.pc-kbtn-enter:hover {
+  background-color: #D97706 !important;
+  border-color: #B45309 !important;
+  color: #FFFFFF !important;
+}
+.pc-kbtn-enter:active {
+  background-color: #B45309 !important;
+}
+
+/* ==========================================================================
+   4. SCREEN 2: QUEUE (Held Print Release - Optimized for Toshiba Panels)
+   ========================================================================== */
+.pc-queue-screen {
+  padding: 6px 12px 56px 12px;
+  max-width: 1050px;
+  margin: 0 auto;
+}
+
+.pc-queue-wrapper {
+  width: 100%;
+  margin: 0 auto;
+}
+
+.pc-tab-bar {
+  width: 100%;
+  background-color: #FFFFFF;
+  border: 1px solid #CBD5E1;
+  border-bottom: none;
+  border-radius: 0px !important;
+  padding: 4px 10px;
+}
+
+.pc-tab-active {
+  display: inline-block;
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #1D4ED8;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  border-bottom: 2px solid #F59E0B;
+  vertical-align: middle;
+  border-radius: 0px !important;
+}
+
+.pc-tab-link {
+  display: inline-block;
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #64748B;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  text-decoration: none;
+  vertical-align: middle;
+}
+.pc-tab-link:hover {
+  color: #1D4ED8;
+}
+
+.pc-count-tag {
+  background-color: #EFF6FF;
+  color: #1D4ED8;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 0px !important;
+  margin-left: 4px;
+}
+
+/* Print All Button - Bold Gold/Yellow Accent */
+.pc-btn-print-all {
+  display: inline-block;
+  background-color: #F59E0B !important;
+  border: 1px solid #D97706 !important;
+  color: #0F172A !important;
+  font-size: 12px;
+  font-weight: 800;
+  padding: 6px 14px;
+  border-radius: 0px !important;
+  cursor: pointer;
+  text-transform: uppercase;
+  margin-right: 6px;
+  vertical-align: middle;
+  letter-spacing: 0.3px;
+  box-shadow: 0 1px 2px rgba(245, 158, 11, 0.25);
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+.pc-btn-print-all:hover {
+  background-color: #D97706 !important;
+  border-color: #B45309 !important;
+  color: #FFFFFF !important;
+}
+
+/* Refresh Button - Square Secondary */
+.pc-btn-refresh {
+  display: inline-block;
+  background-color: #FFFFFF;
+  border: 1px solid #CBD5E1;
+  color: #334155;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 6px 10px;
+  border-radius: 0px !important;
+  cursor: pointer;
+  text-transform: uppercase;
+  vertical-align: middle;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+.pc-btn-refresh:hover {
+  background-color: #EFF6FF;
+  border-color: #1D4ED8;
+  color: #1D4ED8;
+}
+
+/* Held Jobs Table - Auto Viewport Height Fitting */
+.pc-table-wrap {
+  background-color: #FFFFFF;
+  border: 1px solid #CBD5E1;
+  border-radius: 0px !important;
+  max-height: calc(100vh - 165px);
+  min-height: 140px;
+  overflow-y: auto;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
+}
+
+table.pc-job-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+  border-radius: 0px !important;
+}
+
+table.pc-job-table thead tr {
+  background-color: #F8FAFC;
+  color: #1E3A8A;
+  border-bottom: 1px solid #E2E8F0;
+}
+
+table.pc-job-table th {
+  padding: 8px 10px;
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  text-align: left;
+}
+
+table.pc-job-table td {
+  padding: 8px 10px;
+  border-bottom: 1px solid #F1F5F9;
+  color: #1E293B;
+  vertical-align: middle;
+}
+
+table.pc-job-table tbody tr {
+  cursor: pointer;
+}
+
+table.pc-job-table tbody tr:hover {
+  background-color: #EFF6FF;
+}
+
+table.pc-job-table tbody tr.pc-row-selected {
+  background-color: #FEF9C3;
+  border-left: 4px solid #F59E0B;
+}
+
+.pc-checkbox-touch {
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+  accent-color: #1D4ED8;
+  border-radius: 0px !important;
+}
+
+.pc-doc-title {
+  font-weight: 600;
+  color: #0F172A;
+  max-width: 300px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pc-doc-meta {
+  font-size: 11px;
+  color: #64748B;
+  margin-top: 2px;
+}
+
+.pc-badge-tag {
+  display: inline-block;
+  padding: 2px 6px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  border-radius: 0px !important;
+  border: 1px solid transparent;
+}
+.pc-badge-held {
+  background-color: #FEF3C7;
+  border-color: #FDE68A;
+  color: #92400E;
+}
+
+.pc-attr-tag {
+  display: inline-block;
+  padding: 1px 5px;
+  font-size: 10px;
+  background: #F1F5F9;
+  border: 1px solid #E2E8F0;
+  color: #475569;
+  margin-right: 3px;
+}
+
+.pc-empty-queue {
   text-align: center;
-  touch-action: manipulation;
-  margin-right: 8px;
+  padding: 40px 16px;
 }
 
-.btn-primary-release {
-  background-color: #2e7d32;
-  border-color: #4caf50;
-  color: #ffffff;
-  min-width: 170px;
+.pc-empty-queue h3 {
+  font-size: 14px;
+  font-weight: 700;
+  color: #0F172A;
+  margin-bottom: 4px;
 }
 
-.btn-primary-release:active {
-  background-color: #1b5e20;
+.pc-empty-queue p {
+  color: #64748B;
+  font-size: 12px;
 }
 
-.btn-danger-cancel {
-  background-color: #8c2323;
-  border-color: #c62828;
-  color: #ffffff;
-  min-width: 150px;
+/* ==========================================================================
+   5. BOTTOM ACTION DOCK
+   ========================================================================== */
+.pc-action-dock {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 48px;
+  background-color: #FFFFFF;
+  border-top: 2px solid #CBD5E1;
+  padding: 6px 14px;
+  box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.05);
+  border-radius: 0px !important;
+  z-index: 100;
 }
 
-.btn-danger-cancel:active {
-  background-color: #5c1414;
+.pc-selection-summary {
+  font-size: 12px;
+  font-weight: 600;
+  color: #0F172A;
 }
 
-.btn-secondary {
-  background-color: #2b3b52;
-  border-color: #415573;
-  color: #ffffff;
+.pc-summary-sep {
+  margin: 0 5px;
+  color: #CBD5E1;
 }
 
-.btn-secondary:active {
-  background-color: #1c2738;
+.pc-target-printer-badge {
+  font-size: 10.5px;
+  color: #64748B;
+  margin-top: 1px;
 }
 
-.btn-warning {
-  background-color: #e65100;
-  border-color: #ff9800;
-  color: #ffffff;
+.pc-btn-dock-cancel {
+  display: inline-block;
+  background-color: #FFFFFF;
+  border: 1px solid #CBD5E1;
+  color: #991B1B;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 6px 12px;
+  border-radius: 0px !important;
+  cursor: pointer;
+  text-transform: uppercase;
+  margin-right: 6px;
+  vertical-align: middle;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+.pc-btn-dock-cancel:hover {
+  background-color: #FEF2F2;
+  border-color: #F87171;
 }
 
-.btn-warning:active {
-  background-color: #b23c00;
+/* Print Selected Button - Authority Blue */
+.pc-btn-dock-print {
+  display: inline-block;
+  background-color: #1D4ED8 !important;
+  border: 1px solid #1E40AF !important;
+  color: #FFFFFF !important;
+  font-size: 11.5px;
+  font-weight: 700;
+  padding: 6px 18px;
+  border-radius: 0px !important;
+  cursor: pointer;
+  text-transform: uppercase;
+  vertical-align: middle;
+  letter-spacing: 0.3px;
+  box-shadow: 0 1px 3px rgba(29, 78, 216, 0.25);
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+.pc-btn-dock-print:hover {
+  background-color: #1E40AF !important;
+  border-color: #1E3A8A !important;
 }
 
-.btn-disabled {
-  opacity: 0.45;
-  cursor: not-allowed;
+.pc-btn-disabled {
+  opacity: 0.35 !important;
+  cursor: not-allowed !important;
+  pointer-events: none !important;
 }
 
-/* Simulation Notice Footer */
-.simulation-footer {
-  margin-top: 15px;
-  background: #111822;
-  border: 1px solid #28374d;
-  padding: 10px 16px;
+/* Responsive Adaptation for Toshiba e-STUDIO Panels (4508A / 3508A / 800x480 / 1024x600) */
+@media (max-width: 860px) {
+  .pc-col-hide-sm { display: none !important; }
+  .pc-doc-title { max-width: 220px; }
+  .pc-target-printer-badge { display: none !important; }
+  .pc-btn-dock-print { padding: 6px 12px; }
+  .pc-btn-dock-cancel { padding: 6px 8px; }
+}
+
+@media (max-height: 580px) {
+  .pc-header { height: 40px; padding: 0 10px; }
+  .pc-logo-box { width: 26px; height: 26px; line-height: 22px; font-size: 11px; margin-right: 6px; }
+  .pc-brand-name { font-size: 13px; }
+  .pc-brand-subtitle { display: none; }
+  .pc-user-info { padding: 3px 6px; font-size: 10.5px; }
+  .pc-btn-logout { padding: 3px 8px; font-size: 10.5px; }
+  .pc-auth-screen { padding: 8px 8px 16px 8px; }
+  .pc-col-left { padding: 14px 16px; }
+  .pc-col-left h2 { font-size: 16px; margin-bottom: 4px; }
+  .pc-col-left p { font-size: 11.5px; margin-bottom: 12px; }
+  .pc-pin-box { height: 38px; line-height: 36px; margin-bottom: 10px; }
+  .pc-kbtn { height: 38px; line-height: 36px; font-size: 17px; }
+  .pc-queue-screen { padding: 4px 8px 52px 8px; }
+  .pc-tab-bar { padding: 3px 8px; }
+  .pc-tab-active { padding: 4px 8px; font-size: 11px; }
+  .pc-table-wrap { max-height: calc(100vh - 140px); }
+  .pc-action-dock { height: 44px; padding: 4px 10px; }
+}
+
+/* ==========================================================================
+   6. ALERTS
+   ========================================================================== */
+.pc-alert-strip {
+  display: none;
+  max-width: 820px;
+  margin: 12px auto 0 auto;
+  padding: 8px 16px;
+  font-size: 12px;
+  font-weight: 600;
+  text-align: center;
+  border-radius: 0px !important;
+  border: 1px solid transparent;
+}
+.pc-alert-strip.pc-alert-info {
+  display: block;
+  background-color: #EFF6FF;
+  border-color: #BFDBFE;
+  color: #1E40AF;
+}
+.pc-alert-strip.pc-alert-error {
+  display: block;
+  background-color: #FEF2F2;
+  border-color: #FCA5A5;
+  color: #991B1B;
+}
+
+/* ==========================================================================
+   7. TOUCH MODALS (Embedded EWB Overlay)
+   ========================================================================== */
+.pc-modal-backdrop {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(15, 23, 42, 0.75);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  padding: 16px;
+}
+.pc-modal-box {
+  background: #FFFFFF;
+  border: 2px solid #CBD5E1;
   border-radius: 4px;
-  font-size: 13px;
-  color: #ffaa44;
+  width: 100%;
+  max-width: 520px;
+  padding: 28px 24px;
   text-align: center;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.3);
 }
