@@ -202,13 +202,65 @@ public class AdminController {
         }
     }
 
-    @GetMapping("/printers/{id}/ewb-status")
+    @PostMapping("/printers/{id}/lock-functions")
+    public ResponseEntity<?> lockPrinterFunctions(@PathVariable("id") Long id,
+                                                  @RequestParam(value = "lock", defaultValue = "true") boolean lock,
+                                                  HttpServletRequest httpRequest) {
+        if (!isAdmin(httpRequest)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("error", "Admin privileges required."));
+        }
+        try {
+            String adminUser = getAdminActorName(httpRequest);
+            boolean success = printerService.lockPrinterFunctions(id, lock, adminUser, httpRequest.getRemoteAddr());
+            return ResponseEntity.ok(Map.of(
+                    "success", success,
+                    "locked", lock,
+                    "message", success
+                            ? (lock ? "Toshiba HOME screen icons (Photo Copy) successfully LOCKED!" : "Toshiba HOME screen functions UNLOCKED.")
+                            : "Failed to communicate with Toshiba MFP. Please check IP and credentials."
+            ));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    @PostMapping("/printers/lock-all-functions")
+    public ResponseEntity<?> lockAllPrintersFunctions(@RequestParam(value = "lock", defaultValue = "true") boolean lock,
+                                                      HttpServletRequest httpRequest) {
+        if (!isAdmin(httpRequest)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("error", "Admin privileges required."));
+        }
+        try {
+            String adminUser = getAdminActorName(httpRequest);
+            Map<String, Object> result = printerService.lockAllPrintersFunctions(lock, adminUser, httpRequest.getRemoteAddr());
+            return ResponseEntity.ok(result);
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of("error", e.getMessage()));
+        }
+    }
     public ResponseEntity<?> getPrinterEwbStatus(@PathVariable("id") Long id, HttpServletRequest httpRequest) {
         if (!isAdmin(httpRequest)) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("error", "Admin privileges required."));
         }
         try {
             EwbConfigResult result = printerService.getPrinterEwbStatus(id);
+            return ResponseEntity.ok(result);
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    @GetMapping("/printers/{id}/diagnose")
+    public ResponseEntity<?> diagnosePrinterSettings(@PathVariable("id") Long id, HttpServletRequest httpRequest) {
+        if (!isAdmin(httpRequest)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("error", "Admin privileges required."));
+        }
+        try {
+            Map<String, String> result = printerService.dumpPrinterSettings(id);
             return ResponseEntity.ok(result);
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));

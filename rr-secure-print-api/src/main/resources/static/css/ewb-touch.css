@@ -10,30 +10,35 @@
   padding: 0;
 }
 
-/* Universal Square / Sharp Reset */
-button, input, select, textarea, table, thead, tbody, th, td,
-.pc-logo-box, .pc-device-ready, .pc-user-info, .pc-btn-logout,
-.pc-auth-table, .pc-pin-box, .pc-quick-chip, .pc-kbtn, .pc-kbtn-clear,
-.pc-kbtn-enter, .pc-tab-bar, .pc-tab-active, .pc-tab-link, .pc-count-tag,
+/* Modern Enterprise Styling Reset */
+.pc-device-ready, .pc-user-info,
+.pc-quick-chip, .pc-tab-bar, .pc-tab-active, .pc-tab-link, .pc-count-tag,
 .pc-btn-print-all, .pc-btn-refresh, .pc-table-wrap, .pc-checkbox-touch,
 .pc-badge-tag, .pc-action-dock, .pc-btn-dock-cancel, .pc-btn-dock-print,
-.pc-alert-strip, #dockDeviceFuncBtn, #deviceFuncBtn {
-  border-radius: 0px !important;
+#dockDeviceFuncBtn, #deviceFuncBtn {
+  border-radius: 4px;
 }
 
-body {
+html, body {
   font-family: -apple-system, BlinkMacSystemFont, Arial, "Helvetica Neue", Helvetica, sans-serif;
   background-color: #F1F5F9;
   color: #0F172A;
-  margin: 0;
-  padding: 0;
+  margin: 0 !important;
+  padding: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  max-height: 100% !important;
   font-size: 13px;
   font-weight: 400;
   line-height: 1.4;
   -webkit-user-select: none;
   user-select: none;
   touch-action: manipulation;
-  min-height: 100vh;
+  overflow: hidden !important;
+  overflow-x: hidden !important;
+  overflow-y: hidden !important;
+  position: fixed !important;
+  top: 0; left: 0; right: 0; bottom: 0;
 }
 
 strong, b {
@@ -45,11 +50,11 @@ strong, b {
    1. TOP HEADER BAR
    ========================================================================== */
 .pc-header {
-  height: 56px;
+  height: 60px;
   background-color: #FFFFFF;
-  border-bottom: 2px solid #F59E0B;
-  padding: 0 24px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  border-bottom: 2px solid #1D4ED8;
+  padding: 0 20px;
+  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.04);
 }
 
 .pc-header-brand {
@@ -59,19 +64,20 @@ strong, b {
 
 .pc-logo-box {
   display: inline-block;
-  width: 36px;
-  height: 36px;
-  line-height: 32px;
+  width: 48px;
+  height: 48px;
+  line-height: 44px;
   background-color: #1D4ED8;
-  border: 2px solid #F59E0B;
+  border: 2px solid #1E40AF;
   color: #FFFFFF;
-  font-weight: 800;
-  font-size: 15px;
+  font-weight: 900;
+  font-size: 22px;
   text-align: center;
-  border-radius: 0px !important;
+  border-radius: 10px !important;
   vertical-align: middle;
-  margin-right: 10px;
+  margin-right: 12px;
   letter-spacing: -0.5px;
+  box-shadow: 0 3px 8px rgba(29, 78, 216, 0.25);
 }
 
 .pc-brand-info {
@@ -82,31 +88,50 @@ strong, b {
 .pc-brand-name {
   display: block;
   color: #0F172A;
-  font-size: 15px;
+  font-size: 20px;
   font-weight: 800;
-  letter-spacing: -0.2px;
+  letter-spacing: -0.3px;
   line-height: 1.2;
 }
 
 .pc-brand-subtitle {
   display: block;
   color: #64748B;
-  font-size: 11px;
-  font-weight: 500;
+  font-size: 12px;
+  font-weight: 600;
 }
 
 /* Device status pill */
 .pc-device-ready {
   display: inline-block;
   background-color: #F0FDF4;
-  border: 1px solid #86EFAC;
-  padding: 5px 12px;
+  border: 1.5px solid #86EFAC;
+  padding: 6px 14px;
   border-radius: 0px !important;
   color: #14532D;
-  font-size: 11px;
-  font-weight: 600;
+  font-size: 12.5px;
+  font-weight: 700;
   vertical-align: middle;
 }
+
+.pc-scale-toggle {
+  display: inline-block;
+  background-color: #F8FAFC;
+  border: 1.5px solid #CBD5E1;
+  color: #1E3A8A;
+  padding: 6px 14px;
+  border-radius: 0px !important;
+  font-size: 12px;
+  font-weight: 700;
+  vertical-align: middle;
+  cursor: pointer;
+  margin-left: 8px;
+  letter-spacing: 0.3px;
+  transition: all 0.15s ease;
+  text-transform: uppercase;
+}
+.pc-scale-toggle:hover { background-color: #EFF6FF; border-color: #1D4ED8; color: #1D4ED8; }
+.pc-scale-toggle:active { background-color: #DBEAFE; }
 
 .pc-status-dot {
   display: inline-block;
@@ -167,6 +192,11 @@ strong, b {
    ========================================================================== */
 .pc-screen {
   display: none;
+  width: 100%;
+  height: calc(100% - 52px);
+  max-height: calc(100% - 52px);
+  overflow: hidden;
+  box-sizing: border-box;
 }
 
 .pc-screen.pc-active {
@@ -174,102 +204,775 @@ strong, b {
 }
 
 /* ==========================================================================
-   3. SCREEN 1: AUTHENTICATION (Ultra-Compact for 100% Zero-Scroll on Toshiba Panels)
+   2B. SCREEN 2: MAIN MENU / ACTION LAUNCHER (PaperCut MF 3-Action Tiles)
+   ========================================================================== */
+.pc-menu-screen {
+  padding: 0;
+  animation: fadeInMenu 0.18s ease-out;
+}
+
+@keyframes fadeInMenu {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.pc-menu-wrapper {
+  max-width: 100%;
+  margin: 0;
+}
+
+.pc-menu-title-bar {
+  margin-bottom: 10px;
+  text-align: center;
+}
+
+.pc-menu-title-bar h2 {
+  font-size: 18px;
+  font-weight: 800;
+  color: #0F172A;
+  margin-bottom: 2px;
+  letter-spacing: -0.3px;
+}
+
+.pc-menu-title-bar p {
+  font-size: 12px;
+  color: #64748B;
+  font-weight: 500;
+}
+
+/* Strictly Horizontal Row for 3 Primary Application Cards */
+.pc-menu-table {
+  width: 100% !important;
+  border-collapse: separate !important;
+  border-spacing: 14px 0 !important;
+  table-layout: fixed !important;
+  margin-top: 6px !important;
+}
+
+.pc-menu-table td {
+  width: 33.333% !important;
+  vertical-align: top !important;
+  padding: 0 !important;
+}
+
+.pc-menu-grid {
+  display: flex !important;
+  flex-direction: row !important;
+  justify-content: stretch !important;
+  align-items: stretch !important;
+  gap: 14px !important;
+  width: 100% !important;
+  box-sizing: border-box !important;
+}
+
+.pc-menu-card {
+  flex: 1 1 0 !important;
+  min-width: 0 !important;
+  position: relative;
+  background: #FFFFFF;
+  border: 1.5px solid #CBD5E1 !important;
+  border-radius: 12px !important;
+  padding: 22px 14px 20px !important;
+  text-align: center;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.05);
+  transition: all 0.16s cubic-bezier(0.16, 1, 0.3, 1);
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: center !important;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+  box-sizing: border-box !important;
+}
+
+.pc-menu-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 10px 24px rgba(29, 78, 216, 0.14);
+  border-color: #1D4ED8 !important;
+}
+
+.pc-menu-card:active {
+  transform: translateY(1px);
+  background: #F8FAFC;
+  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.08);
+}
+
+.pc-menu-card-title {
+  font-size: 22px !important;
+  font-weight: 800 !important;
+  color: #0F172A;
+  margin-top: 10px;
+  margin-bottom: 0px;
+  letter-spacing: -0.3px;
+}
+
+/* Minimalist Clean Bottom Home Button */
+.pc-menu-home-dock {
+  margin-top: 20px;
+  text-align: center;
+}
+
+.pc-btn-access-home {
+  display: inline-block;
+  padding: 10px 28px;
+  background: #EFF6FF;
+  border: 1.5px solid #BFDBFE;
+  color: #1D4ED8 !important;
+  border-radius: 6px !important;
+  font-size: 13.5px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  line-height: 22px;
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(29, 78, 216, 0.08);
+  transition: all 0.15s ease;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.pc-btn-access-home:hover {
+  background: #1D4ED8;
+  border-color: #1D4ED8;
+  color: #FFFFFF !important;
+  box-shadow: 0 4px 12px rgba(29, 78, 216, 0.25);
+  transform: translateY(-1px);
+}
+
+.pc-btn-access-home:active {
+  background: #1E40AF;
+  color: #FFFFFF !important;
+  transform: translateY(1px);
+}
+
+
+
+.pc-btn-header-home {
+  display: inline-block;
+  background-color: #1D4ED8 !important;
+  border: 1px solid #1E40AF !important;
+  color: #FFFFFF !important;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 6px 12px;
+  cursor: pointer;
+  vertical-align: middle;
+  text-transform: uppercase;
+  margin-right: 6px;
+  letter-spacing: 0.3px;
+  border-radius: 4px !important;
+}
+
+.pc-btn-header-home:hover {
+  background-color: #1E40AF !important;
+}
+
+.pc-menu-card-badge,
+.pc-badge-ready {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  background: #EFF6FF !important;
+  color: #1D4ED8 !important;
+  border: 1px solid #BFDBFE !important;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 3px !important;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.pc-menu-icon-wrap {
+  width: 100%;
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 8px;
+  margin-bottom: 12px;
+  min-height: 145px;
+}
+
+.pc-menu-icon {
+  width: 100%;
+  max-width: 165px !important;
+  height: auto;
+  max-height: 165px !important;
+  object-fit: contain;
+  transition: transform 0.15s ease;
+  border-radius: 6px;
+}
+
+.pc-menu-card:hover .pc-menu-icon {
+  transform: scale(1.06);
+}
+
+.pc-menu-svg-fallback {
+  width: 130px;
+  height: 130px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.pc-menu-card-title {
+  font-size: 20px !important;
+  font-weight: 800 !important;
+  color: #0F172A;
+  margin-bottom: 6px;
+  letter-spacing: -0.3px;
+}
+
+/* Access Home Button - Pure nexPrint Corporate Blue Theme */
+.pc-btn-access-home {
+  display: inline-block;
+  padding: 11px 32px;
+  background: #1D4ED8;
+  color: #FFFFFF !important;
+  border: 1.5px solid #1E40AF;
+  border-radius: 4px;
+  font-size: 13.5px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  line-height: 22px;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(29, 78, 216, 0.25);
+  transition: all 0.15s ease;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+}
+
+.pc-btn-access-home:hover {
+  background: #1E40AF;
+  border-color: #172554;
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(29, 78, 216, 0.35);
+}
+
+.pc-btn-access-home:active {
+  background: #172554;
+  transform: translateY(1px);
+}
+
+.pc-menu-card-subtitle {
+  font-size: 10.5px;
+  font-weight: 700;
+  color: #64748B;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 5px;
+}
+
+.pc-menu-card-desc {
+  font-size: 11px;
+  color: #64748B;
+  line-height: 1.35;
+  margin-bottom: 10px;
+}
+
+.pc-menu-card-action {
+  width: 100%;
+  padding: 7px 10px;
+  background: #F8FAFC;
+  border: 1px solid #E2E8F0;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: #1D4ED8;
+  border-radius: 0px !important;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  transition: all 0.15s ease;
+  box-sizing: border-box !important;
+}
+
+.pc-menu-card:hover .pc-menu-card-action,
+.pc-menu-card-copy:hover .pc-menu-card-action,
+.pc-menu-card-scan:hover .pc-menu-card-action,
+.pc-menu-card-home:hover .pc-menu-card-action {
+  background: #1D4ED8;
+  color: #FFFFFF;
+  border-color: #1D4ED8;
+}
+
+/* ==========================================================================
+   2C. PHOTOCOPY & SCAN CONSOLE STYLES (Full Walk-Up Control Windows)
+   ========================================================================== */
+.pc-copy-screen,
+.pc-scan-screen {
+  padding: 10px 16px 20px;
+  animation: fadeInMenu 0.18s ease-out;
+}
+
+.pc-copy-wrapper,
+.pc-scan-wrapper {
+  max-width: 1040px;
+  margin: 0 auto;
+}
+
+.pc-copy-dev-badge {
+  display: inline-block;
+  vertical-align: middle;
+  font-size: 11px;
+  font-weight: 600;
+  color: #475569;
+  background: #F1F5F9;
+  border: 1px solid #CBD5E1;
+  padding: 2px 8px;
+  margin-left: 8px;
+  border-radius: 0px !important;
+}
+
+.pc-copy-body {
+  display: flex;
+  gap: 16px;
+  background: #FFFFFF;
+  border: 1.5px solid #CBD5E1;
+  border-top: 3px solid #1D4ED8;
+  padding: 18px 20px;
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.05);
+  box-sizing: border-box;
+}
+
+.pc-scan-screen .pc-copy-body {
+  border-top-color: #1D4ED8;
+}
+
+.pc-copy-col-options {
+  flex: 3;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.pc-copy-col-action {
+  flex: 2;
+  min-width: 240px;
+  max-width: 310px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 14px;
+  border-left: 1px solid #E2E8F0;
+  padding-left: 18px;
+}
+
+.pc-copy-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.pc-copy-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: #475569;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.pc-copy-btn-group {
+  display: flex;
+  gap: 8px;
+  width: 100%;
+}
+
+.pc-copy-opt-btn {
+  flex: 1;
+  background: #F8FAFC;
+  border: 1px solid #CBD5E1;
+  color: #334155;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 9px 8px;
+  text-align: center;
+  cursor: pointer;
+  border-radius: 0px !important;
+  transition: all 0.12s ease;
+  user-select: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.pc-copy-opt-btn:hover {
+  background: #EFF6FF;
+  border-color: #93C5FD;
+}
+
+.pc-copy-opt-btn.active {
+  background: #1E3A8A !important;
+  border-color: #1D4ED8 !important;
+  color: #FFFFFF !important;
+  font-weight: 700 !important;
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+.pc-copy-grid-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+
+.pc-copy-hw-status {
+  margin-top: auto;
+  padding: 8px 12px;
+  background: #F8FAFC;
+  border: 1px solid #E2E8F0;
+  font-size: 11px;
+  color: #475569;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-radius: 0px !important;
+}
+
+.pc-hw-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50% !important;
+  background: #10B981;
+  box-shadow: 0 0 6px rgba(16, 185, 129, 0.6);
+  flex-shrink: 0;
+}
+
+/* Copies Stepper & Chips */
+.pc-copies-stepper-box {
+  background: #F8FAFC;
+  border: 1px solid #E2E8F0;
+  padding: 12px 14px;
+  border-radius: 0px !important;
+}
+
+.pc-stepper-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin: 8px 0;
+}
+
+.pc-stepper-btn {
+  width: 44px;
+  height: 44px;
+  background: #FFFFFF;
+  border: 1px solid #CBD5E1;
+  font-size: 22px;
+  font-weight: 700;
+  color: #0F172A;
+  cursor: pointer;
+  border-radius: 0px !important;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.pc-stepper-btn:hover {
+  background: #F1F5F9;
+  border-color: #94A3B8;
+}
+
+.pc-stepper-btn:active {
+  background: #E2E8F0;
+}
+
+.pc-stepper-display {
+  width: 68px;
+  height: 44px;
+  background: #FFFFFF;
+  border: 2px solid #1D4ED8;
+  font-size: 24px;
+  font-weight: 800;
+  color: #1D4ED8;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0px !important;
+}
+
+.pc-chips-row {
+  display: flex;
+  gap: 6px;
+  justify-content: center;
+  margin-top: 6px;
+}
+
+.pc-chip-btn {
+  background: #FFFFFF;
+  border: 1px solid #CBD5E1;
+  color: #334155;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 4px 8px;
+  cursor: pointer;
+  border-radius: 0px !important;
+  flex: 1;
+  text-align: center;
+}
+
+.pc-chip-btn:hover {
+  background: #EFF6FF;
+  border-color: #1D4ED8;
+  color: #1D4ED8;
+}
+
+/* Big Tactile START COPY Button */
+.pc-btn-start-copy {
+  width: 100%;
+  background: linear-gradient(180deg, #16A34A 0%, #15803D 100%);
+  border: 2px solid #14532D;
+  color: #FFFFFF;
+  padding: 16px 12px;
+  text-align: center;
+  cursor: pointer;
+  border-radius: 0px !important;
+  box-shadow: 0 4px 12px rgba(22, 163, 74, 0.35);
+  transition: all 0.12s ease;
+  user-select: none;
+}
+
+.pc-btn-start-copy:hover {
+  background: linear-gradient(180deg, #15803D 0%, #166534 100%);
+  box-shadow: 0 6px 16px rgba(22, 163, 74, 0.45);
+}
+
+.pc-btn-start-copy:active {
+  transform: translateY(2px);
+  box-shadow: 0 1px 4px rgba(22, 163, 74, 0.2);
+}
+
+.pc-btn-start-scan {
+  background: linear-gradient(180deg, #2563EB 0%, #1D4ED8 100%) !important;
+  border-color: #1E3A8A !important;
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.35) !important;
+}
+
+.pc-btn-start-scan:hover {
+  background: linear-gradient(180deg, #1D4ED8 0%, #1E40AF 100%) !important;
+  box-shadow: 0 6px 16px rgba(37, 99, 235, 0.45) !important;
+}
+
+.pc-start-copy-icon {
+  font-size: 26px;
+  line-height: 1;
+  margin-bottom: 4px;
+}
+
+.pc-start-copy-label {
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+}
+
+.pc-start-copy-sub {
+  font-size: 11px;
+  opacity: 0.9;
+  margin-top: 3px;
+  font-weight: 600;
+}
+
+/* Progress Spinner */
+.pc-copy-progress {
+  padding: 10px;
+  background: #F8FAFC;
+  border: 1px solid #E2E8F0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border-radius: 0px !important;
+}
+
+.pc-spinner-copy {
+  width: 20px;
+  height: 20px;
+  border: 3px solid #CBD5E1;
+  border-top-color: #16A34A;
+  border-radius: 50% !important;
+  animation: spinCopy 0.8s linear infinite;
+  flex-shrink: 0;
+}
+
+@keyframes spinCopy {
+  to { transform: rotate(360deg); }
+}
+
+.pc-copy-progress-text {
+  font-size: 12px;
+  font-weight: 600;
+  color: #1E293B;
+}
+
+.pc-btn-menu-back {
+  background: #0F172A !important;
+  color: #FFFFFF !important;
+  border: 1px solid #0F172A !important;
+  font-weight: 700 !important;
+  font-size: 11px !important;
+  padding: 3px 10px !important;
+  margin-right: 6px !important;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  vertical-align: middle;
+}
+
+.pc-btn-menu-back:hover {
+  background: #1E293B !important;
+}
+
+/* ==========================================================================
+   3. SCREEN 1: AUTHENTICATION (PaperCut MF Modern Minimalist Touchscreen)
    ========================================================================== */
 .pc-auth-screen {
-  padding: 8px 12px 14px 12px;
+  padding: 10px 14px 16px 14px;
 }
 
 .pc-auth-wrapper {
-  max-width: 780px;
+  max-width: 820px;
   margin: 0 auto;
+}
+
+/* Modern Segmented Capsule Dock */
+.pc-auth-nav-dock {
+  display: flex !important;
+  justify-content: center !important;
+  gap: 10px !important;
+  margin-bottom: 12px !important;
+}
+
+.pc-auth-pill {
+  background: #EFF6FF !important;
+  border: 1.5px solid #BFDBFE !important;
+  border-radius: 24px !important;
+  padding: 8px 26px !important;
+  font-size: 13px !important;
+  font-weight: 800 !important;
+  color: #1D4ED8 !important;
+  cursor: pointer;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+  transition: all 0.15s ease;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.pc-auth-pill.active {
+  background: #1D4ED8 !important;
+  border-color: #1D4ED8 !important;
+  color: #FFFFFF !important;
+  box-shadow: 0 4px 12px rgba(29, 78, 216, 0.3) !important;
+}
+
+.pc-auth-pill-icon {
+  width: 18px !important;
+  height: 18px !important;
+  border-radius: 4px;
+  vertical-align: middle;
 }
 
 .pc-auth-table {
   width: 100%;
   background-color: #FFFFFF;
-  border: 1px solid #CBD5E1;
-  border-top: 3px solid #1D4ED8;
-  border-radius: 0px !important;
-  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.05);
-  border-collapse: separate;
+  border: 1.5px solid #CBD5E1 !important;
+  border-radius: 14px !important;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.06);
+  border-collapse: separate !important;
   overflow: hidden;
 }
 
 .pc-col-left {
-  width: 50%;
-  padding: 16px 20px;
+  width: 48%;
+  background: linear-gradient(180deg, #F8FAFC 0%, #EFF6FF 100%);
+  border-right: 1.5px solid #E2E8F0;
+  padding: 18px 20px;
+  text-align: center;
+  vertical-align: top;
 }
 
-.pc-col-left h2 {
-  font-size: 16px;
-  font-weight: 700;
-  color: #0F172A;
-  letter-spacing: -0.3px;
-  margin-bottom: 4px;
+.pc-rfid-hero-img {
+  width: 135px !important;
+  height: 135px !important;
+  object-fit: contain;
+  border-radius: 12px !important;
+  display: block;
+  margin: 0 auto 8px auto;
+  box-shadow: 0 4px 14px rgba(29, 78, 216, 0.14);
 }
 
-.pc-col-left p {
-  color: #64748B;
-  font-size: 11.5px;
-  line-height: 1.35;
-  margin-bottom: 12px;
+.pc-rfid-title {
+  font-size: 19px !important;
+  font-weight: 900 !important;
+  color: #1D4ED8;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  margin-bottom: 2px;
 }
 
-.pc-pin-label {
-  font-size: 10px;
-  font-weight: 700;
+.pc-rfid-sub {
+  font-size: 11px !important;
+  font-weight: 700 !important;
   color: #64748B;
   text-transform: uppercase;
   letter-spacing: 0.5px;
+  margin-bottom: 10px;
+}
+
+.pc-pin-label {
+  font-size: 11px !important;
+  font-weight: 800 !important;
+  color: #475569;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
   margin-bottom: 4px;
+  text-align: left;
 }
 
 .pc-pin-box {
   width: 100%;
-  height: 40px;
-  line-height: 38px;
-  background-color: #F8FAFC;
-  border: 1.5px solid #CBD5E1;
-  border-radius: 0px !important;
+  height: 46px;
+  line-height: 44px;
+  background-color: #FFFFFF !important;
+  border: 2px solid #1D4ED8 !important;
+  border-radius: 8px !important;
   text-align: center;
-  margin-bottom: 12px;
+  margin-bottom: 6px;
+  box-shadow: 0 2px 6px rgba(29, 78, 216, 0.08);
 }
 
 .pc-pin-placeholder {
   color: #94A3B8;
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 2px;
+  font-size: 13.5px;
+  font-weight: 800;
+  letter-spacing: 3px;
 }
 
 .pc-pin-dot {
   display: inline-block;
-  width: 10px;
-  height: 10px;
-  background-color: #0F172A;
+  width: 13px;
+  height: 13px;
+  background-color: #1D4ED8 !important;
   border-radius: 50% !important;
   margin: 0 4px;
   vertical-align: middle;
 }
 
-.pc-auth-foot {
-  font-size: 10px;
-  color: #94A3B8;
-  font-weight: 500;
-}
-
 /* Right Column: 3x4 Touch Numeric Keypad */
 .pc-col-right {
-  width: 50%;
-  background-color: #F8FAFC;
-  border-left: 1px solid #E2E8F0;
-  padding: 14px 18px;
+  width: 52%;
+  background-color: #FFFFFF;
+  padding: 16px 20px;
+  vertical-align: middle;
 }
 
 .pc-keypad-title {
-  font-size: 10px;
-  font-weight: 700;
+  font-size: 11.5px !important;
+  font-weight: 800 !important;
   color: #64748B;
   text-transform: uppercase;
   letter-spacing: 0.5px;
@@ -288,44 +991,87 @@ strong, b {
   padding: 0;
 }
 
-/* Numeric Keypad Buttons - STRICT SQUARE */
+/* Modern Rounded Tactile Keypad Buttons */
 .pc-kbtn {
   width: 100%;
-  height: 38px;
-  line-height: 36px;
-  background-color: #FFFFFF;
-  border: 1px solid #CBD5E1;
-  border-radius: 0px !important;
-  color: #0F172A;
-  font-size: 18px;
-  font-weight: 600;
+  height: 48px;
+  line-height: 46px;
+  background-color: #F8FAFC !important;
+  border: 1.5px solid #CBD5E1 !important;
+  border-radius: 8px !important;
+  color: #0F172A !important;
+  font-size: 22px !important;
+  font-weight: 800 !important;
   text-align: center;
   cursor: pointer;
   display: block;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.03);
   transition: all 0.1s ease;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
 }
 .pc-kbtn:hover {
-  background-color: #EFF6FF;
-  border-color: #1D4ED8;
-  color: #1D4ED8;
+  background-color: #EFF6FF !important;
+  border-color: #1D4ED8 !important;
+  color: #1D4ED8 !important;
 }
 .pc-kbtn:active {
-  background-color: #1D4ED8;
-  border-color: #1E40AF;
-  color: #FFFFFF;
+  background-color: #1D4ED8 !important;
+  border-color: #1E40AF !important;
+  color: #FFFFFF !important;
+  transform: translateY(1px);
 }
 
 .pc-kbtn-clear {
-  background-color: #F8FAFC;
-  border: 1px solid #CBD5E1;
-  color: #475569;
-  font-size: 11px;
-  font-weight: 700;
-  border-radius: 0px !important;
+  background-color: #F1F5F9 !important;
+  border: 1.5px solid #CBD5E1 !important;
+  color: #475569 !important;
+  font-size: 12.5px !important;
+  font-weight: 800 !important;
+  border-radius: 8px !important;
 }
 .pc-kbtn-clear:hover {
-  background-color: #FEE2E2;
+  background-color: #FEE2E2 !important;
+  border-color: #F87171 !important;
+  color: #DC2626 !important;
+}
+
+.pc-kbtn-enter {
+  background-color: #1D4ED8 !important;
+  border: 1.5px solid #1E40AF !important;
+  color: #FFFFFF !important;
+  font-size: 13.5px !important;
+  font-weight: 800 !important;
+  border-radius: 8px !important;
+  box-shadow: 0 4px 12px rgba(29, 78, 216, 0.28) !important;
+}
+.pc-kbtn-enter:hover {
+  background-color: #1E40AF !important;
+}
+.pc-kbtn-enter:active {
+  background-color: #172554 !important;
+  transform: translateY(1px);
+}
+
+.pc-input-touch {
+  width: 100%;
+  height: 44px;
+  line-height: 42px;
+  background: #FFFFFF;
+  border: 1.5px solid #CBD5E1 !important;
+  border-radius: 8px !important;
+  font-size: 14px;
+  font-weight: 600;
+  color: #0F172A;
+  padding: 0 12px;
+  margin-bottom: 10px;
+  box-sizing: border-box;
+}
+.pc-input-touch:focus {
+  border-color: #1D4ED8 !important;
+  outline: none;
+  background: #EFF6FF;
+}
   border-color: #F87171;
   color: #991B1B;
 }
@@ -333,10 +1079,10 @@ strong, b {
 /* LOG IN / ENTER - Enterprise Tech Gold / Yellow */
 .pc-kbtn-enter {
   background-color: #F59E0B !important;
-  border: 1px solid #D97706 !important;
+  border: 1.5px solid #D97706 !important;
   color: #0F172A !important;
-  font-size: 11.5px;
-  font-weight: 800;
+  font-size: 14px;
+  font-weight: 900;
   border-radius: 0px !important;
   letter-spacing: 0.5px;
 }
@@ -661,60 +1407,173 @@ table.pc-job-table tbody tr.pc-row-selected {
   pointer-events: none !important;
 }
 
-/* Responsive Adaptation for Toshiba e-STUDIO Panels (4508A / 3508A / 800x480 / 1024x600) */
+/* ==========================================================================
+   DYNAMIC MFP SCALING PRESETS (Managed via JavaScript & Screen Adaptation)
+   ========================================================================== */
+
+/* PRESET 1: Large (Default on Toshiba MFP 10.1" Displays) */
+.mfp-scale-large .pc-header { height: 64px !important; }
+.mfp-scale-large .pc-logo-box {
+  width: 50px !important;
+  height: 50px !important;
+  line-height: 46px !important;
+  font-size: 22px !important;
+  margin-right: 14px !important;
+}
+.mfp-scale-large #ewbLogoImg {
+  max-height: 52px !important;
+  max-width: 260px !important;
+}
+.mfp-scale-large .pc-brand-name { font-size: 21px !important; }
+.mfp-scale-large .pc-brand-subtitle { font-size: 13px !important; }
+.mfp-scale-large .pc-device-ready { font-size: 13.5px !important; padding: 7px 16px !important; }
+.mfp-scale-large .pc-user-info { font-size: 13.5px !important; padding: 7px 16px !important; }
+.mfp-scale-large .pc-scale-toggle { font-size: 13px !important; padding: 7px 16px !important; }
+.mfp-scale-large .pc-btn-logout,
+.mfp-scale-large #deviceFuncBtn { font-size: 13.5px !important; padding: 8px 18px !important; }
+
+.mfp-scale-large .pc-auth-wrapper { max-width: 980px !important; }
+.mfp-scale-large .pc-auth-tab { height: 50px !important; line-height: 50px !important; font-size: 15px !important; }
+.mfp-scale-large .pc-col-left { padding: 22px 26px !important; }
+.mfp-scale-large .pc-col-left h2 { font-size: 24px !important; }
+.mfp-scale-large .pc-col-left p { font-size: 14px !important; line-height: 1.45 !important; }
+.mfp-scale-large .pc-pin-label { font-size: 13px !important; margin-bottom: 7px !important; }
+.mfp-scale-large .pc-pin-box { height: 56px !important; line-height: 54px !important; font-size: 24px !important; }
+.mfp-scale-large .pc-pin-dot { width: 16px !important; height: 16px !important; margin: 0 6px !important; }
+.mfp-scale-large .pc-pin-placeholder { font-size: 16px !important; letter-spacing: 3px !important; }
+.mfp-scale-large .pc-keypad-title { font-size: 12.5px !important; margin-bottom: 10px !important; }
+.mfp-scale-large .pc-kbtn { height: 58px !important; line-height: 56px !important; font-size: 28px !important; }
+.mfp-scale-large .pc-kbtn-clear { font-size: 14.5px !important; }
+.mfp-scale-large .pc-kbtn-enter { font-size: 15.5px !important; }
+.mfp-scale-large .pc-input-touch { height: 50px !important; line-height: 48px !important; font-size: 16px !important; }
+
+.mfp-scale-large .pc-queue-screen { padding-bottom: 76px !important; max-width: 1240px !important; }
+.mfp-scale-large .pc-tab-bar { padding: 8px 14px !important; }
+.mfp-scale-large .pc-tab-active { font-size: 15px !important; }
+.mfp-scale-large .pc-btn-print-all { height: 48px !important; line-height: 46px !important; font-size: 14.5px !important; padding: 0 22px !important; }
+.mfp-scale-large .pc-btn-refresh { height: 44px !important; line-height: 42px !important; font-size: 13.5px !important; padding: 0 16px !important; }
+.mfp-scale-large .pc-table-wrap { max-height: calc(100vh - 190px) !important; }
+.mfp-scale-large table.pc-job-table th { font-size: 12.5px !important; padding: 12px 12px !important; }
+.mfp-scale-large table.pc-job-table td { font-size: 14.5px !important; padding: 14px 12px !important; }
+.mfp-scale-large .pc-doc-title { font-size: 16px !important; }
+.mfp-scale-large .pc-checkbox-touch { width: 24px !important; height: 24px !important; }
+.mfp-scale-large .pc-action-dock { height: 66px !important; padding: 8px 20px !important; }
+.mfp-scale-large .pc-selection-summary { font-size: 15.5px !important; }
+.mfp-scale-large .pc-target-printer-badge { font-size: 13px !important; }
+.mfp-scale-large .pc-btn-dock-cancel,
+.mfp-scale-large #dockDeviceFuncBtn { height: 48px !important; line-height: 46px !important; font-size: 14px !important; padding: 0 18px !important; }
+.mfp-scale-large .pc-btn-dock-print { height: 48px !important; line-height: 46px !important; font-size: 15px !important; padding: 0 26px !important; }
+
+/* PRESET 2: Extra-Large (XL for 1280x800 or High-Res Panels) */
+.mfp-scale-xl .pc-header { height: 72px !important; }
+.mfp-scale-xl .pc-logo-box {
+  width: 56px !important;
+  height: 56px !important;
+  line-height: 52px !important;
+  font-size: 25px !important;
+  margin-right: 16px !important;
+}
+.mfp-scale-xl #ewbLogoImg {
+  max-height: 60px !important;
+  max-width: 300px !important;
+}
+.mfp-scale-xl .pc-brand-name { font-size: 24px !important; }
+.mfp-scale-xl .pc-brand-subtitle { font-size: 14px !important; }
+.mfp-scale-xl .pc-device-ready { font-size: 14.5px !important; padding: 8px 18px !important; }
+.mfp-scale-xl .pc-user-info { font-size: 14.5px !important; padding: 8px 18px !important; }
+.mfp-scale-xl .pc-scale-toggle { font-size: 14px !important; padding: 8px 18px !important; }
+.mfp-scale-xl .pc-btn-logout,
+.mfp-scale-xl #deviceFuncBtn { font-size: 14.5px !important; padding: 9px 20px !important; }
+
+.mfp-scale-xl .pc-auth-wrapper { max-width: 1040px !important; }
+.mfp-scale-xl .pc-auth-tab { height: 56px !important; line-height: 56px !important; font-size: 16.5px !important; }
+.mfp-scale-xl .pc-col-left { padding: 24px 30px !important; }
+.mfp-scale-xl .pc-col-left h2 { font-size: 26px !important; }
+.mfp-scale-xl .pc-col-left p { font-size: 15.5px !important; line-height: 1.5 !important; }
+.mfp-scale-xl .pc-pin-label { font-size: 14px !important; margin-bottom: 8px !important; }
+.mfp-scale-xl .pc-pin-box { height: 62px !important; line-height: 60px !important; font-size: 26px !important; }
+.mfp-scale-xl .pc-pin-dot { width: 18px !important; height: 18px !important; margin: 0 7px !important; }
+.mfp-scale-xl .pc-pin-placeholder { font-size: 18px !important; letter-spacing: 4px !important; }
+.mfp-scale-xl .pc-keypad-title { font-size: 13.5px !important; margin-bottom: 12px !important; }
+.mfp-scale-xl .pc-kbtn { height: 66px !important; line-height: 64px !important; font-size: 32px !important; }
+.mfp-scale-xl .pc-kbtn-clear { font-size: 16px !important; }
+.mfp-scale-xl .pc-kbtn-enter { font-size: 17px !important; }
+.mfp-scale-xl .pc-input-touch { height: 54px !important; line-height: 52px !important; font-size: 17px !important; }
+
+.mfp-scale-xl .pc-queue-screen { padding-bottom: 84px !important; max-width: 1320px !important; }
+.mfp-scale-xl .pc-tab-bar { padding: 10px 16px !important; }
+.mfp-scale-xl .pc-tab-active { font-size: 16.5px !important; }
+.mfp-scale-xl .pc-btn-print-all { height: 52px !important; line-height: 50px !important; font-size: 16px !important; padding: 0 26px !important; }
+.mfp-scale-xl .pc-btn-refresh { height: 48px !important; line-height: 46px !important; font-size: 14.5px !important; padding: 0 18px !important; }
+.mfp-scale-xl .pc-table-wrap { max-height: calc(100vh - 210px) !important; }
+.mfp-scale-xl table.pc-job-table th { font-size: 13.5px !important; padding: 14px 14px !important; }
+.mfp-scale-xl table.pc-job-table td { font-size: 15.5px !important; padding: 16px 14px !important; }
+.mfp-scale-xl .pc-doc-title { font-size: 17.5px !important; }
+.mfp-scale-xl .pc-checkbox-touch { width: 28px !important; height: 28px !important; }
+.mfp-scale-xl .pc-action-dock { height: 74px !important; padding: 10px 24px !important; }
+.mfp-scale-xl .pc-selection-summary { font-size: 17px !important; }
+.mfp-scale-xl .pc-target-printer-badge { font-size: 14px !important; }
+.mfp-scale-xl .pc-btn-dock-cancel,
+.mfp-scale-xl #dockDeviceFuncBtn { height: 52px !important; line-height: 50px !important; font-size: 15px !important; padding: 0 20px !important; }
+.mfp-scale-xl .pc-btn-dock-print { height: 52px !important; line-height: 50px !important; font-size: 16px !important; padding: 0 30px !important; }
+
+/* Responsive Adaptation for Toshiba e-STUDIO Panels */
 @media (max-width: 860px) {
   .pc-col-hide-sm { display: none !important; }
   .pc-doc-title { max-width: 220px; }
   .pc-target-printer-badge { display: none !important; }
-  .pc-btn-dock-print { padding: 6px 12px; }
-  .pc-btn-dock-cancel { padding: 6px 8px; }
+  .pc-btn-dock-print { padding: 6px 14px; }
+  .pc-btn-dock-cancel { padding: 6px 10px; }
 }
 
-@media (max-height: 580px) {
-  .pc-header { height: 40px; padding: 0 10px; }
-  .pc-logo-box { width: 26px; height: 26px; line-height: 22px; font-size: 11px; margin-right: 6px; }
-  .pc-brand-name { font-size: 13px; }
+@media (max-height: 480px) {
+  .pc-header { height: 48px; padding: 0 20px; }
+  .pc-logo-box { width: 34px; height: 34px; line-height: 30px; font-size: 14px; margin-right: 8px; }
+  .pc-brand-name { font-size: 14px; }
   .pc-brand-subtitle { display: none; }
-  .pc-user-info { padding: 3px 6px; font-size: 10.5px; }
-  .pc-btn-logout { padding: 3px 8px; font-size: 10.5px; }
-  .pc-auth-screen { padding: 8px 8px 16px 8px; }
-  .pc-col-left { padding: 14px 16px; }
-  .pc-col-left h2 { font-size: 16px; margin-bottom: 4px; }
-  .pc-col-left p { font-size: 11.5px; margin-bottom: 12px; }
-  .pc-pin-box { height: 38px; line-height: 36px; margin-bottom: 10px; }
-  .pc-kbtn { height: 38px; line-height: 36px; font-size: 17px; }
+  .pc-user-info { padding: 4px 8px; font-size: 11px; }
+  .pc-btn-logout { padding: 4px 10px; font-size: 11px; }
+  .pc-auth-screen { padding: 6px 8px 12px 8px; }
+  .pc-col-left { padding: 12px 14px; }
+  .pc-col-left h2 { font-size: 17px; margin-bottom: 3px; }
+  .pc-col-left p { font-size: 11.5px; margin-bottom: 8px; }
+  .pc-pin-box { height: 42px; line-height: 40px; margin-bottom: 8px; }
+  .pc-kbtn { height: 44px; line-height: 42px; font-size: 20px; }
   .pc-queue-screen { padding: 4px 8px 52px 8px; }
-  .pc-tab-bar { padding: 3px 8px; }
-  .pc-tab-active { padding: 4px 8px; font-size: 11px; }
-  .pc-table-wrap { max-height: calc(100vh - 140px); }
-  .pc-action-dock { height: 44px; padding: 4px 10px; }
+  .pc-tab-bar { padding: 4px 8px; }
+  .pc-tab-active { padding: 4px 8px; font-size: 11.5px; }
+  .pc-table-wrap { max-height: calc(100vh - 145px); }
+  .pc-action-dock { height: 48px; padding: 4px 12px; }
 }
 
 /* ==========================================================================
-   6. ALERTS
+   6. ALERTS — Fixed overlay (does NOT push layout down)
    ========================================================================== */
 .pc-alert-strip {
   display: none;
-  max-width: 820px;
-  margin: 12px auto 0 auto;
-  padding: 8px 16px;
-  font-size: 12px;
-  font-weight: 600;
+  position: fixed !important;
+  top: 58px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 90%;
+  max-width: 860px;
+  padding: 10px 18px;
+  font-size: 13.5px;
+  font-weight: 800;
   text-align: center;
-  border-radius: 0px !important;
-  border: 1px solid transparent;
+  letter-spacing: 0.4px;
+  border-radius: 4px !important;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+  border: 1.5px solid transparent;
+  z-index: 999;
 }
-.pc-alert-strip.pc-alert-info {
-  display: block;
-  background-color: #EFF6FF;
-  border-color: #BFDBFE;
-  color: #1E40AF;
-}
+.pc-alert-strip.pc-alert-info,
+.pc-alert-strip.pc-alert-success,
 .pc-alert-strip.pc-alert-error {
-  display: block;
-  background-color: #FEF2F2;
-  border-color: #FCA5A5;
-  color: #991B1B;
+  display: block !important;
+  background-color: #EFF6FF !important;
+  border-color: #2563EB !important;
+  color: #1E40AF !important;
 }
 
 /* ==========================================================================

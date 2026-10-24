@@ -14,6 +14,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -413,6 +414,18 @@ public class PrinterService {
             if (result.printerModel() != null && !result.printerModel().isBlank()) {
                 printer.setModel(result.printerModel());
             }
+
+            // Lock Toshiba HOME screen functions (Photocopy restriction) if requested or by default
+            if (request.lockHomeFunctions() == null || Boolean.TRUE.equals(request.lockHomeFunctions())) {
+                try {
+                    boolean locked = toshibaEwbService.setCopyRestriction(printer.getIpAddress(), user, pass, true);
+                    printer.setFunctionsLocked(locked);
+                    log.info("Auto-locked Toshiba HOME screen functions for {}: {}", printer.getPrinterCode(), locked);
+                } catch (Exception ex) {
+                    log.warn("Could not auto-lock HOME functions during EWB push for {}: {}", printer.getPrinterCode(), ex.getMessage());
+                }
+            }
+
             printerRepository.save(printer);
         }
 
@@ -422,10 +435,76 @@ public class PrinterService {
         return result;
     }
 
+    @Transactional
+    public boolean lockPrinterFunctions(Long id, boolean lock, String adminActor, String clientIp) {
+        PrinterEntity printer = printerRepository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("Printer id " + id + " not found."));
+
+        if ("TOSHIBA_OLD".equalsIgnoreCase(printer.getDeviceGeneration())) {
+            log.info("Lock functions called on legacy device {}. Not applicable.", printer.getName());
+            return true;
+        }
+
+        String user = printer.getAdminUsername() != null && !printer.getAdminUsername().isBlank()
+                ? printer.getAdminUsername() : "admin";
+        String pass = printer.getAdminPassword() != null && !printer.getAdminPassword().isBlank()
+                ? printer.getAdminPassword() : "123456";
+
+        boolean success = toshibaEwbService.setCopyRestriction(printer.getIpAddress(), user, pass, lock);
+        if (success) {
+            printer.setFunctionsLocked(lock);
+            printerRepository.save(printer);
+        }
+
+        auditService.logEvent(lock ? "PRINTER_FUNCTIONS_LOCKED" : "PRINTER_FUNCTIONS_UNLOCKED",
+                null, adminActor, null, printer.getPrinterCode(), clientIp,
+                (lock ? "Locked" : "Unlocked") + " Toshiba HOME screen functions (Photocopy restriction): " + (success ? "Success" : "Failed"),
+                success ? "SUCCESS" : "FAILURE");
+
+        return success;
+    }
+
+    @Transactional
+    public Map<String, Object> lockAllPrintersFunctions(boolean lock, String adminActor, String clientIp) {
+        List<PrinterEntity> printers = printerRepository.findAll();
+        int total = 0;
+        int succeeded = 0;
+        int failed = 0;
+        List<String> failedPrinters = new ArrayList<>();
+
+        for (PrinterEntity p : printers) {
+            if ("TOSHIBA_OLD".equalsIgnoreCase(p.getDeviceGeneration()) || !p.isActive()) {
+                continue;
+            }
+            total++;
+            boolean ok = lockPrinterFunctions(p.getId(), lock, adminActor, clientIp);
+            if (ok) {
+                succeeded++;
+            } else {
+                failed++;
+                failedPrinters.add(p.getName() + " (" + p.getIpAddress() + ")");
+            }
+        }
+
+        return Map.of(
+                "total", total,
+                "succeeded", succeeded,
+                "failed", failed,
+                "failedPrinters", failedPrinters,
+                "message", "Successfully " + (lock ? "locked" : "unlocked") + " HOME screen icons on " + succeeded + " of " + total + " printers."
+        );
+    }
+
     public EwbConfigResult getPrinterEwbStatus(Long id) {
         PrinterEntity printer = printerRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Printer id " + id + " not found."));
         return toshibaEwbService.getEwbStatus(printer.getIpAddress(), printer.getAdminUsername(), printer.getAdminPassword());
+    }
+
+    public Map<String, String> dumpPrinterSettings(Long id) {
+        PrinterEntity printer = printerRepository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("Printer id " + id + " not found."));
+        return toshibaEwbService.dumpAllSettings(printer.getIpAddress(), printer.getAdminUsername(), printer.getAdminPassword());
     }
 
     public EwbConfigResult testEwbDirect(EwbConfigRequest request) {

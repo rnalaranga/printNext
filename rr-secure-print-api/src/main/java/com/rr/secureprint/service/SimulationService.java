@@ -177,7 +177,13 @@ public class SimulationService {
 
         // Ensure real user RR exists with PIN 1234
         userRepository.findByUsername("rr").ifPresentOrElse(
-                u -> { u.setPinHash("1234"); userRepository.save(u); },
+                u -> {
+                    u.setPinHash("1234");
+                    if (u.getBadgeId() == null || u.getBadgeId().isBlank()) {
+                        u.setBadgeId("BADGE-1001");
+                    }
+                    userRepository.save(u);
+                },
                 () -> {
                     UserEntity rrUser = new UserEntity(
                             "rr",

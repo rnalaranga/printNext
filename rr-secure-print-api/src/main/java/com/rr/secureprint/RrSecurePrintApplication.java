@@ -41,9 +41,9 @@ public class RrSecurePrintApplication {
             LOGGER.info(" >> REST API Health:          http://localhost:" + port + "/api/health");
             LOGGER.info("----------------------------------------------------------------------------");
             LOGGER.info(" Demo Touchscreen Credentials:");
-            LOGGER.info("  - Engineer PIN: '1234' (User: John Doe - jdoe)");
-            LOGGER.info("  - Director PIN: '1234' (User: Mary Smith - msmith)");
-            LOGGER.info("  - Admin PIN:    '1234' (User: Administrator - admin)");
+            LOGGER.info("  - RFID Card Tap: 'BADGE-1001' (Registered to User: RR)");
+            LOGGER.info("  - User PIN:      '1234' (User: RR)");
+            LOGGER.info("  - Admin PIN:     '9999' (User: Administrator - admin)");
             LOGGER.info("============================================================================");
         };
     }

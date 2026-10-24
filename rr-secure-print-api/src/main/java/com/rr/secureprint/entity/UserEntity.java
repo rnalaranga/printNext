@@ -29,6 +29,9 @@ public class UserEntity {
     @Column(name = "badge_id", unique = true, length = 64)
     private String badgeId;
 
+    @Column(name = "secondary_badge_id", length = 64)
+    private String secondaryBadgeId;
+
     @Column(length = 128)
     private String email;
 
@@ -101,6 +104,9 @@ public class UserEntity {
 
     public String getBadgeId() { return badgeId; }
     public void setBadgeId(String badgeId) { this.badgeId = badgeId; }
+
+    public String getSecondaryBadgeId() { return secondaryBadgeId; }
+    public void setSecondaryBadgeId(String secondaryBadgeId) { this.secondaryBadgeId = secondaryBadgeId; }
 
     public String getEmail() { return email; }
     public void setEmail(String email) { this.email = email; }

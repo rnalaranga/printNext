@@ -13,6 +13,20 @@
     return ('' + s).replace(/^\s+|\s+$/g, '');
   }
 
+  // Safe ES3/ES5 Object.keys Polyfill for embedded WebKit
+  if (!Object.keys) {
+    Object.keys = function (obj) {
+      var keys = [];
+      if (!obj) return keys;
+      for (var prop in obj) {
+        if (Object.prototype.hasOwnProperty.call(obj, prop)) {
+          keys.push(prop);
+        }
+      }
+      return keys;
+    };
+  }
+
   // Toshiba EWB Global Diagnostic Catch
   window.onerror = function (msg, url, line) {
     var errText = 'EWB Script Notice: ' + msg + ' (L:' + line + ')';
@@ -32,20 +46,25 @@
     selectedJobIds: {},
     inactivitySeconds: 120,
     timerInterval: null,
-    isBusy: false
+    isBusy: false,
+    isNativeOperationActive: false
   };
 
   // DOM Elements
   var pinDisplay          = null;
   var alertBox            = null;
   var screenAuth          = null;
+  var screenMenu          = null;
   var screenQueue         = null;
+  var screenCopy          = null;
+  var screenScan          = null;
   var userHeaderSection   = null;
   var deviceStatusHeader  = null;
   var userBadgeText       = null;
   var userDeptText        = null;
   var timerCountdown      = null;
   var queueCountBadge     = null;
+  var menuPrintBadge      = null;
   var printAllBtn         = null;
   var printAllCountText   = null;
   var selectAllCheckbox   = null;
@@ -61,13 +80,17 @@
     pinDisplay          = document.getElementById('pinDisplay');
     alertBox            = document.getElementById('alertBox');
     screenAuth          = document.getElementById('screenAuth');
+    screenMenu          = document.getElementById('screenMenu');
     screenQueue         = document.getElementById('screenQueue');
+    screenCopy          = document.getElementById('screenCopy');
+    screenScan          = document.getElementById('screenScan');
     userHeaderSection   = document.getElementById('userHeaderSection');
     deviceStatusHeader  = document.getElementById('deviceStatusHeader');
     userBadgeText       = document.getElementById('userBadgeText');
     userDeptText        = document.getElementById('userDeptText');
     timerCountdown      = document.getElementById('timerCountdown');
     queueCountBadge     = document.getElementById('queueCountBadge');
+    menuPrintBadge      = document.getElementById('menuPrintBadge');
     printAllBtn         = document.getElementById('printAllBtn');
     printAllCountText   = document.getElementById('printAllCountText');
     selectAllCheckbox   = document.getElementById('selectAllCheckbox');
@@ -83,35 +106,36 @@
     document.body.onmousedown  = resetInactivityTimer;
     document.body.ontouchstart = resetInactivityTimer;
 
-    // Immediate Hardware Sleep / Energy Saver / Hide Event Handlers
+    // Immediate Hardware Sleep / Energy Saver / Wake Lock Handlers
     if (document.addEventListener) {
       document.addEventListener('visibilitychange', function () {
         if (document.visibilityState === 'hidden') {
-          // Hardware Sleep button pressed OR panel turned off into Energy Saver!
-          window.emergencyLockAndLogout('HARDWARE_SLEEP_BUTTON');
+          if (state.isNativeOperationActive) {
+            // Native Copy screen has opened on panel! Pre-restore DefaultScreen to EWB for sleep security
+            sendCopyScreenOpenedBeacon();
+          } else {
+            window.emergencyLockAndLogout('HARDWARE_SLEEP_BUTTON');
+          }
         } else if (document.visibilityState === 'visible') {
-          // Machine woke up from sleep - enforce lock and show PIN pad
-          window.emergencyLockAndLogout('HARDWARE_WAKE_VERIFY');
+          // Machine woke up from sleep or returned to nexPrint
+          // CRITICAL: Always lock and enforce PIN on wake-up!
+          window.emergencyLockAndLogout('HARDWARE_WAKE_LOCK');
         }
       });
     }
 
     if (window.addEventListener) {
       window.addEventListener('pagehide', function () {
-        window.emergencyLockAndLogout('PAGE_HIDE');
-      });
-      window.addEventListener('blur', function () {
-        if (state.currentUser) {
-          window.emergencyLockAndLogout('WINDOW_BLUR_SLEEP');
+        if (!state.isNativeOperationActive) {
+          window.emergencyLockAndLogout('PAGE_HIDE');
         }
       });
-      window.addEventListener('focus', function () {
-        if (!state.currentUser) {
-          window.emergencyLockAndLogout('WINDOW_FOCUS_WAKE');
+      window.addEventListener('blur', function () {
+        if (state.isNativeOperationActive) {
+          sendCopyScreenOpenedBeacon();
         }
       });
       window.addEventListener('online', onWakeOrReconnect);
-      window.addEventListener('pageshow', onWakeOrReconnect);
     }
 
     // Hook into Toshiba OpenPlatform injected system sleep events
@@ -134,6 +158,12 @@
 
     // Initialize physical release station info
     initStationInfo();
+
+    // Initialize physical MFP touchscreen display scaling
+    initMfpScreenScale();
+
+    // Initialize Card Reader USB HID Catcher
+    setupCardCatcher();
   };
 
 
@@ -141,6 +171,11 @@
   /* Emergency Sleep Auto-Lock & Device Security                        */
   /* ------------------------------------------------------------------ */
   window.emergencyLockAndLogout = function (reason) {
+    if (state.isNativeOperationActive &&
+        (reason === 'WINDOW_BLUR_SLEEP' || reason === 'PAGE_HIDE' || reason === 'HARDWARE_SLEEP_BUTTON')) {
+      // User is actively in native Copy / Scan mode on physical panel - do not auto-lock while panel is in use
+      return;
+    }
     var stationCode = (state.station && state.station.printerCode) ? state.station.printerCode : null;
     var stationIp = (state.station && state.station.ipAddress) ? state.station.ipAddress : null;
     var payload = JSON.stringify({
@@ -170,6 +205,7 @@
     } catch (e) {}
 
     // 3. Reset local UI state to locked PIN pad
+    state.isNativeOperationActive = false;
     state.currentUser = null;
     state.pinBuffer = '';
     stopHeartbeat();
@@ -178,6 +214,31 @@
     showAuthScreen();
     showAlert('Device locked & secured. Enter PIN to start.', 'info');
   };
+
+  function sendCopyScreenOpenedBeacon() {
+    var stationCode = (state.station && state.station.printerCode) ? state.station.printerCode : null;
+    var stationIp = (state.station && state.station.ipAddress) ? state.station.ipAddress : null;
+    var payload = JSON.stringify({
+      printerCode: stationCode,
+      printerIp: stationIp
+    });
+    if (navigator.sendBeacon) {
+      try {
+        var blob = new Blob([payload], { type: 'application/json' });
+        navigator.sendBeacon('/api/station/copy-screen-opened', blob);
+      } catch (e) {}
+    }
+    try {
+      if (window.fetch) {
+        fetch('/api/station/copy-screen-opened', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: payload,
+          keepalive: true
+        });
+      }
+    } catch (e) {}
+  }
 
   /* ------------------------------------------------------------------ */
   /* Touch Terminal Heartbeat (Keeps session alive while active)        */
@@ -212,6 +273,74 @@
 
 
   /* ------------------------------------------------------------------ */
+  /* MFP Screen Scale & Viewport Adaptation Controller                 */
+  /* Automatically optimizes layout, logo, and button sizes for        */
+  /* Toshiba e-STUDIO MFP physical touch screens (1024x600 / 1280x800)  */
+  /* ------------------------------------------------------------------ */
+  function setRootScaleClass(cls) {
+    var targets = [document.documentElement, document.body];
+    for (var i = 0; i < targets.length; i++) {
+      var el = targets[i];
+      if (el) {
+        var c = (el.className || '').replace(/\bmfp-scale-\S+/g, '').replace(/\s+/g, ' ');
+        el.className = safeTrim(c + ' ' + cls);
+      }
+    }
+  }
+
+  function updateScaleButtonLabel(scaleName) {
+    var btn = document.getElementById('mfpScaleBtn');
+    if (!btn) return;
+    if (scaleName === 'xl') {
+      btn.textContent = '🖵 Size: XL';
+    } else if (scaleName === 'normal') {
+      btn.textContent = '🖵 Size: Standard';
+    } else {
+      btn.textContent = '🖵 Size: Large';
+    }
+  }
+
+  window.applyMfpScale = function (scaleName) {
+    if (scaleName !== 'xl' && scaleName !== 'normal') {
+      scaleName = 'large';
+    }
+    setRootScaleClass('mfp-scale-' + scaleName);
+    updateScaleButtonLabel(scaleName);
+    try {
+      localStorage.setItem('nexprint_mfp_scale', scaleName);
+    } catch (e) {}
+  };
+
+  window.cycleMfpScale = function () {
+    var saved = 'large';
+    try {
+      saved = localStorage.getItem('nexprint_mfp_scale') || 'large';
+    } catch (e) {}
+
+    var next = 'large';
+    if (saved === 'large') next = 'xl';
+    else if (saved === 'xl') next = 'normal';
+    else if (saved === 'normal') next = 'large';
+
+    window.applyMfpScale(next);
+  };
+
+  function initMfpScreenScale() {
+    var saved = null;
+    try {
+      saved = localStorage.getItem('nexprint_mfp_scale');
+    } catch (e) {}
+
+    if (saved && (saved === 'normal' || saved === 'large' || saved === 'xl')) {
+      window.applyMfpScale(saved);
+      return;
+    }
+
+    // Default to clean standard scale ('normal') so 1024x600 and 1280x800 screens fit 100% without overflow
+    window.applyMfpScale('normal');
+  }
+
+  /* ------------------------------------------------------------------ */
   /* Physical Station Management (PaperCut Find-Me Architecture)       */
   /* ------------------------------------------------------------------ */
   function applyEwbBranding(branding) {
@@ -224,6 +353,10 @@
     if (branding.hasCustomLogo && branding.logoData) {
       if (logoImg) {
         logoImg.src = branding.logoData;
+        logoImg.style.maxHeight = '34px';
+        logoImg.style.maxWidth = '160px';
+        logoImg.style.objectFit = 'contain';
+        logoImg.style.marginLeft = '4px';
         logoImg.style.display = 'inline-block';
       }
       if (defaultGroup) defaultGroup.style.display = 'none';
@@ -232,7 +365,7 @@
         logoImg.src = '';
         logoImg.style.display = 'none';
       }
-      if (defaultGroup) defaultGroup.style.display = 'inline-flex';
+      if (defaultGroup) defaultGroup.style.display = 'inline-block';
       if (brandName && branding.systemTitle) {
         brandName.textContent = branding.systemTitle;
       }
@@ -272,7 +405,28 @@
           selectEl.style.display = 'inline-block';
         }
       }
+      sendDiagnostics();
     });
+  }
+
+  function sendDiagnostics() {
+    try {
+      var diag = {
+        userAgent: navigator.userAgent,
+        hasTopaccess: !!window.topaccess,
+        topaccessKeys: window.topaccess ? Object.keys(window.topaccess) : [],
+        systemKeys: (window.topaccess && window.topaccess.system) ? Object.keys(window.topaccess.system) : [],
+        hasExternal: !!window.external
+      };
+      if (window.topaccess && window.topaccess.system) {
+        var sm = {};
+        for (var k in window.topaccess.system) {
+          try { sm[k] = typeof window.topaccess.system[k]; } catch(e){}
+        }
+        diag.systemMethods = sm;
+      }
+      apiRequest('POST', '/api/station/diagnostics', diag, function () {});
+    } catch (e) {}
   }
 
   window.handleSwitchStation = function (code) {
@@ -339,6 +493,173 @@
     });
   }
 
+  /* ------------------------------------------------------------------ */
+  /* PaperCut MF RFID & NFC Card Reader HID Wedge Interceptor           */
+  /* ------------------------------------------------------------------ */
+  var cardKeystrokeBuffer = '';
+  var cardLastKeyTime = 0;
+  var cardDebounceTimer = null;
+  state.pendingCardBadgeId = null;
+
+  window.loginWithCard = function (badgeId) {
+    if (!badgeId || state.isBusy) return;
+    badgeId = safeTrim(badgeId);
+    if (!badgeId) return;
+
+    state.isBusy = true;
+    showAlert('RFID / NFC Card detected (' + badgeId + '). Verifying...', 'info');
+
+    var stationCode = (state.station && state.station.printerCode) ? state.station.printerCode : null;
+    var stationIp = (state.station && state.station.ipAddress) ? state.station.ipAddress : null;
+
+    apiRequest('POST', '/api/auth/login', {
+      badgeId: badgeId,
+      printerCode: stationCode,
+      printerIp: stationIp
+    }, function (status, data) {
+      state.isBusy = false;
+      if (status === 200 && data && data.authenticated) {
+        state.pendingCardBadgeId = null;
+        updateCardPromptUI();
+        onLoginSuccess(data);
+      } else if (data && data.unregisteredCard) {
+        // PaperCut MF Self-Association workflow
+        state.pendingCardBadgeId = data.badgeId || badgeId;
+        updateCardPromptUI();
+        window.switchAuthMode('PIN');
+        showAlert('New card detected: ' + state.pendingCardBadgeId + '. Enter your PIN below to register.', 'info');
+      } else {
+        state.pendingCardBadgeId = null;
+        updateCardPromptUI();
+        showAlert((data && data.message) || 'Card verification failed.', 'error');
+      }
+    });
+  };
+
+  window.cancelCardAssociation = function () {
+    state.pendingCardBadgeId = null;
+    updateCardPromptUI();
+    showAlert('Card registration cancelled.', 'info');
+  };
+
+  function updateCardPromptUI() {
+    var assocBox = document.getElementById('cardAssociationPrompt');
+    var badgeLabel = document.getElementById('detectedCardId');
+
+    if (state.pendingCardBadgeId) {
+      if (assocBox) assocBox.style.display = 'block';
+      if (badgeLabel) badgeLabel.textContent = state.pendingCardBadgeId;
+    } else {
+      if (assocBox) assocBox.style.display = 'none';
+      if (badgeLabel) badgeLabel.textContent = '';
+    }
+  }
+
+  function updateRawKeyDebug(evtType, e) {
+    var dbg = document.getElementById('rawKeyDebug');
+    if (dbg) {
+      var code = e ? (e.keyCode || e.which) : '';
+      var k = e ? (e.key || '') : '';
+      dbg.textContent = 'READER I/O [' + evtType + ']: code=' + code + ' key=' + k + ' buf=' + cardKeystrokeBuffer;
+      dbg.style.color = '#1D4ED8';
+      dbg.style.borderColor = '#2563EB';
+    }
+  }
+
+  function focusCardCatcher() {
+    var authScreen = document.getElementById('screenAuth');
+    if (!authScreen) return;
+    if (authScreen.style.display === 'none' && !authScreen.classList.contains('pc-active')) return;
+    var active = document.activeElement;
+    if (active && (active.id === 'userUsername' || active.id === 'userPassword')) {
+      return;
+    }
+    var catcher = document.getElementById('pcCardCatcher');
+    if (catcher && typeof catcher.focus === 'function') {
+      try {
+        catcher.focus();
+      } catch (err) {}
+    }
+  }
+
+  function setupCardCatcher() {
+    focusCardCatcher();
+  }
+
+  function handleCardKey(e) {
+    if (e.repeat) return; // Prevent key bounce/repeats
+
+    var authScreen = document.getElementById('screenAuth');
+    if (!authScreen || (authScreen.style.display === 'none' && !authScreen.classList.contains('pc-active'))) {
+      return;
+    }
+
+    var active = document.activeElement;
+    if (active && (active.id === 'userUsername' || active.id === 'userPassword')) {
+      return;
+    }
+
+    var keyCode = e.keyCode || e.which;
+    var key = e.key;
+    updateRawKeyDebug('KEY', e);
+
+    // Enter or Tab triggers immediate verification
+    if (keyCode === 13 || keyCode === 9 || key === 'Enter' || key === 'Tab') {
+      if (cardDebounceTimer) { clearTimeout(cardDebounceTimer); cardDebounceTimer = null; }
+      if (cardKeystrokeBuffer && cardKeystrokeBuffer.length >= 3) {
+        var cardId = cardKeystrokeBuffer;
+        cardKeystrokeBuffer = '';
+        if (e.preventDefault) e.preventDefault();
+        if (e.stopPropagation) e.stopPropagation();
+        window.loginWithCard(cardId);
+        return;
+      }
+      cardKeystrokeBuffer = '';
+      return;
+    }
+
+    // Capture printable characters (Standard alphanumeric & Numpad)
+    var char = '';
+    if (key && key.length === 1 && !e.ctrlKey && !e.altKey && !e.metaKey) {
+      char = key;
+    } else if (keyCode >= 48 && keyCode <= 57) { // 0-9
+      char = String.fromCharCode(keyCode);
+    } else if (keyCode >= 65 && keyCode <= 90) { // A-Z
+      char = String.fromCharCode(keyCode);
+    } else if (keyCode >= 96 && keyCode <= 105) { // Numpad 0-9
+      char = String.fromCharCode(keyCode - 48);
+    } else if (keyCode === 189 || keyCode === 109) { // Hyphen / dash
+      char = '-';
+    }
+
+    if (!char) return;
+
+    var now = new Date().getTime();
+    if (now - cardLastKeyTime > 350) {
+      cardKeystrokeBuffer = '';
+    }
+    cardLastKeyTime = now;
+    cardKeystrokeBuffer += char;
+    updateRawKeyDebug('CHAR', { keyCode: keyCode, key: char });
+
+    // Auto-trigger without Enter if reader stops typing (300ms debounce)
+    if (cardDebounceTimer) clearTimeout(cardDebounceTimer);
+    cardDebounceTimer = setTimeout(function () {
+      if (cardKeystrokeBuffer && cardKeystrokeBuffer.length >= 4) {
+        var autoCardId = cardKeystrokeBuffer;
+        cardKeystrokeBuffer = '';
+        window.loginWithCard(autoCardId);
+      }
+    }, 300);
+  }
+
+  // Single cleanly bound listener on document (prevents duplicate keystrokes)
+  if (document.addEventListener) {
+    document.addEventListener('keydown', handleCardKey, false);
+  } else if (window.addEventListener) {
+    window.addEventListener('keydown', handleCardKey, false);
+  }
+
   window.handleKeypad = function (val) {
     if (state.isBusy) return;
     if (val === 'CLEAR') {
@@ -376,16 +697,27 @@
     var stationCode = (state.station && state.station.printerCode) ? state.station.printerCode : null;
     var stationIp = (state.station && state.station.ipAddress) ? state.station.ipAddress : null;
 
-    apiRequest('POST', '/api/auth/login', {
+    var reqData = {
       pin: state.pinBuffer,
       printerCode: stationCode,
       printerIp: stationIp
-    }, function (status, data) {
+    };
+    if (state.pendingCardBadgeId) {
+      reqData.badgeId = state.pendingCardBadgeId;
+    }
+
+    apiRequest('POST', '/api/auth/login', reqData, function (status, data) {
       state.isBusy = false;
       state.pinBuffer = '';
       refreshPinDisplay();
       if (status === 200 && data && data.authenticated) {
+        var wasCardLinked = !!state.pendingCardBadgeId;
+        state.pendingCardBadgeId = null;
+        updateCardPromptUI();
         onLoginSuccess(data);
+        if (wasCardLinked) {
+          showAlert('Card successfully linked to ' + data.displayName + '!', 'success');
+        }
       } else {
         showAlert((data && data.message) || 'Invalid PIN code. Access denied.', 'error');
       }
@@ -430,8 +762,8 @@
     var viewUserPass = document.getElementById('authViewUserPass');
 
     if (mode === 'USER_PASS') {
-      if (tabPin) tabPin.className = 'pc-auth-tab';
-      if (tabUserPass) tabUserPass.className = 'pc-auth-tab active';
+      if (tabPin) tabPin.className = 'pc-auth-pill';
+      if (tabUserPass) tabUserPass.className = 'pc-auth-pill active';
       if (viewPin) viewPin.style.display = 'none';
       if (viewUserPass) viewUserPass.style.display = 'block';
       var inpUser = document.getElementById('inputUsername');
@@ -441,8 +773,8 @@
         }, 120);
       }
     } else {
-      if (tabPin) tabPin.className = 'pc-auth-tab active';
-      if (tabUserPass) tabUserPass.className = 'pc-auth-tab';
+      if (tabPin) tabPin.className = 'pc-auth-pill active';
+      if (tabUserPass) tabUserPass.className = 'pc-auth-pill';
       if (viewPin) viewPin.style.display = 'block';
       if (viewUserPass) viewUserPass.style.display = 'none';
     }
@@ -498,16 +830,27 @@
     var stationCode = (state.station && state.station.printerCode) ? state.station.printerCode : null;
     var stationIp = (state.station && state.station.ipAddress) ? state.station.ipAddress : null;
 
-    apiRequest('POST', '/api/auth/login', {
+    var reqData = {
       username: username,
       password: password,
       printerCode: stationCode,
       printerIp: stationIp
-    }, function (status, data) {
+    };
+    if (state.pendingCardBadgeId) {
+      reqData.badgeId = state.pendingCardBadgeId;
+    }
+
+    apiRequest('POST', '/api/auth/login', reqData, function (status, data) {
       state.isBusy = false;
       if (status === 200 && data && data.authenticated) {
+        var wasCardLinked = !!state.pendingCardBadgeId;
+        state.pendingCardBadgeId = null;
+        updateCardPromptUI();
         if (inpPass) inpPass.value = '';
         onLoginSuccess(data);
+        if (wasCardLinked) {
+          showAlert('Card successfully linked to ' + data.displayName + '!', 'success');
+        }
       } else {
         var msg = (data && data.message) ? data.message : 'Invalid credentials. Please verify your Active Directory username and password.';
         showAlert(msg, 'error');
@@ -535,7 +878,8 @@
     if (userHeaderSection) userHeaderSection.style.display = 'block';
     if (deviceStatusHeader) deviceStatusHeader.style.display = 'none';
 
-    showQueueScreen();
+    // Show PaperCut MF 3-Action Launcher upon successful login
+    window.showMenuScreen();
     startInactivityTimer();
     startHeartbeat();
     window.loadJobs();
@@ -548,6 +892,7 @@
     stopInactivityTimer();
     var stationCode = (state.station && state.station.printerCode) ? state.station.printerCode : null;
     var stationIp = (state.station && state.station.ipAddress) ? state.station.ipAddress : null;
+
     apiRequest('POST', '/api/auth/logout', { printerCode: stationCode, printerIp: stationIp }, function () {
       state.isBusy = false;
       state.currentUser = null;
@@ -562,100 +907,276 @@
     });
   };
 
-  /* Open Native Toshiba Device Functions (Copy / Scan / Home) */
-  window.handleOpenDeviceFunctions = function () {
-    showAlert('Unlocking Photocopy functions on this Toshiba MFP...', 'info');
+  /* =========================================================================
+     PaperCut MF Touch Screen Switcher (Auth -> Apps Menu -> Print Queue / Copy / Scan)
+     ========================================================================= */
+  function showAuthScreen() {
+    screenAuth.className = 'pc-screen pc-auth-screen pc-active';
+    if (screenMenu) screenMenu.className = 'pc-screen pc-menu-screen';
+    if (screenQueue) screenQueue.className = 'pc-screen pc-queue-screen';
+    if (screenCopy) screenCopy.className = 'pc-screen pc-copy-screen';
+    if (screenScan) screenScan.className = 'pc-screen pc-scan-screen';
+    state.pinBuffer = '';
+    state.pendingCardBadgeId = null;
+    window.switchAuthMode('PIN');
+    updateCardPromptUI();
+    refreshPinDisplay();
+    focusCardCatcher();
+  }
 
-    // Notify backend that user opened device functions so copy tracking window is active
+  window.showMenuScreen = function () {
+    screenAuth.className = 'pc-screen pc-auth-screen';
+    if (screenMenu) screenMenu.className = 'pc-screen pc-menu-screen pc-active';
+    if (screenQueue) screenQueue.className = 'pc-screen pc-queue-screen';
+    if (screenCopy) screenCopy.className = 'pc-screen pc-copy-screen';
+    if (screenScan) screenScan.className = 'pc-screen pc-scan-screen';
+    updateMenuJobCount();
+  };
+
+  window.showQueueScreen = function () {
+    screenAuth.className = 'pc-screen pc-auth-screen';
+    if (screenMenu) screenMenu.className = 'pc-screen pc-menu-screen';
+    if (screenQueue) screenQueue.className = 'pc-screen pc-queue-screen pc-active';
+    if (screenCopy) screenCopy.className = 'pc-screen pc-copy-screen';
+    if (screenScan) screenScan.className = 'pc-screen pc-scan-screen';
+  };
+
+  window.showCopyScreen = function () {
+    screenAuth.className = 'pc-screen pc-auth-screen';
+    if (screenMenu) screenMenu.className = 'pc-screen pc-menu-screen';
+    if (screenQueue) screenQueue.className = 'pc-screen pc-queue-screen';
+    if (screenCopy) screenCopy.className = 'pc-screen pc-copy-screen pc-active';
+    if (screenScan) screenScan.className = 'pc-screen pc-scan-screen';
+  };
+
+  window.showScanScreen = function () {
+    screenAuth.className = 'pc-screen pc-auth-screen';
+    if (screenMenu) screenMenu.className = 'pc-screen pc-menu-screen';
+    if (screenQueue) screenQueue.className = 'pc-screen pc-queue-screen';
+    if (screenCopy) screenCopy.className = 'pc-screen pc-copy-screen';
+    if (screenScan) screenScan.className = 'pc-screen pc-scan-screen pc-active';
+  };
+
+  /* Action Handlers for the 3 Application Launcher Tiles */
+  window.openPrintRelease = function () {
+    window.showQueueScreen();
+  };
+
+  window.openCopyFunction = function () {
+    state.isNativeOperationActive = true;
+    state.inactivitySeconds = 90;
+    updateTimerText();
+
+    var userName = (state.currentUser && (state.currentUser.displayName || state.currentUser.username)) || 'User';
+    showAlert('▶ PHOTOCOPIER READY! PRESS [CLEAR] OR [HOME] ◀', 'success');
+
+    // Trigger native unlock & CWS DefaultScreen = Copy
+    unlockDeviceTarget('COPY');
+  };
+
+  window.openScanFunction = function () {
+    state.isNativeOperationActive = true;
+    state.inactivitySeconds = 90;
+    updateTimerText();
+
+    var userName = (state.currentUser && (state.currentUser.displayName || state.currentUser.username)) || 'User';
+    showAlert('▶ SCANNER READY! PRESS [CLEAR] OR [HOME] ◀', 'success');
+
+    // Trigger native unlock & CWS DefaultScreen = Scan
+    unlockDeviceTarget('SCAN');
+  };
+
+  window.openDeviceHome = function () {
+    state.isNativeOperationActive = true;
+    state.inactivitySeconds = 90;
+    updateTimerText();
+
+    var userName = (state.currentUser && (state.currentUser.displayName || state.currentUser.username)) || 'User';
+    showAlert('▶ DEVICE HOME READY! PRESS [CLEAR] OR [HOME] ◀', 'info');
+
+    // Trigger native unlock & CWS DefaultScreen = Home
+    unlockDeviceTarget('HOME');
+  };
+
+  // Backwards compatibility alias
+  window.handleOpenDeviceFunctions = function () {
+    window.openCopyFunction();
+  };
+
+  function unlockDeviceTarget(mode) {
     var stationCode = (state.station && state.station.printerCode) ? state.station.printerCode : null;
     var stationIp = (state.station && state.station.ipAddress) ? state.station.ipAddress : null;
+    var modeLabel = (mode === 'SCAN' ? 'Scanner' : (mode === 'HOME' ? 'Device Home' : 'Photocopier'));
+
+    state.isNativeOperationActive = true;
+
+    // Immediate attempt on local browser environment
+    triggerToshibaNativeHook(mode);
+
     try {
-      apiRequest('POST', '/api/station/device-functions', { printerCode: stationCode, printerIp: stationIp }, function (status, data) {
+      apiRequest('POST', '/api/station/device-functions', {
+        printerCode: stationCode,
+        printerIp: stationIp,
+        mode: mode,
+        switchScreen: 'true'
+      }, function (status, data) {
         if (status === 200) {
-          showAlert('Walk-up photocopy unlocked! Press [Copy] or use feeder.', 'success');
+          showAlert('▶ ' + modeLabel.toUpperCase() + ' READY! PRESS [CLEAR] OR [HOME] ◀', 'success');
+        } else {
+          showAlert('▶ ' + modeLabel.toUpperCase() + ' READY! PRESS [CLEAR] OR [HOME] ◀', 'info');
         }
-        window.showCopySessionModal();
       });
     } catch (e) {
-      window.showCopySessionModal();
+      // non-fatal
     }
+  }
 
-    // 1. Toshiba e-BRIDGE OpenPlatform injected system hooks
+  function triggerToshibaNativeHook(mode) {
+    var screenName = (mode === 'SCAN') ? 'scan' : 'copy';
+    var screenCapitalized = (mode === 'SCAN') ? 'Scan' : 'Copy';
+    var screenUpper = (mode === 'SCAN') ? 'SCAN' : 'COPY';
+    var funcId = (mode === 'COPY') ? 1 : 2;
+
+    // Report what topaccess actually has right at click for diagnostics
     try {
       if (window.topaccess && window.topaccess.system) {
-        if (typeof window.topaccess.system.openHomeScreen === 'function') {
-          window.topaccess.system.openHomeScreen();
-          return;
-        } else if (typeof window.topaccess.system.openCopyScreen === 'function') {
-          window.topaccess.system.openCopyScreen();
-          return;
+        var methods = [];
+        for (var m in window.topaccess.system) {
+          methods.push(m + ':' + typeof window.topaccess.system[m]);
         }
+        apiRequest('POST', '/api/station/diagnostics', { triggerMode: mode, systemMethods: methods }, function(){});
       }
-    } catch (e) {}
+    } catch(e) {}
 
-    // 2. Check top/parent window hooks
-    try {
-      if (window.top && window.top.topaccess && window.top.topaccess.system && typeof window.top.topaccess.system.openHomeScreen === 'function') {
-        window.top.topaccess.system.openHomeScreen();
-        return;
-      }
-    } catch (e) {}
+    // 1. Check all candidate Toshiba OpenPlatform global namespaces
+    var taList = [
+      window.topaccess,
+      (window.top && window.top !== window ? window.top.topaccess : null),
+      (window.parent && window.parent !== window ? window.parent.topaccess : null),
+      window.toshiba,
+      (window.top && window.top !== window ? window.top.toshiba : null)
+    ];
 
-    // 3. In Toshiba e-BRIDGE Next EWB, window.close() / top.close() drops browser overlay to native UI
+    for (var i = 0; i < taList.length; i++) {
+      var ta = taList[i];
+      if (!ta) continue;
+
+      try {
+        if (ta.system) {
+          // Direct named functions
+          if (mode === 'COPY') {
+            if (typeof ta.system.openCopyScreen === 'function') { ta.system.openCopyScreen(); return; }
+            if (typeof ta.system.openCopy === 'function') { ta.system.openCopy(); return; }
+          } else {
+            if (typeof ta.system.openScanScreen === 'function') { ta.system.openScanScreen(); return; }
+            if (typeof ta.system.openScan === 'function') { ta.system.openScan(); return; }
+          }
+
+          // Generic screen switchers (openScreen / changeScreen / setScreen)
+          if (typeof ta.system.openScreen === 'function') {
+            try { ta.system.openScreen(screenName); return; } catch(e){}
+            try { ta.system.openScreen(screenCapitalized); return; } catch(e){}
+            try { ta.system.openScreen(screenUpper); return; } catch(e){}
+            try { ta.system.openScreen(funcId); return; } catch(e){}
+          }
+          if (typeof ta.system.changeScreen === 'function') {
+            try { ta.system.changeScreen(screenName); return; } catch(e){}
+            try { ta.system.changeScreen(screenCapitalized); return; } catch(e){}
+            try { ta.system.changeScreen(screenUpper); return; } catch(e){}
+            try { ta.system.changeScreen(funcId); return; } catch(e){}
+          }
+          if (typeof ta.system.setScreen === 'function') {
+            try { ta.system.setScreen(screenName); return; } catch(e){}
+            try { ta.system.setScreen(screenCapitalized); return; } catch(e){}
+          }
+          if (typeof ta.system.launchApp === 'function') {
+            try { ta.system.launchApp(screenName); return; } catch(e){}
+            try { ta.system.launchApp(screenCapitalized); return; } catch(e){}
+          }
+          if (typeof ta.system.openProgramableKey === 'function') {
+            try { ta.system.openProgramableKey(funcId); return; } catch(e){}
+          }
+          if (typeof ta.system.executeProgramableKey === 'function') {
+            try { ta.system.executeProgramableKey(funcId); return; } catch(e){}
+          }
+
+          // Native Toshiba openHomeScreen - try with screen target first, then fallback
+          if (typeof ta.system.openHomeScreen === 'function') {
+            try { ta.system.openHomeScreen(screenName); return; } catch(e){}
+            try { ta.system.openHomeScreen(funcId); return; } catch(e){}
+            ta.system.openHomeScreen();
+            return;
+          }
+        }
+
+        // Direct device/copier modules
+        if (mode === 'COPY') {
+          if (ta.copier && typeof ta.copier.open === 'function') { ta.copier.open(); return; }
+          if (ta.copy && typeof ta.copy.open === 'function') { ta.copy.open(); return; }
+        } else {
+          if (ta.scanner && typeof ta.scanner.open === 'function') { ta.scanner.open(); return; }
+          if (ta.scan && typeof ta.scan.open === 'function') { ta.scan.open(); return; }
+        }
+
+        if (ta.ui && typeof ta.ui.showScreen === 'function') {
+          try { ta.ui.showScreen(screenName); return; } catch(e){}
+        }
+      } catch (err) {}
+    }
+
+    // 2. Check window.external
     try {
-      if (window.close) {
-        window.close();
+      if (window.external) {
+        if (mode === 'COPY' && typeof window.external.openCopyScreen === 'function') { window.external.openCopyScreen(); return; }
+        if (typeof window.external.openScreen === 'function') { window.external.openScreen(screenName); return; }
+        if (typeof window.external.changeScreen === 'function') { window.external.changeScreen(screenName); return; }
       }
-    } catch (e) {}
-    try {
-      if (window.top && window.top !== window && window.top.close) {
-        window.top.close();
-      }
-    } catch (e) {}
-    try {
-      if (window.parent && window.parent !== window && window.parent.close) {
-        window.parent.close();
-      }
-    } catch (e) {}
+    } catch (err) {}
+
+    // Drop browser overlay to reveal Toshiba native UI
+    try { window.open('', '_self', ''); window.close(); } catch (e) {}
+    try { if (window.top) { window.top.open('', '_self', ''); window.top.close(); } } catch (e) {}
+    try { if (window.parent) { window.parent.open('', '_self', ''); window.parent.close(); } } catch (e) {}
+    try { if (window.close) window.close(); } catch (e) {}
+  }
+
+  window.triggerNativeCopyDirect = function (mode) {
+    unlockDeviceTarget(mode || 'COPY');
+  };
+
+  /* =========================================================================
+     Photocopy & Scan Walk-Up Station Handlers
+     ========================================================================= */
+  window.triggerNativeCopyDirect = function (mode) {
+    unlockDeviceTarget(mode || 'COPY');
   };
 
   window.showCopySessionModal = function () {
-    var modal = document.getElementById('copySessionModal');
-    var usernameSpan = document.getElementById('copyModalUsername');
-    if (usernameSpan && state.currentUser) {
-      usernameSpan.textContent = (state.currentUser.fullName || state.currentUser.displayName || state.currentUser.username || 'User').toUpperCase();
-    }
-    if (modal) {
-      modal.style.display = 'flex';
-    }
+    window.showCopyScreen();
   };
 
-  window.hideCopySessionModal = function () {
-    var modal = document.getElementById('copySessionModal');
-    if (modal) {
-      modal.style.display = 'none';
-    }
-    // Re-lock copy restriction on the Toshiba MFP if modal was dismissed
-    var stationCode = (state.station && state.station.printerCode) ? state.station.printerCode : null;
-    var stationIp = (state.station && state.station.ipAddress) ? state.station.ipAddress : null;
-    apiRequest('POST', '/api/station/auto-lock', { printerCode: stationCode, printerIp: stationIp, reason: 'MODAL_DISMISSED' }, function () {});
-  };
+  window.hideCopySessionModal = function () {};
 
   window.handleFinishCopying = function () {
-    window.hideCopySessionModal();
-    window.emergencyLockAndLogout('FINISH_COPYING_BUTTON');
+    state.isNativeOperationActive = false;
+    window.emergencyLockAndLogout('FINISH_DEVICE_SESSION_BUTTON');
   };
 
-  function showAuthScreen() {
-    screenAuth.className = 'pc-screen pc-auth-screen pc-active';
-    screenQueue.className = 'pc-screen pc-queue-screen';
-    state.pinBuffer = '';
-    refreshPinDisplay();
-  }
-
-  function showQueueScreen() {
-    screenAuth.className = 'pc-screen pc-auth-screen';
-    screenQueue.className = 'pc-screen pc-queue-screen pc-active';
+  function updateMenuJobCount() {
+    var badge = document.getElementById('menuPrintBadge');
+    if (!badge) return;
+    var count = (state.jobs && state.jobs.length) || 0;
+    if (count > 0) {
+      badge.textContent = count + (count === 1 ? ' Job Waiting' : ' Jobs Waiting');
+      badge.style.background = '#FEF3C7';
+      badge.style.color = '#B45309';
+      badge.style.borderColor = '#FCD34D';
+    } else {
+      badge.textContent = '0 Jobs';
+      badge.style.background = '#EFF6FF';
+      badge.style.color = '#1D4ED8';
+      badge.style.borderColor = '#BFDBFE';
+    }
   }
 
   /* ------------------------------------------------------------------ */
@@ -761,6 +1282,7 @@
   };
 
   function refreshDockAndStats() {
+    updateMenuJobCount();
     var totalCount = state.jobs ? state.jobs.length : 0;
     var selectedIds = Object.keys(state.selectedJobIds);
     var selectedCount = selectedIds.length;
@@ -936,6 +1458,14 @@
   function updateTimerText() {
     if (timerCountdown) {
       timerCountdown.textContent = '(' + state.inactivitySeconds + 's)';
+    }
+    var csTime = document.getElementById('copyStationTime');
+    if (csTime) {
+      csTime.textContent = state.inactivitySeconds + 's remaining';
+    }
+    var scTime = document.getElementById('scanStationTime');
+    if (scTime) {
+      scTime.textContent = state.inactivitySeconds + 's remaining';
     }
   }
 

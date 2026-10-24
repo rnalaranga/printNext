@@ -43,9 +43,12 @@ public class CopyTrackingService {
     /**
      * Represents a terminal session on a specific printer.
      */
-    public record TerminalSession(String username, Instant loginTime, Instant logoutTime, Instant lastHeartbeatTime) {
+    public record TerminalSession(String username, Instant loginTime, Instant logoutTime, Instant lastHeartbeatTime, boolean isWalkUp) {
         public TerminalSession(String username, Instant loginTime, Instant logoutTime) {
-            this(username, loginTime, logoutTime, loginTime != null ? loginTime : Instant.now());
+            this(username, loginTime, logoutTime, loginTime != null ? loginTime : Instant.now(), false);
+        }
+        public TerminalSession(String username, Instant loginTime, Instant logoutTime, Instant lastHeartbeatTime) {
+            this(username, loginTime, logoutTime, lastHeartbeatTime, false);
         }
 
         public boolean isActive() {
@@ -111,11 +114,36 @@ public class CopyTrackingService {
         String cleanUser = normalizeUsername(username);
 
         Instant now = Instant.now();
-        TerminalSession session = new TerminalSession(cleanUser, now, null, now);
+        TerminalSession session = new TerminalSession(cleanUser, now, null, now, false);
         activeTerminalUsers.put(cleanIp, session);
         addToHistory(cleanIp, session);
 
+        // Pre-warm TopAccess session asynchronously on login so subsequent CWS requests execute in ~100ms.
+        // DefaultScreen is strictly maintained as "EWB" kiosk so unauthenticated walk-up access is impossible.
+        printerRepository.findByIpAddress(cleanIp).ifPresent(p -> {
+            if (!"TOSHIBA_OLD".equalsIgnoreCase(p.getDeviceGeneration())) {
+                toshibaEwbService.warmUpSession(p.getIpAddress(), p.getAdminUsername(), p.getAdminPassword());
+            }
+        });
+
         LOGGER.info("[TERMINAL SESSION] Registered active user '" + cleanUser + "' on IP " + cleanIp);
+    }
+
+    /**
+     * Activates a walk-up copy / scan session where the user interacts directly with the physical MFP glass/panel.
+     * Grants extended watchdog tolerances (up to 120s) because background WebKit throttles heartbeat intervals.
+     */
+    public void registerWalkUpSession(String clientOrPrinterIp, String username) {
+        if (clientOrPrinterIp == null || username == null || username.isBlank()) return;
+        String cleanIp = clientOrPrinterIp.trim();
+        String cleanUser = normalizeUsername(username);
+
+        Instant now = Instant.now();
+        TerminalSession session = new TerminalSession(cleanUser, now, null, now, true);
+        activeTerminalUsers.put(cleanIp, session);
+        addToHistory(cleanIp, session);
+
+        LOGGER.info("[TERMINAL SESSION] Walk-up Copy/Scan mode activated for user '" + cleanUser + "' on IP " + cleanIp);
     }
 
     /**
@@ -132,14 +160,16 @@ public class CopyTrackingService {
             LOGGER.info("[TERMINAL SESSION] User '" + active.username() + "' logged out from IP " + cleanIp + " (Session recorded for job reconciliation)");
         }
 
-        // Re-lock copy restriction on the Toshiba MFP to prevent unauthorized walk-up copies (e-BRIDGE Next)
+        // Ensure DefaultScreen is restored to EWB kiosk on logout AND physical copy restriction is LOCKED!
         printerRepository.findByIpAddress(cleanIp).ifPresent(p -> {
             if (!"TOSHIBA_OLD".equalsIgnoreCase(p.getDeviceGeneration())) {
                 CompletableFuture.runAsync(() -> {
                     try {
+                        toshibaEwbService.setDefaultScreen(p.getIpAddress(), p.getAdminUsername(), p.getAdminPassword(), "EWB");
                         toshibaEwbService.setCopyRestriction(p.getIpAddress(), p.getAdminUsername(), p.getAdminPassword(), true);
+                        LOGGER.info("[TERMINAL LOGOUT] Copier physical copy restriction locked on " + cleanIp);
                     } catch (Exception ex) {
-                        LOGGER.fine("Could not re-lock copy restriction on " + cleanIp + ": " + ex.getMessage());
+                        LOGGER.warning("Could not restore default screen or lock copy on " + cleanIp + ": " + ex.getMessage());
                     }
                 });
             }
@@ -322,10 +352,16 @@ public class CopyTrackingService {
                 long secondsSinceHeartbeat = Duration.between(lastHb, now).getSeconds();
                 long totalSessionSeconds = Duration.between(session.loginTime(), now).getSeconds();
 
-                // If no heartbeat for > 20 seconds (e.g. physical Sleep button pressed) OR total session > 90 seconds
-                if (secondsSinceHeartbeat > 20 || totalSessionSeconds > 90) {
+                // If in walk-up mode (photocopy / scan on physical glass):
+                // EWB browser runs in background so heartbeats are paused/throttled by WebKit.
+                // 15 seconds inactivity gap locks quickly when user walks away or presses physical Sleep.
+                long maxHeartbeatGap = 15;
+                long maxSessionSeconds = session.isWalkUp() ? 60 : 45;
+
+                if (secondsSinceHeartbeat > maxHeartbeatGap || totalSessionSeconds > maxSessionSeconds) {
                     LOGGER.info("[AUTO-LOCK WATCHDOG] Terminal on IP " + ip + " entered Sleep or Inactivity (" +
-                            secondsSinceHeartbeat + "s without heartbeat, user: '" + session.username() + "'). Auto-locking physical device now.");
+                            secondsSinceHeartbeat + "s without heartbeat, isWalkUp=" + session.isWalkUp() +
+                            ", user: '" + session.username() + "'). Auto-locking physical device now.");
                     ipsToLock.add(ip);
                 }
             }

@@ -79,9 +79,9 @@
     var navItems = document.querySelectorAll('.sidebar-item[data-page]');
     for (var i = 0; i < navItems.length; i++) {
       if (navItems[i].getAttribute('data-page') === pageId) {
-        navItems[i].className = 'sidebar-item active';
+        navItems[i].classList.add('active');
       } else {
-        navItems[i].className = 'sidebar-item';
+        navItems[i].classList.remove('active');
       }
     }
 
@@ -139,7 +139,6 @@
 
   window.refreshCurrentPage = function () {
     window.navigatePage(state.currentPage, false);
-    showToast('Refreshing ' + state.currentPage.toUpperCase() + ' data...', 'info');
   };
 
   /* =========================================================================
@@ -256,18 +255,48 @@
 
       var ewbBadge;
       if (isOld) {
-        ewbBadge = '<span class="badge" style="background:#F1F5F9; color:#475569; border:1px solid #CBD5E1;" title="Legacy device releases prints via RAW Port 9100 / Web Station">PORT 9100 / WEB</span>';
+        ewbBadge =
+          '<div class="ewb-status-lights">' +
+            '<span class="status-pill pill-dim" title="Legacy device releases prints via RAW Port 9100 / Web Station">' +
+              '<span class="light-dot light-dim"></span> Port 9100' +
+            '</span>' +
+          '</div>';
       } else {
-        ewbBadge = p.ewbConfigured
-          ? '<span class="badge badge-ewb-ready" title="Terminal URL: ' + esc(p.ewbUrl || '') + '">EWB READY</span>'
-          : '<span class="badge badge-ewb-none" title="Not pushed to device yet">NO EWB</span>';
+        var ewbLight = p.ewbConfigured
+          ? '<span class="status-pill pill-green" title="EWB Terminal: Configured & Ready (' + esc(p.ewbUrl || '') + ')"><span class="light-dot light-green"></span> EWB</span>'
+          : '<span class="status-pill pill-dim" title="EWB Terminal: Not pushed to device yet"><span class="light-dot light-dim"></span> No EWB</span>';
+
+        var lockLight = p.functionsLocked
+          ? '<span class="status-pill pill-green" title="HOME Screen Icons: LOCKED (Photo Copy & Native Functions Restricted)"><span class="light-dot light-green"></span> Lock</span>'
+          : '<span class="status-pill pill-amber" title="HOME Screen Icons: UNLOCKED (Walk-Up Copy Open)"><span class="light-dot light-amber"></span> Open</span>';
+
+        ewbBadge =
+          '<div class="ewb-status-lights">' +
+            ewbLight +
+            lockLight +
+          '</div>';
       }
 
       var roleBadge = '<span class="badge" style="background:#EFF6FF; color:#1D4ED8; font-weight:600; border:1px solid #BFDBFE;">Follow-Me Station</span>';
 
-      var ewbActionBtn = isOld
-        ? ''
-        : '<button class="btn btn-sm btn-action-ewb" onclick="openQuickEwbModal(' + p.id + ')">PUSH EWB</button>';
+      var actionsDropdown =
+        '<div class="action-dropdown-wrap" id="action-wrap-' + p.id + '">' +
+          '<button type="button" class="btn-action-dropdown" onclick="window.togglePrinterDropdown(event, ' + p.id + ')" id="dropdown-btn-' + p.id + '">' +
+            'Actions ▾' +
+          '</button>' +
+          '<div class="action-dropdown-menu" id="dropdown-menu-' + p.id + '">' +
+            (!isOld ? '<button type="button" class="action-dropdown-item item-primary" onclick="openQuickEwbModal(' + p.id + ')"><span>⚡</span> Push EWB Settings</button>' : '') +
+            (!isOld ? '<button type="button" class="action-dropdown-item item-warning" onclick="window.lockSinglePrinter(' + p.id + ', true)"><span>🔒</span> Lock HOME Icons (Photo Copy)</button>' : '') +
+            (!isOld ? '<button type="button" class="action-dropdown-item" onclick="window.lockSinglePrinter(' + p.id + ', false)"><span>🔓</span> Unlock Walk-Up Copy</button>' : '') +
+            (!isOld ? '<div class="action-dropdown-divider"></div>' : '') +
+            '<button type="button" class="action-dropdown-item" onclick="testPrinter(' + p.id + ')"><span>🔍</span> Test Connection</button>' +
+            '<button type="button" class="action-dropdown-item" onclick="window.open(\'http://' + esc(p.ipAddress) + '/\', \'_blank\')"><span>🌐</span> Open TopAccess</button>' +
+            (!isOld ? '<button type="button" class="action-dropdown-item" onclick="window.rebootSinglePrinter(' + p.id + ')"><span>🔄</span> Remote Restart MFP</button>' : '') +
+            '<div class="action-dropdown-divider"></div>' +
+            '<button type="button" class="action-dropdown-item" onclick="openEditPrinterModal(' + p.id + ')"><span>✏️</span> Edit Printer</button>' +
+            '<button type="button" class="action-dropdown-item item-danger" onclick="deletePrinter(' + p.id + ', \'' + esc(p.name) + '\')"><span>🗑️</span> Delete Printer</button>' +
+          '</div>' +
+        '</div>';
 
       tr.innerHTML =
         '<td><strong>' + esc(p.name) + '</strong></td>' +
@@ -279,13 +308,7 @@
         '<td>' + roleBadge + '</td>' +
         '<td>' + ewbBadge + '</td>' +
         '<td id="printer-status-' + p.id + '">' + statusBadge + '</td>' +
-        '<td style="text-align:right; white-space:nowrap;">' +
-          '<button class="btn btn-sm btn-action-test" id="btn-test-' + p.id + '" onclick="testPrinter(' + p.id + ')">TEST</button>' +
-          ewbActionBtn +
-          '<button class="btn btn-sm btn-action-web" onclick="window.open(\'http://' + esc(p.ipAddress) + '/\', \'_blank\')" title="Open TopAccess in new tab">TOPACCESS</button>' +
-          '<button class="btn btn-sm btn-action-edit" onclick="openEditPrinterModal(' + p.id + ')">EDIT</button>' +
-          '<button class="btn btn-sm btn-action-delete" onclick="deletePrinter(' + p.id + ', \'' + esc(p.name) + '\')">DEL</button>' +
-        '</td>';
+        '<td style="text-align:right; white-space:nowrap; position:relative;">' + actionsDropdown + '</td>';
 
       tbody.appendChild(tr);
     }
@@ -482,7 +505,23 @@
     }
 
     var logBox = document.getElementById('quickEwbLog');
-    logBox.textContent = 'Device: ' + p.name + ' (' + p.ipAddress + ')\nReady to push EWB Home Page to printer. Click "Push EWB Now".';
+    logBox.textContent = 'Device: ' + p.name + ' (' + p.ipAddress + ')\nReady to push EWB Home Page to printer. Click "Push EWB Now" or "Lock HOME Icons".';
+
+    var badge = document.getElementById('quickEwbLockBadge');
+    if (badge) {
+      if (p.functionsLocked) {
+        badge.textContent = 'Status: LOCKED 🔒';
+        badge.style.background = '#DCFCE7';
+        badge.style.color = '#15803D';
+      } else {
+        badge.textContent = 'Status: UNLOCKED 🔓';
+        badge.style.background = '#FEF3C7';
+        badge.style.color = '#92400E';
+      }
+    }
+
+    var autoLockCb = document.getElementById('quickEwbAutoLock');
+    if (autoLockCb) autoLockCb.checked = true;
 
     document.getElementById('quickEwbModal').style.display = 'flex';
   };
@@ -491,18 +530,73 @@
     document.getElementById('quickEwbModal').style.display = 'none';
   };
 
+  window.handleQuickEwbLock = function (lock) {
+    var id = document.getElementById('quickEwbPrinterId').value;
+    if (!id) return;
+    var btn = lock ? document.getElementById('btnQuickEwbLockCopy') : document.getElementById('btnQuickEwbUnlockCopy');
+    var logBox = document.getElementById('quickEwbLog');
+    var badge = document.getElementById('quickEwbLockBadge');
+
+    if (btn) btn.disabled = true;
+    if (logBox) {
+      logBox.textContent = (lock
+        ? '🔒 [1/2] Connecting to Toshiba TopAccess CWS to LOCK HOME screen icons (Photo Copy)...\n'
+        : '🔓 [1/2] Connecting to Toshiba TopAccess CWS to UNLOCK HOME screen functions...\n');
+    }
+
+    fetch('/api/admin/printers/' + id + '/lock-functions?lock=' + lock, {
+      method: 'POST'
+    })
+      .then(function (res) { return res.json(); })
+      .then(function (res) {
+        if (btn) btn.disabled = false;
+        if (res.success) {
+          if (logBox) {
+            logBox.textContent += '[2/2] Toshiba AuthenticatedTarget restriction updated... STATUS_OK\n' +
+                                  'SUCCESS: ' + res.message + '\n' +
+                                  (lock
+                                    ? 'Toshiba HOME screen icons (Photo Copy & Native functions) are now LOCKED.\nWalk-up users cannot make copies without authenticating.'
+                                    : 'Toshiba HOME screen functions are UNLOCKED for open walk-up copying.');
+          }
+          if (badge) {
+            if (lock) {
+              badge.textContent = 'Status: LOCKED 🔒';
+              badge.style.background = '#DCFCE7';
+              badge.style.color = '#15803D';
+            } else {
+              badge.textContent = 'Status: UNLOCKED 🔓';
+              badge.style.background = '#FEF3C7';
+              badge.style.color = '#92400E';
+            }
+          }
+          showToast(res.message, 'success');
+          loadPrinters();
+        } else {
+          if (logBox) logBox.textContent += 'FAILED: ' + res.message;
+          showToast('Failed: ' + res.message, 'error');
+        }
+      })
+      .catch(function (err) {
+        if (btn) btn.disabled = false;
+        if (logBox) logBox.textContent += 'ERROR: ' + err.message;
+        showToast('Communication error: ' + err.message, 'error');
+      });
+  };
+
   window.handleQuickEwbSubmit = function (e) {
     e.preventDefault();
     var id = document.getElementById('quickEwbPrinterId').value;
     var user = document.getElementById('quickEwbUser').value.trim();
     var pass = document.getElementById('quickEwbPass').value.trim();
     var url = document.getElementById('quickEwbUrl').value.trim();
+    var autoLock = document.getElementById('quickEwbAutoLock') ? document.getElementById('quickEwbAutoLock').checked : true;
     var btn = document.getElementById('btnQuickEwbSubmit');
     var logBox = document.getElementById('quickEwbLog');
+    var badge = document.getElementById('quickEwbLockBadge');
 
     if (btn) { btn.disabled = true; btn.textContent = 'Pushing...'; }
     if (logBox) {
-      logBox.textContent = '[1/3] Connecting to TopAccess XML endpoint...\n';
+      logBox.textContent = '[1/4] Connecting to TopAccess XML endpoint...\n';
     }
 
     fetch('/api/admin/printers/' + id + '/configure-ewb', {
@@ -511,17 +605,24 @@
       body: JSON.stringify({
         adminUsername: user,
         adminPassword: pass,
-        terminalUrl: url
+        terminalUrl: url,
+        lockHomeFunctions: autoLock
       })
     })
       .then(function (res) { return res.json(); })
       .then(function (res) {
         if (btn) { btn.disabled = false; btn.textContent = 'Push EWB Now'; }
         if (res.success) {
-          logBox.textContent += '[2/3] Administrator login... STATUS_OK\n' +
-                                '[3/3] Updating EWBSettings (HomePage, MDS, AutoScreenChange)... Normal\n' +
+          logBox.textContent += '[2/4] Administrator login... STATUS_OK\n' +
+                                '[3/4] Updating EWBSettings (HomePage, MDS, AutoScreenChange)... Normal\n' +
+                                (autoLock ? '[4/4] Restricting HOME Screen Icons (Photo Copy locked)... Normal\n' : '') +
                                 'SUCCESS: ' + res.message + '\n' +
                                 'Verified Model: ' + (res.printerModel || 'Toshiba MFP');
+          if (badge && autoLock) {
+            badge.textContent = 'Status: LOCKED 🔒';
+            badge.style.background = '#DCFCE7';
+            badge.style.color = '#15803D';
+          }
           showToast('EWB settings successfully updated on printer!', 'success');
           loadPrinters();
         } else {
@@ -607,6 +708,137 @@
           if (btn) btn.disabled = false;
           if (logBox) logBox.textContent += '\nERROR: ' + err.message;
           showToast('Error resetting EWB: ' + err.message, 'error');
+        });
+    });
+  };
+
+  /* Actions Dropdown Handlers */
+  window.togglePrinterDropdown = function (event, printerId) {
+    if (event) {
+      event.stopPropagation();
+      event.preventDefault();
+    }
+    var menu = document.getElementById('dropdown-menu-' + printerId);
+    var btn = document.getElementById('dropdown-btn-' + printerId);
+    if (!menu || !btn) return;
+
+    var isOpen = menu.classList.contains('show');
+
+    // Close all open dropdowns
+    var allMenus = document.querySelectorAll('.action-dropdown-menu');
+    for (var i = 0; i < allMenus.length; i++) {
+      allMenus[i].classList.remove('show');
+    }
+    var allBtns = document.querySelectorAll('.btn-action-dropdown');
+    for (var j = 0; j < allBtns.length; j++) {
+      allBtns[j].classList.remove('active');
+    }
+
+    if (!isOpen) {
+      // Calculate coordinates in viewport coordinates to break out of all overflow boundaries
+      var rect = btn.getBoundingClientRect();
+      var menuWidth = 210;
+      var menuEstimatedHeight = 280;
+
+      var spaceBelow = window.innerHeight - rect.bottom;
+      var spaceAbove = rect.top;
+
+      // If near bottom of table or viewport, open UPWARDS
+      if (spaceBelow < menuEstimatedHeight && spaceAbove > spaceBelow) {
+        menu.style.top = Math.max(10, rect.top - menuEstimatedHeight) + 'px';
+        menu.classList.add('dropup');
+      } else {
+        menu.style.top = (rect.bottom + 4) + 'px';
+        menu.classList.remove('dropup');
+      }
+
+      // Align right edge with button
+      var leftPos = rect.right - menuWidth;
+      if (leftPos < 10) leftPos = 10;
+      menu.style.left = leftPos + 'px';
+
+      menu.classList.add('show');
+      btn.classList.add('active');
+
+      // Fine-tune top position with exact menu height
+      setTimeout(function () {
+        if (menu.classList.contains('dropup')) {
+          var realH = menu.offsetHeight || menuEstimatedHeight;
+          menu.style.top = Math.max(10, rect.top - realH - 4) + 'px';
+        }
+      }, 0);
+    }
+  };
+
+  window.lockSinglePrinter = function (printerId, lock) {
+    var allMenus = document.querySelectorAll('.action-dropdown-menu');
+    for (var i = 0; i < allMenus.length; i++) allMenus[i].classList.remove('show');
+
+    showToast((lock ? 'Locking HOME screen icons...' : 'Unlocking walk-up functions...'), 'info');
+
+    fetch('/api/admin/printers/' + printerId + '/lock-functions?lock=' + lock, {
+      method: 'POST'
+    })
+      .then(function (res) { return res.json(); })
+      .then(function (res) {
+        if (res.success) {
+          showToast(res.message, 'success');
+          loadPrinters();
+        } else {
+          showToast('Failed: ' + res.message, 'error');
+        }
+      })
+      .catch(function (err) {
+        showToast('Communication error: ' + err.message, 'error');
+      });
+  };
+
+  window.rebootSinglePrinter = function (printerId) {
+    var allMenus = document.querySelectorAll('.action-dropdown-menu');
+    for (var i = 0; i < allMenus.length; i++) allMenus[i].classList.remove('show');
+
+    customConfirm(
+      'Restart Toshiba MFP',
+      'Send remote restart command to this Toshiba MFP controller?',
+      'Restart MFP',
+      'btn-action-delete'
+    ).then(function (confirmed) {
+      if (!confirmed) return;
+      showToast('Sending restart command to Toshiba MFP...', 'info');
+      fetch('/api/admin/printers/' + printerId + '/reboot', { method: 'POST' })
+        .then(function (res) { return res.json(); })
+        .then(function (res) {
+          if (res.success) {
+            showToast('MFP restart signal accepted!', 'success');
+          } else {
+            showToast('Failed: ' + res.message, 'error');
+          }
+        })
+        .catch(function (err) {
+          showToast('Error: ' + err.message, 'error');
+        });
+    });
+  };
+
+  window.lockAllFleetPrinters = function (lock) {
+    customConfirm(
+      (lock ? 'Lock All HOME Screens' : 'Unlock All MFP Functions'),
+      (lock
+        ? 'Enforce User Authentication (openAccess=1) & lock Photo Copy/Scan icons on ALL registered Toshiba MFPs?'
+        : 'Unlock walk-up photocopy functions on all registered Toshiba MFPs?'),
+      (lock ? 'Lock All Devices' : 'Unlock All'),
+      (lock ? 'btn-yellow' : 'btn-secondary')
+    ).then(function (confirmed) {
+      if (!confirmed) return;
+      showToast((lock ? 'Enforcing HOME screen lock across all Toshiba MFPs...' : 'Unlocking functions across all MFPs...'), 'info');
+      fetch('/api/admin/printers/lock-all-functions?lock=' + lock, { method: 'POST' })
+        .then(function (res) { return res.json(); })
+        .then(function (res) {
+          showToast(res.message, (res.succeeded && res.succeeded > 0) ? 'success' : 'info');
+          loadPrinters();
+        })
+        .catch(function (err) {
+          showToast('Error locking fleet: ' + err.message, 'error');
         });
     });
   };
@@ -775,13 +1007,18 @@
       var copyPages = (u.copyCount != null) ? u.copyCount : 0;
       var totalPages = printPages + copyPages;
 
+      var cardHtml = '';
+      if (u.badgeId) cardHtml += '<span class="badge" style="background:#eff6ff; color:#1d4ed8; font-weight:700; margin-right:4px;">RFID: ' + esc(u.badgeId) + '</span>';
+      if (u.secondaryBadgeId) cardHtml += '<span class="badge" style="background:#f0fdf4; color:#15803d; font-weight:700;">NFC: ' + esc(u.secondaryBadgeId) + '</span>';
+      if (!cardHtml) cardHtml = '<span style="color:#94a3b8;">None</span>';
+
       tr.innerHTML =
         '<td><strong>' + esc(u.username) + '</strong></td>' +
         '<td>' + esc(u.displayName) + '</td>' +
         '<td>' + esc(u.department || 'Operations') + '</td>' +
         '<td>' + sourceBadge + '</td>' +
         '<td>' + pinBadge + '</td>' +
-        '<td>' + (u.badgeId ? '<code>' + esc(u.badgeId) + '</code>' : '<span style="color:#94a3b8;">None</span>') + '</td>' +
+        '<td>' + cardHtml + '</td>' +
         '<td><span class="badge" style="background:#eff6ff; color:#1d4ed8; font-weight:700;">🖨️ ' + printPages + '</span></td>' +
         '<td><span class="badge" style="background:#f0fdf4; color:#15803d; font-weight:700;">📄 ' + copyPages + '</span></td>' +
         '<td><strong style="color:#0f172a; font-size:13px;">' + totalPages + '</strong></td>' +
@@ -807,9 +1044,13 @@
     document.getElementById('userPin').value = '';
     document.getElementById('userPin').required = false;
     document.getElementById('userPinHint').textContent = 'PIN entered at the Toshiba touchscreen (e.g. 1234)';
-    document.getElementById('userPassword').value = '';
-    document.getElementById('userPasswordHint').textContent = 'Password for login at MFP touchscreen';
+    var passElem = document.getElementById('userPassword');
+    if (passElem) passElem.value = '';
+    var passHint = document.getElementById('userPasswordHint');
+    if (passHint) passHint.textContent = 'Password for login at MFP touchscreen';
     document.getElementById('userBadge').value = '';
+    var secBadge = document.getElementById('userSecondaryBadge');
+    if (secBadge) secBadge.value = '';
     document.getElementById('userEmail').value = '';
     document.getElementById('userSid').value = '';
     document.getElementById('userActive').checked = true;
@@ -837,9 +1078,13 @@
     document.getElementById('userRole').value = u.role || 'USER';
     document.getElementById('userPin').value = '';
     document.getElementById('userPinHint').textContent = 'Leave empty to keep existing PIN unchanged.';
-    document.getElementById('userPassword').value = '';
-    document.getElementById('userPasswordHint').textContent = 'Leave empty to keep existing password unchanged.';
+    var passElem = document.getElementById('userPassword');
+    if (passElem) passElem.value = '';
+    var passHint = document.getElementById('userPasswordHint');
+    if (passHint) passHint.textContent = 'Leave empty to keep existing password unchanged.';
     document.getElementById('userBadge').value = u.badgeId || '';
+    var secBadge = document.getElementById('userSecondaryBadge');
+    if (secBadge) secBadge.value = u.secondaryBadgeId || '';
     document.getElementById('userEmail').value = u.email || '';
     document.getElementById('userSid').value = u.userSid || '';
     document.getElementById('userActive').checked = u.isActive !== false;
@@ -857,14 +1102,18 @@
     var id = document.getElementById('userFormId').value;
     var isEdit = !!id;
 
+    var passElem = document.getElementById('userPassword');
+    var secBadgeElem = document.getElementById('userSecondaryBadge');
+
     var payload = {
       username: document.getElementById('userUsername').value.trim(),
       displayName: document.getElementById('userDisplayName').value.trim(),
       department: document.getElementById('userDepartment').value.trim(),
       role: document.getElementById('userRole').value,
       pin: document.getElementById('userPin').value.trim() || null,
-      password: document.getElementById('userPassword').value.trim() || null,
+      password: (passElem && passElem.value.trim()) ? passElem.value.trim() : null,
       badgeId: document.getElementById('userBadge').value.trim() || null,
+      secondaryBadgeId: (secBadgeElem && secBadgeElem.value.trim()) ? secBadgeElem.value.trim() : null,
       email: document.getElementById('userEmail').value.trim() || null,
       userSid: document.getElementById('userSid').value.trim() || null,
       isActive: document.getElementById('userActive').checked
@@ -1505,17 +1754,122 @@
       .replace(/"/g, '&quot;');
   }
 
-  window.showToast = function showToast(msg, type) {
-    var toast = document.getElementById('toastNotification');
-    if (!toast) return;
-    toast.textContent = msg;
-    toast.className = 'toast-strip toast-' + (type || 'info');
-    toast.style.display = 'block';
+  // Modern In-App Centralized Notification & Alert Modal System (Zero Top Banners)
+  window.showToast = function showToast(msg, type, customTitle) {
+    if (!msg) return;
+    type = (type || 'info').toLowerCase();
 
+    var modal = document.getElementById('notifyModal');
+    var headEl = document.getElementById('notifyModalHead');
+    var titleEl = document.getElementById('notifyModalTitle');
+    var headIconEl = document.getElementById('notifyModalHeadIcon');
+    var badgeEl = document.getElementById('notifyModalBadge');
+    var badgeIconEl = document.getElementById('notifyModalBadgeIcon');
+    var msgEl = document.getElementById('notifyModalMsg');
+    var okBtn = document.getElementById('notifyModalOkBtn');
+
+    if (!modal || !msgEl) {
+      console.log('[' + type.toUpperCase() + '] ' + msg);
+      return;
+    }
+
+    var cfg = {
+      title: 'Information',
+      headIcon: 'ℹ️',
+      badgeClass: 'notify-badge-info',
+      badgeIcon: 'ℹ',
+      borderColor: '#2563EB',
+      btnClass: 'btn btn-primary',
+      btnBg: '#2563EB',
+      btnBorder: '#1D4ED8'
+    };
+
+    if (type === 'success') {
+      cfg.title = 'Success';
+      cfg.headIcon = '✓';
+      cfg.badgeClass = 'notify-badge-success';
+      cfg.badgeIcon = '✓';
+      cfg.borderColor = '#10B981';
+      cfg.btnClass = 'btn btn-primary';
+      cfg.btnBg = '#059669';
+      cfg.btnBorder = '#047857';
+    } else if (type === 'error' || type === 'danger') {
+      cfg.title = 'Error';
+      cfg.headIcon = '✕';
+      cfg.badgeClass = 'notify-badge-error';
+      cfg.badgeIcon = '✕';
+      cfg.borderColor = '#EF4444';
+      cfg.btnClass = 'btn btn-danger';
+      cfg.btnBg = '#DC2626';
+      cfg.btnBorder = '#B91C1C';
+    } else if (type === 'warning' || type === 'warn') {
+      cfg.title = 'Warning';
+      cfg.headIcon = '⚠';
+      cfg.badgeClass = 'notify-badge-warning';
+      cfg.badgeIcon = '!';
+      cfg.borderColor = '#F59E0B';
+      cfg.btnClass = 'btn btn-warning';
+      cfg.btnBg = '#D97706';
+      cfg.btnBorder = '#B45309';
+    }
+
+    if (customTitle) {
+      cfg.title = customTitle;
+    }
+
+    if (titleEl) titleEl.textContent = cfg.title;
+    if (headIconEl) headIconEl.textContent = cfg.headIcon;
+    if (msgEl) msgEl.textContent = msg;
+
+    if (headEl) {
+      headEl.style.borderLeft = '4px solid ' + cfg.borderColor;
+    }
+
+    if (badgeEl) {
+      badgeEl.className = 'notify-type-badge ' + cfg.badgeClass;
+    }
+    if (badgeIconEl) {
+      badgeIconEl.textContent = cfg.badgeIcon;
+    }
+
+    if (okBtn) {
+      okBtn.className = cfg.btnClass;
+      okBtn.style.background = cfg.btnBg;
+      okBtn.style.borderColor = cfg.btnBorder;
+      okBtn.style.color = '#FFFFFF';
+    }
+
+    // Display modal
+    modal.style.display = 'flex';
+
+    // Auto-focus OK button so hitting Enter/Space immediately dismisses
     setTimeout(function () {
-      toast.style.display = 'none';
-    }, 4500);
-  }
+      if (okBtn) {
+        try { okBtn.focus(); } catch (e) {}
+      }
+    }, 50);
+  };
+
+  window.closeNotifyModal = function () {
+    var modal = document.getElementById('notifyModal');
+    if (modal) {
+      modal.style.display = 'none';
+    }
+  };
+
+  window.showAlert = window.showToast;
+  window.showNotification = window.showToast;
+
+  // Keyboard shortcut: Escape to close Notify Modal
+  window.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') {
+      var modal = document.getElementById('notifyModal');
+      if (modal && modal.style.display === 'flex') {
+        e.preventDefault();
+        window.closeNotifyModal();
+      }
+    }
+  });
 
   // Modern In-App Confirmation & Alert System (Zero Browser Popups)
   var confirmResolver = null;
@@ -1551,7 +1905,7 @@
     }
   };
 
-  // Override browser native alert to completely disable browser popup messages
+  // Override browser native alert to show custom in-app modal
   window.alert = function (msg) {
     showToast(msg, 'info');
   };
@@ -2689,5 +3043,93 @@
       if (btnSubmit) btnSubmit.disabled = false;
     });
   };
+
+  /* =========================================================================
+     SIDEBAR COLLAPSE CONTROLLER (100% Offline, Zero Internet Dependencies)
+     ========================================================================= */
+
+  window.toggleAdminSidebar = function () {
+    var doc = document.documentElement;
+    var b = document.body;
+    var isCollapsed = doc.classList.contains('sidebar-collapsed') || (b && b.classList.contains('sidebar-collapsed'));
+
+    if (isCollapsed) {
+      doc.classList.remove('sidebar-collapsed', 'sidebar-collapsed-prerender');
+      if (b) b.classList.remove('sidebar-collapsed', 'sidebar-collapsed-prerender');
+      try { localStorage.setItem('nexprint_sidebar_collapsed', 'false'); } catch (e) {}
+    } else {
+      doc.classList.add('sidebar-collapsed');
+      if (b) b.classList.add('sidebar-collapsed');
+      try { localStorage.setItem('nexprint_sidebar_collapsed', 'true'); } catch (e) {}
+    }
+
+    var isNowCollapsed = !isCollapsed;
+    var toggleBtn = document.getElementById('topbarSidebarToggle');
+    if (toggleBtn) {
+      toggleBtn.title = isNowCollapsed ? 'Expand Sidebar (Ctrl+B)' : 'Collapse Sidebar (Ctrl+B)';
+      toggleBtn.setAttribute('aria-expanded', isNowCollapsed ? 'false' : 'true');
+    }
+    var collapseBtn = document.getElementById('sidebarCollapseBtn');
+    if (collapseBtn) {
+      collapseBtn.title = isNowCollapsed ? 'Expand Sidebar (Ctrl+B)' : 'Collapse Sidebar (Ctrl+B)';
+    }
+  };
+
+  // Keyboard shortcut: Ctrl + B toggles sidebar
+  window.addEventListener('keydown', function (e) {
+    if ((e.ctrlKey || e.metaKey) && (e.key === 'b' || e.key === 'B')) {
+      var tag = (e.target && e.target.tagName) ? e.target.tagName.toLowerCase() : '';
+      if (tag === 'input' || tag === 'textarea' || tag === 'select') return;
+      e.preventDefault();
+      window.toggleAdminSidebar();
+    }
+  });
+
+  // Close dropdown on outside click or Escape
+  document.addEventListener('click', function (e) {
+    if (!e.target.closest('.action-dropdown-wrap')) {
+      var allMenus = document.querySelectorAll('.action-dropdown-menu');
+      for (var i = 0; i < allMenus.length; i++) {
+        allMenus[i].classList.remove('show');
+      }
+      var allBtns = document.querySelectorAll('.btn-action-dropdown');
+      for (var j = 0; j < allBtns.length; j++) {
+        allBtns[j].classList.remove('active');
+      }
+    }
+  });
+
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') {
+      var allMenus = document.querySelectorAll('.action-dropdown-menu');
+      for (var i = 0; i < allMenus.length; i++) {
+        allMenus[i].classList.remove('show');
+      }
+      var allBtns = document.querySelectorAll('.btn-action-dropdown');
+      for (var j = 0; j < allBtns.length; j++) {
+        allBtns[j].classList.remove('active');
+      }
+    }
+  });
+
+  // Close dropdown on page scroll or table scroll
+  window.addEventListener('scroll', function () {
+    var allMenus = document.querySelectorAll('.action-dropdown-menu.show');
+    for (var i = 0; i < allMenus.length; i++) {
+      allMenus[i].classList.remove('show');
+    }
+    var allBtns = document.querySelectorAll('.btn-action-dropdown.active');
+    for (var j = 0; j < allBtns.length; j++) {
+      allBtns[j].classList.remove('active');
+    }
+  }, true);
+
+  // Initialize stored sidebar state on script execution
+  try {
+    if (localStorage.getItem('nexprint_sidebar_collapsed') === 'true') {
+      document.documentElement.classList.add('sidebar-collapsed');
+      document.body.classList.add('sidebar-collapsed');
+    }
+  } catch (e) {}
 
 })();

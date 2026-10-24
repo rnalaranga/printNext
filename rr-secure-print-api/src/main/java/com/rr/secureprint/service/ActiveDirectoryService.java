@@ -599,7 +599,7 @@ public class ActiveDirectoryService {
         if (badgeId == null || badgeId.isBlank()) {
             return Optional.empty();
         }
-        return userRepository.findByBadgeId(badgeId.trim())
+        return userRepository.findByAnyBadgeId(badgeId.trim())
                 .filter(UserEntity::isActive);
     }
 

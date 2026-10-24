@@ -62,6 +62,9 @@ public class PrinterEntity {
     @Column(name = "device_generation", length = 32)
     private String deviceGeneration = "TOSHIBA_NEW";
 
+    @Column(name = "functions_locked")
+    private boolean functionsLocked = false;
+
     @Column(name = "created_at")
     private Instant createdAt = Instant.now();
 
@@ -148,6 +151,9 @@ public class PrinterEntity {
     public void setDeviceGeneration(String deviceGeneration) {
         this.deviceGeneration = (deviceGeneration != null && !deviceGeneration.isBlank()) ? deviceGeneration.toUpperCase() : "TOSHIBA_NEW";
     }
+
+    public boolean isFunctionsLocked() { return functionsLocked; }
+    public void setFunctionsLocked(boolean functionsLocked) { this.functionsLocked = functionsLocked; }
 
     public Instant getCreatedAt() { return createdAt; }
     public void setCreatedAt(Instant createdAt) { this.createdAt = createdAt; }

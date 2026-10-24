@@ -4,18 +4,65 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>nexPrint - Administration Console</title>
-  <link rel="stylesheet" href="/css/admin.css?v=20261020_50">
+  <link rel="stylesheet" href="/css/admin.css?v=20261023_02">
+  <script>
+    /* Instant Pre-Render Sidebar State & Global Offline Toggle Controller */
+    (function () {
+      try {
+        if (localStorage.getItem('nexprint_sidebar_collapsed') === 'true') {
+          document.documentElement.classList.add('sidebar-collapsed');
+        }
+      } catch (e) {}
+    })();
+
+    window.toggleAdminSidebar = function () {
+      var doc = document.documentElement;
+      var b = document.body;
+      var isCollapsed = doc.classList.contains('sidebar-collapsed') || (b && b.classList.contains('sidebar-collapsed'));
+
+      if (isCollapsed) {
+        doc.classList.remove('sidebar-collapsed', 'sidebar-collapsed-prerender');
+        if (b) b.classList.remove('sidebar-collapsed', 'sidebar-collapsed-prerender');
+        try { localStorage.setItem('nexprint_sidebar_collapsed', 'false'); } catch (e) {}
+      } else {
+        doc.classList.add('sidebar-collapsed');
+        if (b) b.classList.add('sidebar-collapsed');
+        try { localStorage.setItem('nexprint_sidebar_collapsed', 'true'); } catch (e) {}
+      }
+
+      var isNowCollapsed = !isCollapsed;
+      var toggleBtn = document.getElementById('topbarSidebarToggle');
+      if (toggleBtn) {
+        toggleBtn.title = isNowCollapsed ? 'Expand Sidebar (Ctrl+B)' : 'Collapse Sidebar (Ctrl+B)';
+        toggleBtn.setAttribute('aria-expanded', isNowCollapsed ? 'false' : 'true');
+      }
+      var collapseBtn = document.getElementById('sidebarCollapseBtn');
+      if (collapseBtn) {
+        collapseBtn.title = isNowCollapsed ? 'Expand Sidebar (Ctrl+B)' : 'Collapse Sidebar (Ctrl+B)';
+      }
+    };
+
+    // Keyboard shortcut: Ctrl + B toggles sidebar
+    window.addEventListener('keydown', function (e) {
+      if ((e.ctrlKey || e.metaKey) && (e.key === 'b' || e.key === 'B')) {
+        var tag = (e.target && e.target.tagName) ? e.target.tagName.toLowerCase() : '';
+        if (tag === 'input' || tag === 'textarea' || tag === 'select') return;
+        e.preventDefault();
+        window.toggleAdminSidebar();
+      }
+    });
+  </script>
 </head>
 <body>
 
 <!-- =========================================================================
      SIDEBAR NAVIGATION (Clean nexPrint Admin)
      ========================================================================= -->
-<div class="sidebar">
+<div class="sidebar" id="adminSidebar">
   <div class="sidebar-brand" id="sidebarBrandContainer">
     <!-- Default Branding (nP icon + title/sub) when no custom logo is uploaded -->
     <div class="brand-default-group" id="sidebarBrandDefaultGroup">
-      <div class="brand-mark" id="sidebarBrandMark">nP</div>
+      <div class="brand-mark" id="sidebarBrandMark" onclick="window.toggleAdminSidebar()" title="Toggle Sidebar (Expand / Collapse)" style="cursor:pointer;">nP</div>
       <div class="brand-words" id="sidebarBrandWords">
         <span class="brand-name" id="sidebarBrandName">nex<span>Print</span></span>
         <span class="brand-sub" id="sidebarBrandSub">Print Management</span>
@@ -29,40 +76,80 @@
   </div>
 
   <nav class="sidebar-nav">
-    <a class="sidebar-item active" data-page="dashboard" onclick="navigatePage('dashboard')">
-      Dashboard
+    <a class="sidebar-item active" data-page="dashboard" data-tooltip="Dashboard" onclick="navigatePage('dashboard')">
+      <span class="sidebar-icon">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square"><rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/></svg>
+      </span>
+      <span class="sidebar-label">Dashboard</span>
     </a>
-    <a class="sidebar-item" data-page="virtual-queue" onclick="navigatePage('virtual-queue')">
-      Virtual Print Queue
+    <a class="sidebar-item" data-page="virtual-queue" data-tooltip="Virtual Print Queue" onclick="navigatePage('virtual-queue')">
+      <span class="sidebar-icon">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>
+      </span>
+      <span class="sidebar-label">Virtual Print Queue</span>
     </a>
-    <a class="sidebar-item" data-page="printers" onclick="navigatePage('printers')">
-      Printer Devices
+    <a class="sidebar-item" data-page="printers" data-tooltip="Printer Devices" onclick="navigatePage('printers')">
+      <span class="sidebar-icon">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+      </span>
+      <span class="sidebar-label">Printer Devices</span>
     </a>
-    <a class="sidebar-item" data-page="users" onclick="navigatePage('users')">
-      User Management
+    <a class="sidebar-item" data-page="users" data-tooltip="User Management" onclick="navigatePage('users')">
+      <span class="sidebar-icon">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+      </span>
+      <span class="sidebar-label">User Management</span>
     </a>
-    <a class="sidebar-item" data-page="queue" onclick="navigatePage('queue')">
-      Print Queue
+    <a class="sidebar-item" data-page="queue" data-tooltip="Print Queue" onclick="navigatePage('queue')">
+      <span class="sidebar-icon">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+      </span>
+      <span class="sidebar-label">Print Queue</span>
     </a>
-    <a class="sidebar-item" data-page="copy-logs" onclick="navigatePage('copy-logs')">
-      Photocopy Logs
+    <a class="sidebar-item" data-page="copy-logs" data-tooltip="Photocopy Logs" onclick="navigatePage('copy-logs')">
+      <span class="sidebar-icon">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square"><rect x="9" y="9" width="13" height="13"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+      </span>
+      <span class="sidebar-label">Photocopy Logs</span>
     </a>
-    <a class="sidebar-item" data-page="audit" onclick="navigatePage('audit')">
-      Audit Trail
+    <a class="sidebar-item" data-page="audit" data-tooltip="Audit Trail" onclick="navigatePage('audit')">
+      <span class="sidebar-icon">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+      </span>
+      <span class="sidebar-label">Audit Trail</span>
     </a>
-    <a class="sidebar-item" data-page="settings" onclick="navigatePage('settings')">
-      System Settings
+    <a class="sidebar-item" data-page="settings" data-tooltip="System Settings" onclick="navigatePage('settings')">
+      <span class="sidebar-icon">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+      </span>
+      <span class="sidebar-label">System Settings</span>
     </a>
 
     <div class="sidebar-divider"></div>
 
-    <a class="sidebar-item sidebar-external" href="/" target="_blank">
-      Open Terminal UI
+    <a class="sidebar-item sidebar-external" data-tooltip="Open Terminal UI" href="/" target="_blank">
+      <span class="sidebar-icon">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square"><rect x="2" y="3" width="20" height="14"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+      </span>
+      <span class="sidebar-label">Open Terminal UI</span>
     </a>
-    <a class="sidebar-item sidebar-external" href="/api/health" target="_blank">
-      System Health
+    <a class="sidebar-item sidebar-external" data-tooltip="System Health" href="/api/health" target="_blank">
+      <span class="sidebar-icon">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+      </span>
+      <span class="sidebar-label">System Health</span>
     </a>
   </nav>
+
+  <!-- Sidebar Footer with Collapse Action -->
+  <div class="sidebar-collapse-wrapper">
+    <button type="button" class="sidebar-collapse-btn" id="sidebarCollapseBtn" onclick="window.toggleAdminSidebar()" title="Collapse / Expand Sidebar (Ctrl+B)">
+      <span class="sidebar-collapse-icon">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square"><polyline points="15 18 9 12 15 6"/></svg>
+      </span>
+      <span class="sidebar-label collapse-label-text">Collapse Menu</span>
+    </button>
+  </div>
 
   <div class="sidebar-bottom">
     <div class="printer-label">
@@ -79,9 +166,14 @@
 
   <!-- TOP HEADER -->
   <div class="topbar">
-    <div>
-      <h1 id="topbarTitle">System Administration</h1>
-      <p id="topbarSub">Enterprise Pull-Print Management &amp; Device Control</p>
+    <div class="topbar-left" style="display:flex; align-items:center; gap:16px;">
+      <button type="button" class="topbar-toggle-btn" id="topbarSidebarToggle" onclick="window.toggleAdminSidebar()" title="Toggle Sidebar Navigation (Ctrl+B)">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="square"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+      </button>
+      <div>
+        <h1 id="topbarTitle">System Administration</h1>
+        <p id="topbarSub">Enterprise Pull-Print Management &amp; Device Control</p>
+      </div>
     </div>
     <div class="nav-links">
       <button class="nav-btn active" onclick="refreshCurrentPage()">Refresh Page</button>
@@ -89,8 +181,8 @@
     </div>
   </div>
 
-  <!-- TOAST / NOTIFICATION STRIP -->
-  <div id="toastNotification" class="toast-strip" style="display:none;"></div>
+  <!-- TOAST / NOTIFICATION STRIP (Hidden - replaced with central Notify Modal) -->
+  <div id="toastNotification" class="toast-strip" style="display:none !important;"></div>
 
   <div class="admin-body">
 
@@ -382,8 +474,10 @@
           <h2>Physical Printer Devices</h2>
           <p>Register, monitor, and configure physical Toshiba MFPs and RAW/JetDirect Port 9100 devices.</p>
         </div>
-        <div style="display:flex; gap:8px;">
-          <button class="btn btn-primary" onclick="window.pollFleetCopyJobs()" id="btnPollCopyFleet">📑 Poll Walk-Up Copy Jobs</button>
+        <div style="display:flex; gap:8px; flex-wrap:wrap;">
+          <button class="btn btn-warning" onclick="window.lockAllFleetPrinters(true)" id="btnLockAllFleet" style="background:#D97706; border-color:#B45309; color:#FFF; font-weight:700;" title="Lock native Photocopy &amp; HOME screen icons on all Toshiba MFPs">🔒 Lock All HOME Screens</button>
+          <button class="btn btn-secondary" onclick="window.lockAllFleetPrinters(false)" id="btnUnlockAllFleet" title="Unlock walk-up photocopy on all Toshiba MFPs">🔓 Unlock All</button>
+          <button class="btn btn-primary" onclick="window.pollFleetCopyJobs()" id="btnPollCopyFleet">📑 Poll Copy Jobs</button>
           <button class="btn btn-yellow" onclick="openAddPrinterModal()">+ Register New Printer</button>
           <button class="btn btn-secondary" onclick="loadPrinters()">Refresh</button>
         </div>
@@ -899,8 +993,22 @@
             <span class="form-hint" id="userPinHint">PIN entered at the MFP touchscreen to release print jobs</span>
           </div>
           <div class="form-group flex-1">
-            <label class="form-label" for="userBadge">Badge / RFID Card Number</label>
-            <input type="text" id="userBadge" class="form-input" placeholder="e.g. BADGE-1002">
+            <label class="form-label" for="userPassword">Touchscreen Password</label>
+            <input type="password" id="userPassword" class="form-input" placeholder="Account password for MFP touchscreen">
+            <span class="form-hint" id="userPasswordHint">Password for login at MFP touchscreen</span>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group flex-1">
+            <label class="form-label" for="userBadge">RFID Card Number (Primary)</label>
+            <input type="text" id="userBadge" class="form-input" placeholder="e.g. 1029384756 or BADGE-1001">
+            <span class="form-hint">Physical proximity card ID from Toshiba reader</span>
+          </div>
+          <div class="form-group flex-1">
+            <label class="form-label" for="userSecondaryBadge">NFC Card Number (Secondary)</label>
+            <input type="text" id="userSecondaryBadge" class="form-input" placeholder="e.g. 04A1B2C3D4 or mobile NFC">
+            <span class="form-hint">Mobile phone NFC tag or secondary badge number</span>
           </div>
         </div>
 
@@ -993,7 +1101,32 @@
             <span class="form-hint" style="color:#0284C7; font-weight:500;">nexPrint Server PC URL (e.g. http://192.168.1.80:8080/). Do NOT use printer IP or https.</span>
           </div>
         </div>
-        <div id="quickEwbLog" class="ewb-log-box" style="display:block; min-height:80px;">Ready to configure Toshiba EWB. Click "Push EWB Now".</div>
+
+        <!-- Dedicated HOME Screen Icons Lock Card (Photo Copy Restriction) -->
+        <div style="background:#F8FAFC; border:1.5px solid #CBD5E1; padding:12px 14px; margin-top:12px; margin-bottom:12px; border-radius:4px;">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+            <div style="font-size:13px; font-weight:700; color:#0F172A; display:flex; align-items:center; gap:6px;">
+              <span>🔒</span> Toshiba HOME Screen Icons Lock
+            </div>
+            <span id="quickEwbLockBadge" class="badge" style="background:#FEF3C7; color:#92400E; font-size:11px; font-weight:700;">Status: Unlocked</span>
+          </div>
+          <p style="font-size:11.5px; color:#475569; margin-bottom:10px; line-height:1.4;">
+            Lock native walk-up Photo Copy, Scan &amp; HOME screen icons so users cannot make copies without authenticating via nexPrint.
+          </p>
+          <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+            <button type="button" class="btn btn-sm btn-primary" onclick="handleQuickEwbLock(true)" id="btnQuickEwbLockCopy" style="background:#D97706; border-color:#B45309; font-weight:700; padding:6px 14px;">
+              🔒 Lock HOME Icons (Photo Copy)
+            </button>
+            <button type="button" class="btn btn-sm btn-secondary" onclick="handleQuickEwbLock(false)" id="btnQuickEwbUnlockCopy" style="font-size:11.5px; padding:6px 12px;">
+              🔓 Unlock (Allow Walk-up Copy)
+            </button>
+            <label style="font-size:11.5px; color:#334155; margin-left:auto; display:flex; align-items:center; gap:6px; cursor:pointer;">
+              <input type="checkbox" id="quickEwbAutoLock" checked> Auto-lock on Push EWB
+            </label>
+          </div>
+        </div>
+
+        <div id="quickEwbLog" class="ewb-log-box" style="display:block; min-height:80px;">Ready to configure Toshiba EWB. Click "Push EWB Now" or "Lock HOME Icons".</div>
       </div>
       <div class="modal-foot">
         <a id="quickEwbTopAccessLink" href="#" target="_blank" class="btn btn-secondary" style="margin-right:8px;">Open TopAccess</a>
@@ -1152,6 +1285,32 @@
   </div>
 </div>
 
-<script src="/js/admin-app.js?v=20261020_50"></script>
+<!-- =========================================================================
+     MODAL 6: CUSTOM NOTIFICATION & ALERT MODAL (Central Modal Dialog)
+     ========================================================================= -->
+<div id="notifyModal" class="modal-backdrop" style="display:none; z-index:9999999;" onclick="if(event.target===this) window.closeNotifyModal();">
+  <div class="modal-box notify-modal-box" id="notifyModalBox">
+    <div class="modal-head" id="notifyModalHead">
+      <div class="notify-head-left">
+        <span id="notifyModalHeadIcon" class="notify-head-icon">ℹ️</span>
+        <h3 id="notifyModalTitle">Notification</h3>
+      </div>
+      <button type="button" class="modal-close-btn" onclick="window.closeNotifyModal()" title="Close">✕</button>
+    </div>
+    <div class="modal-body notify-modal-body">
+      <div id="notifyModalBadge" class="notify-type-badge notify-badge-info">
+        <span id="notifyModalBadgeIcon">ℹ</span>
+      </div>
+      <div class="notify-msg-wrapper">
+        <p id="notifyModalMsg" class="notify-msg-text"></p>
+      </div>
+    </div>
+    <div class="modal-foot notify-modal-foot">
+      <button type="button" class="btn btn-primary" id="notifyModalOkBtn" onclick="window.closeNotifyModal()">OK</button>
+    </div>
+  </div>
+</div>
+
+<script src="/js/admin-app.js?v=20261024_01"></script>
 </body>
 </html>

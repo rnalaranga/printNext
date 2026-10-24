@@ -4,6 +4,7 @@ import com.rr.secureprint.dto.AuthResponse;
 import com.rr.secureprint.dto.LoginRequest;
 import com.rr.secureprint.entity.UserEntity;
 import com.rr.secureprint.repository.PrinterRepository;
+import com.rr.secureprint.repository.UserRepository;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpSession;
 import org.springframework.stereotype.Service;
@@ -24,6 +25,8 @@ public class AuthService {
     private final AuditService auditService;
     private final CopyTrackingService copyTrackingService;
     private final PrinterRepository printerRepository;
+    private final UserRepository userRepository;
+    private final ToshibaEwbService toshibaEwbService;
 
     // Rate Limiting: Max 5 failed attempts per IP within 60 seconds
     private final Map<String, RateLimitTracker> rateLimitMap = new ConcurrentHashMap<>();
@@ -31,11 +34,15 @@ public class AuthService {
     public AuthService(ActiveDirectoryService activeDirectoryService,
                        AuditService auditService,
                        CopyTrackingService copyTrackingService,
-                       PrinterRepository printerRepository) {
+                       PrinterRepository printerRepository,
+                       UserRepository userRepository,
+                       ToshibaEwbService toshibaEwbService) {
         this.activeDirectoryService = activeDirectoryService;
         this.auditService = auditService;
         this.copyTrackingService = copyTrackingService;
         this.printerRepository = printerRepository;
+        this.userRepository = userRepository;
+        this.toshibaEwbService = toshibaEwbService;
     }
 
     public AuthResponse login(LoginRequest request, HttpServletRequest httpRequest) {
@@ -49,8 +56,46 @@ public class AuthService {
         }
 
         Optional<UserEntity> userOpt = Optional.empty();
+        boolean isCardSelfAssociation = false;
 
-        if (request.hasCredentials()) {
+        // 1. PaperCut Self-Association: User tapped an unregistered badge and provided PIN or credentials to link it
+        if (request.hasBadge() && (request.hasPin() || request.hasCredentials())) {
+            if (request.hasCredentials()) {
+                userOpt = activeDirectoryService.authenticate(request.username(), request.password());
+            } else {
+                if (request.username() != null && !request.username().isBlank()) {
+                    userOpt = activeDirectoryService.authenticateByUsernameAndPin(request.username(), request.pin());
+                } else {
+                    userOpt = activeDirectoryService.authenticateByPin(request.pin());
+                }
+            }
+
+            if (userOpt.isPresent()) {
+                UserEntity user = userOpt.get();
+                String cleanBadge = request.badgeId().trim();
+
+                // Ensure this badge is not already assigned to another active user
+                Optional<UserEntity> existingBadgeUser = userRepository.findByAnyBadgeId(cleanBadge);
+                if (existingBadgeUser.isPresent() && !existingBadgeUser.get().getId().equals(user.getId())) {
+                    auditService.logEvent("CARD_SELF_ASSOCIATION_CONFLICT", user.getUserSid(), user.getUsername(), null, null, clientIp,
+                            "Card " + cleanBadge + " is already linked to " + existingBadgeUser.get().getUsername(), "FAILURE");
+                    return AuthResponse.failure("This card is already linked to user '" + existingBadgeUser.get().getUsername() + "'");
+                }
+
+                // Associate card with user: primary (RFID) or secondary (NFC)
+                if (user.getBadgeId() == null || user.getBadgeId().isBlank()) {
+                    user.setBadgeId(cleanBadge);
+                } else if (!cleanBadge.equalsIgnoreCase(user.getBadgeId())) {
+                    user.setSecondaryBadgeId(cleanBadge);
+                }
+                user = userRepository.save(user);
+                userOpt = Optional.of(user);
+                isCardSelfAssociation = true;
+
+                auditService.logEvent("CARD_SELF_ASSOCIATION_SUCCESS", user.getUserSid(), user.getUsername(), null, null, clientIp,
+                        "RFID/NFC card [" + cleanBadge + "] successfully registered to user " + user.getUsername(), "SUCCESS");
+            }
+        } else if (request.hasCredentials()) {
             userOpt = activeDirectoryService.authenticate(request.username(), request.password());
         } else if (request.hasPin()) {
             if (request.username() != null && !request.username().isBlank()) {
@@ -59,7 +104,15 @@ public class AuthService {
                 userOpt = activeDirectoryService.authenticateByPin(request.pin());
             }
         } else if (request.hasBadge()) {
-            userOpt = activeDirectoryService.authenticateByBadge(request.badgeId());
+            // Pure Card Tap (Card Swipe)
+            String cleanBadge = request.badgeId().trim();
+            userOpt = activeDirectoryService.authenticateByBadge(cleanBadge);
+            if (userOpt.isEmpty()) {
+                // Unknown Card -> Trigger Self-Association prompt (PaperCut MF workflow)
+                auditService.logEvent("CARD_UNKNOWN_TAP", null, null, null, null, clientIp,
+                        "Unregistered RFID/NFC card tapped: " + cleanBadge, "INFO");
+                return AuthResponse.unregisteredCard(cleanBadge, "Card not registered. Enter your PIN or account credentials to link this card.");
+            }
         }
 
         if (userOpt.isPresent()) {
@@ -73,7 +126,7 @@ public class AuthService {
             session.setMaxInactiveInterval(300); // 5 minutes inactivity timeout for MFP touchscreen
 
             auditService.logEvent("LOGIN_SUCCESS", user.getUserSid(), user.getUsername(), null, null, clientIp,
-                    "Authenticated via " + (request.hasPin() ? "PIN" : request.hasBadge() ? "BADGE" : "CREDENTIALS"), "SUCCESS");
+                    "Authenticated via " + (isCardSelfAssociation ? "CARD_SELF_ASSOCIATION" : request.hasBadge() ? "RFID_CARD" : request.hasPin() ? "PIN" : "CREDENTIALS"), "SUCCESS");
 
             // Register terminal session for attribution
             copyTrackingService.registerActiveTerminalUser(clientIp, user.getUsername());

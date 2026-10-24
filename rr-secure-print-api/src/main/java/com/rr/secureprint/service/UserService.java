@@ -94,6 +94,9 @@ public class UserService {
         if (request.isActive() != null) {
             user.setActive(request.isActive());
         }
+        if (request.secondaryBadgeId() != null && !request.secondaryBadgeId().isBlank()) {
+            user.setSecondaryBadgeId(request.secondaryBadgeId().trim());
+        }
         if (request.password() != null && !request.password().isBlank()) {
             user.setPasswordHash(request.password().trim());
         }
@@ -125,6 +128,9 @@ public class UserService {
         }
         if (request.badgeId() != null) {
             user.setBadgeId(request.badgeId().isBlank() ? null : request.badgeId().trim());
+        }
+        if (request.secondaryBadgeId() != null) {
+            user.setSecondaryBadgeId(request.secondaryBadgeId().isBlank() ? null : request.secondaryBadgeId().trim());
         }
         if (request.pin() != null && !request.pin().isBlank()) {
             user.setPinHash(request.pin().trim());

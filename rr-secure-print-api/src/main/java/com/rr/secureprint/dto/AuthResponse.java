@@ -9,10 +9,17 @@ public record AuthResponse(
         String role,
         long printCount,
         long copyCount,
-        String message
+        String message,
+        boolean unregisteredCard,
+        String badgeId
 ) {
+    public AuthResponse(boolean authenticated, String username, String displayName, String userSid,
+                        String department, String role, long printCount, long copyCount, String message) {
+        this(authenticated, username, displayName, userSid, department, role, printCount, copyCount, message, false, null);
+    }
+
     public static AuthResponse success(String username, String displayName, String userSid, String department, String role, long printCount, long copyCount) {
-        return new AuthResponse(true, username, displayName, userSid, department, role, printCount, copyCount, "Authentication successful");
+        return new AuthResponse(true, username, displayName, userSid, department, role, printCount, copyCount, "Authentication successful", false, null);
     }
 
     public static AuthResponse success(String username, String displayName, String userSid, String department, String role) {
@@ -20,6 +27,10 @@ public record AuthResponse(
     }
 
     public static AuthResponse failure(String message) {
-        return new AuthResponse(false, null, null, null, null, null, 0L, 0L, message);
+        return new AuthResponse(false, null, null, null, null, null, 0L, 0L, message, false, null);
+    }
+
+    public static AuthResponse unregisteredCard(String badgeId, String message) {
+        return new AuthResponse(false, null, null, null, null, null, 0L, 0L, message, true, badgeId);
     }
 }

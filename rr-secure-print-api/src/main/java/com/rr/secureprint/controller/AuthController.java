@@ -26,6 +26,9 @@ public class AuthController {
         AuthResponse response = authService.login(request, httpRequest);
         if (response.authenticated()) {
             return ResponseEntity.ok(response);
+        } else if (response.unregisteredCard()) {
+            // Return 200 OK so client receives card info cleanly for Self-Association without a generic 401 error
+            return ResponseEntity.ok(response);
         } else {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(response);
         }
