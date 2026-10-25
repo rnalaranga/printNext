@@ -183,6 +183,48 @@ public class AdminController {
         return ResponseEntity.ok(result);
     }
 
+    @PostMapping("/printers/{id}/push-ldap-lock")
+    public ResponseEntity<?> pushLdapAndLockPrinter(@PathVariable("id") Long id, HttpServletRequest httpRequest) {
+        if (!isAdmin(httpRequest)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("error", "Admin privileges required."));
+        }
+        try {
+            String adminUser = getAdminActorName(httpRequest);
+            EwbConfigResult result = printerService.pushLdapAndLockPrinter(id, adminUser, httpRequest.getRemoteAddr());
+            return ResponseEntity.ok(result);
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    @PostMapping("/printers/push-ldap-lock-direct")
+    public ResponseEntity<?> pushLdapAndLockDirect(@RequestBody EwbConfigRequest request, HttpServletRequest httpRequest) {
+        if (!isAdmin(httpRequest)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("error", "Admin privileges required."));
+        }
+        try {
+            String adminUser = getAdminActorName(httpRequest);
+            EwbConfigResult result = printerService.pushLdapAndLockDirect(request, adminUser, httpRequest.getRemoteAddr());
+            return ResponseEntity.ok(result);
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    @PostMapping("/printers/push-ldap-lock-fleet")
+    public ResponseEntity<?> pushLdapAndLockFleet(HttpServletRequest httpRequest) {
+        if (!isAdmin(httpRequest)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("error", "Admin privileges required."));
+        }
+        try {
+            String adminUser = getAdminActorName(httpRequest);
+            Map<String, Object> result = printerService.pushLdapAndLockAllFleet(adminUser, httpRequest.getRemoteAddr());
+            return ResponseEntity.ok(result);
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of("error", e.getMessage()));
+        }
+    }
+
     @PostMapping("/printers/{id}/configure-ewb")
     public ResponseEntity<?> configurePrinterEwb(@PathVariable("id") Long id,
                                                  @RequestBody(required = false) EwbConfigRequest request,
@@ -451,6 +493,15 @@ public class AdminController {
         String adminUser = getAdminActorName(httpRequest);
         DirectorySyncResultDto result = activeDirectoryService.importWindowsUsers(adminUser, httpRequest.getRemoteAddr());
         return ResponseEntity.ok(result);
+    }
+
+    @GetMapping("/directory/preview-user")
+    public ResponseEntity<?> previewUserAttributes(@RequestParam("username") String username, HttpServletRequest httpRequest) {
+        if (!isAdmin(httpRequest)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("error", "Admin privileges required."));
+        }
+        Map<String, Object> preview = activeDirectoryService.previewUserAttributes(username);
+        return ResponseEntity.ok(preview);
     }
 
     /* =========================================================================

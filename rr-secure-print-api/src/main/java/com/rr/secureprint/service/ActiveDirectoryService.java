@@ -114,6 +114,15 @@ public class ActiveDirectoryService {
         if (dto.defaultPin() != null && !dto.defaultPin().isBlank()) {
             config.setDefaultPin(dto.defaultPin().trim());
         }
+        if (dto.cardIdAttribute() != null && !dto.cardIdAttribute().isBlank()) config.setCardIdAttribute(dto.cardIdAttribute().trim());
+        if (dto.secondaryCardAttribute() != null) config.setSecondaryCardAttribute(dto.secondaryCardAttribute().trim());
+        if (dto.externalAttr1Name() != null && !dto.externalAttr1Name().isBlank()) config.setExternalAttr1Name(dto.externalAttr1Name().trim());
+        if (dto.externalAttr2Name() != null && !dto.externalAttr2Name().isBlank()) config.setExternalAttr2Name(dto.externalAttr2Name().trim());
+        if (dto.externalAttr3Name() != null && !dto.externalAttr3Name().isBlank()) config.setExternalAttr3Name(dto.externalAttr3Name().trim());
+        if (dto.usernameAttribute() != null && !dto.usernameAttribute().isBlank()) config.setUsernameAttribute(dto.usernameAttribute().trim());
+        if (dto.displayNameAttribute() != null && !dto.displayNameAttribute().isBlank()) config.setDisplayNameAttribute(dto.displayNameAttribute().trim());
+        if (dto.emailAttribute() != null && !dto.emailAttribute().isBlank()) config.setEmailAttribute(dto.emailAttribute().trim());
+        if (dto.departmentAttribute() != null && !dto.departmentAttribute().isBlank()) config.setDepartmentAttribute(dto.departmentAttribute().trim());
         config.setEnabled(dto.isEnabled());
         config.setUpdatedAt(Instant.now());
 
@@ -161,7 +170,7 @@ public class ActiveDirectoryService {
 
         // 2. Query Active Directory / LDAP user count
         try {
-            List<Map<String, String>> users = queryActiveDirectoryViaBridge(domain, baseDn, 100);
+            List<Map<String, String>> users = queryActiveDirectoryViaBridge(getOrCreateConfig(), 100);
             return Map.of(
                     "success", true,
                     "message", "Successfully connected to Active Directory (" + domain + "). Found " + users.size() + " active user accounts.",
@@ -192,7 +201,7 @@ public class ActiveDirectoryService {
 
         List<Map<String, String>> adUsers;
         try {
-            adUsers = queryActiveDirectoryViaBridge(domain, baseDn, 1000);
+            adUsers = queryActiveDirectoryViaBridge(config, 10000);
         } catch (Exception e) {
             LOGGER.log(Level.SEVERE, "[AD SYNC ERROR] Failed to query Active Directory: " + e.getMessage(), e);
             config.setLastSyncAt(Instant.now());
@@ -231,33 +240,50 @@ public class ActiveDirectoryService {
             Optional<UserEntity> existingOpt = userRepository.findByUserSid(sid)
                     .or(() -> userRepository.findByUsername(cleanUsername));
 
+            String cardId = u.get("cardId");
+            if (cardId == null || cardId.isBlank()) {
+                cardId = u.get("ext1");
+            }
+            String ext1 = u.get("ext1");
+            String ext2 = u.get("ext2");
+            String ext3 = u.get("ext3");
+
             if (existingOpt.isPresent()) {
                 UserEntity existing = existingOpt.get();
                 existing.setDisplayName(displayName);
                 existing.setEmail(email);
                 existing.setDepartment(department);
                 existing.setAuthSource("ACTIVE_DIRECTORY");
+                if (cardId != null && !cardId.isBlank()) {
+                    existing.setBadgeId(cardId.trim());
+                }
+                if (ext1 != null && !ext1.isBlank()) existing.setExternalAttribute1(ext1.trim());
+                if (ext2 != null && !ext2.isBlank()) existing.setExternalAttribute2(ext2.trim());
+                if (ext3 != null && !ext3.isBlank()) existing.setExternalAttribute3(ext3.trim());
                 if (existing.getUserSid() == null || !existing.getUserSid().startsWith("S-1-5-")) {
                     existing.setUserSid(sid);
                 }
                 userRepository.save(existing);
                 updatedCount++;
-                userSummary.add(cleanUsername + " (Updated from AD)");
+                userSummary.add(cleanUsername + " (Updated: Card=" + (cardId != null ? cardId : "none") + ", Ext1=" + (ext1 != null ? ext1 : "none") + ")");
             } else {
                 UserEntity newUser = new UserEntity(
                         cleanUsername,
                         displayName,
                         sid,
                         defaultPin,
-                        "BADGE-" + Math.abs(cleanUsername.hashCode() % 10000),
+                        (cardId != null && !cardId.isBlank()) ? cardId.trim() : ("BADGE-" + Math.abs(cleanUsername.hashCode() % 10000)),
                         email,
                         department,
                         cleanUsername.equals("administrator") ? "ADMIN" : "USER",
                         "ACTIVE_DIRECTORY"
                 );
+                if (ext1 != null && !ext1.isBlank()) newUser.setExternalAttribute1(ext1.trim());
+                if (ext2 != null && !ext2.isBlank()) newUser.setExternalAttribute2(ext2.trim());
+                if (ext3 != null && !ext3.isBlank()) newUser.setExternalAttribute3(ext3.trim());
                 userRepository.save(newUser);
                 importedCount++;
-                userSummary.add(cleanUsername + " (Imported from AD)");
+                userSummary.add(cleanUsername + " (Imported: Card=" + (cardId != null ? cardId : "none") + ", Ext1=" + (ext1 != null ? ext1 : "none") + ")");
             }
         }
 
@@ -702,7 +728,76 @@ public class ActiveDirectoryService {
        7. HELPER METHODS & SYSTEM INTEGRATION BRIDGES
        ========================================================================= */
 
-    private List<Map<String, String>> queryActiveDirectoryViaBridge(String domain, String baseDn, int maxLimit) throws Exception {
+    public Map<String, Object> previewUserAttributes(String username) {
+        if (username == null || username.isBlank()) {
+            return Map.of("success", false, "message", "Username is required.");
+        }
+        String cleanUser = username.trim().toLowerCase();
+        DirectoryConfigEntity cfg = getOrCreateConfig();
+        String baseDn = cfg.getBaseDn();
+        String cardAttr = cfg.getCardIdAttribute();
+        String ext1Attr = cfg.getExternalAttr1Name();
+        String ext2Attr = cfg.getExternalAttr2Name();
+        String ext3Attr = cfg.getExternalAttr3Name();
+
+        try {
+            String script = "$s = New-Object System.DirectoryServices.DirectorySearcher([ADSI]('LDAP://127.0.0.1/" + baseDn + "')); " +
+                    "$s.Filter = '(&(objectCategory=person)(objectClass=user)(sAMAccountName=" + cleanUser + "))'; " +
+                    "$res = $s.FindOne(); " +
+                    "if (-not $res) { [PSCustomObject]@{ found = $false; username = '" + cleanUser + "' } | ConvertTo-Json -Compress; exit; } " +
+                    "$p = $res.Properties; " +
+                    "$dict = [ordered]@{ found = $true; username = '" + cleanUser + "'; " +
+                    "displayName = if ($p.displayname) { $p.displayname[0].ToString() } else { '' }; " +
+                    "mail = if ($p.mail) { $p.mail[0].ToString() } else { '' }; " +
+                    "department = if ($p.department) { $p.department[0].ToString() } else { '' }; " +
+                    "cardAttributeValue = if ($p.Item('" + cardAttr + "')) { $p.Item('" + cardAttr + "')[0].ToString() } else { '' }; " +
+                    "externalAttr1Value = if ($p.Item('" + ext1Attr + "')) { $p.Item('" + ext1Attr + "')[0].ToString() } else { '' }; " +
+                    "externalAttr2Value = if ($p.Item('" + ext2Attr + "')) { $p.Item('" + ext2Attr + "')[0].ToString() } else { '' }; " +
+                    "externalAttr3Value = if ($p.Item('" + ext3Attr + "')) { $p.Item('" + ext3Attr + "')[0].ToString() } else { '' }; " +
+                    "allAttributesCount = $p.PropertyNames.Count }; " +
+                    "$dict | ConvertTo-Json -Compress";
+
+            ProcessBuilder pb = new ProcessBuilder("powershell", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", script);
+            Process process = pb.start();
+            StringBuilder sb = new StringBuilder();
+            try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
+                String line;
+                while ((line = reader.readLine()) != null) sb.append(line);
+            }
+            process.waitFor();
+            String json = sb.toString().trim();
+            if (!json.isEmpty() && !json.equals("null")) {
+                JsonNode n = objectMapper.readTree(json);
+                if (n.has("found") && n.get("found").asBoolean()) {
+                    Map<String, Object> res = new LinkedHashMap<>();
+                    res.put("success", true);
+                    res.put("username", cleanUser);
+                    res.put("displayName", n.has("displayName") ? n.get("displayName").asText() : "");
+                    res.put("mail", n.has("mail") ? n.get("mail").asText() : "");
+                    res.put("department", n.has("department") ? n.get("department").asText() : "");
+                    res.put("cardIdAttribute", cardAttr);
+                    res.put("cardIdValue", n.has("cardAttributeValue") ? n.get("cardAttributeValue").asText() : "");
+                    res.put("externalAttr1Name", ext1Attr);
+                    res.put("externalAttr1Value", n.has("externalAttr1Value") ? n.get("externalAttr1Value").asText() : "");
+                    res.put("externalAttr2Name", ext2Attr);
+                    res.put("externalAttr2Value", n.has("externalAttr2Value") ? n.get("externalAttr2Value").asText() : "");
+                    res.put("externalAttr3Name", ext3Attr);
+                    res.put("externalAttr3Value", n.has("externalAttr3Value") ? n.get("externalAttr3Value").asText() : "");
+                    return res;
+                }
+            }
+            return Map.of("success", false, "message", "User '" + cleanUser + "' not found in Active Directory (" + baseDn + ").");
+        } catch (Exception e) {
+            return Map.of("success", false, "message", "Error querying AD attributes: " + e.getMessage());
+        }
+    }
+
+    private List<Map<String, String>> queryActiveDirectoryViaBridge(DirectoryConfigEntity config, int maxLimit) throws Exception {
+        String baseDn = config.getBaseDn() != null ? config.getBaseDn() : "DC=qoa,DC=local";
+        String cardAttr = config.getCardIdAttribute() != null ? config.getCardIdAttribute() : "employeeNumber";
+        String ext1Attr = config.getExternalAttr1Name() != null ? config.getExternalAttr1Name() : "extensionAttribute1";
+        String ext2Attr = config.getExternalAttr2Name() != null ? config.getExternalAttr2Name() : "extensionAttribute2";
+        String ext3Attr = config.getExternalAttr3Name() != null ? config.getExternalAttr3Name() : "extensionAttribute3";
         String script = "$s = New-Object System.DirectoryServices.DirectorySearcher([ADSI]'LDAP://127.0.0.1/" + baseDn + "'); " +
                 "$s.Filter = '(&(objectCategory=person)(objectClass=user))'; " +
                 "$s.SizeLimit = " + maxLimit + "; " +
@@ -715,7 +810,11 @@ public class ActiveDirectoryService {
                 "  $mail = if ($p.mail) { $p.mail[0] } else { '' }; " +
                 "  $dept = if ($p.department) { $p.department[0] } else { 'Corporate' }; " +
                 "  $sid = if ($p.objectsid) { (New-Object System.Security.Principal.SecurityIdentifier($p.objectsid[0], 0)).Value } else { '' }; " +
-                "  $results += [PSCustomObject]@{ samAccountName = $sam; displayName = $disp; mail = $mail; department = $dept; sid = $sid }; " +
+                "  $card = if ($p.Item('" + cardAttr + "')) { $p.Item('" + cardAttr + "')[0].ToString() } else { '' }; " +
+                "  $e1 = if ($p.Item('" + ext1Attr + "')) { $p.Item('" + ext1Attr + "')[0].ToString() } else { '' }; " +
+                "  $e2 = if ($p.Item('" + ext2Attr + "')) { $p.Item('" + ext2Attr + "')[0].ToString() } else { '' }; " +
+                "  $e3 = if ($p.Item('" + ext3Attr + "')) { $p.Item('" + ext3Attr + "')[0].ToString() } else { '' }; " +
+                "  $results += [PSCustomObject]@{ samAccountName = $sam; displayName = $disp; mail = $mail; department = $dept; sid = $sid; cardId = $card; ext1 = $e1; ext2 = $e2; ext3 = $e3 }; " +
                 "} " +
                 "$results | ConvertTo-Json -Compress";
 
@@ -797,6 +896,10 @@ public class ActiveDirectoryService {
         m.put("mail", n.has("mail") ? n.get("mail").asText() : "");
         m.put("department", n.has("department") ? n.get("department").asText() : "");
         m.put("sid", n.has("sid") ? n.get("sid").asText() : "");
+        m.put("cardId", n.has("cardId") ? n.get("cardId").asText() : "");
+        m.put("ext1", n.has("ext1") ? n.get("ext1").asText() : "");
+        m.put("ext2", n.has("ext2") ? n.get("ext2").asText() : "");
+        m.put("ext3", n.has("ext3") ? n.get("ext3").asText() : "");
         return m;
     }
 

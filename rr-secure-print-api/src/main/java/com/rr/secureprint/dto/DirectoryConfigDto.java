@@ -17,7 +17,16 @@ public record DirectoryConfigDto(
         Instant lastSyncAt,
         String lastSyncStatus,
         String lastSyncMessage,
-        int syncedUserCount
+        int syncedUserCount,
+        String cardIdAttribute,
+        String secondaryCardAttribute,
+        String externalAttr1Name,
+        String externalAttr2Name,
+        String externalAttr3Name,
+        String usernameAttribute,
+        String displayNameAttribute,
+        String emailAttribute,
+        String departmentAttribute
 ) {
     public static DirectoryConfigDto fromEntity(DirectoryConfigEntity e, boolean maskPassword) {
         String pass = e.getBindPassword();
@@ -38,7 +47,16 @@ public record DirectoryConfigDto(
                 e.getLastSyncAt(),
                 e.getLastSyncStatus(),
                 e.getLastSyncMessage(),
-                e.getSyncedUserCount()
+                e.getSyncedUserCount(),
+                e.getCardIdAttribute(),
+                e.getSecondaryCardAttribute(),
+                e.getExternalAttr1Name(),
+                e.getExternalAttr2Name(),
+                e.getExternalAttr3Name(),
+                e.getUsernameAttribute(),
+                e.getDisplayNameAttribute(),
+                e.getEmailAttribute(),
+                e.getDepartmentAttribute()
         );
     }
 }

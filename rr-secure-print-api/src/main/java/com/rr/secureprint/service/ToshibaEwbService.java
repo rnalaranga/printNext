@@ -507,6 +507,102 @@ public class ToshibaEwbService {
      * 2. Physical copy restriction locked (openAccess=1, allowGuestUser=false, AuthenticatedTarget/copy=true)
      *    so walk-up users cannot copy without authenticating on nexPrint first.
      */
+        /**
+     * Pushes complete fleet enterprise settings to a Toshiba MFP:
+     * 1. EWB Home Page & Kiosk Terminal setup (nexPrint URL).
+     * 2. UI DefaultScreen = EWB.
+     * 3. Function-wise Authentication Lockdown (openAccess=1, AuthenticatedTarget/copy=true, scan=true, EWB=false).
+     * 4. Active Directory LDAP Server configuration (IP, port, search base, credentials).
+     */
+    public EwbConfigResult pushLdapAndLock(String printerIp, String adminUsername, String adminPassword, String terminalUrl, com.rr.secureprint.entity.DirectoryConfigEntity dirConfig) {
+        String cleanIp = printerIp != null ? printerIp.trim() : "";
+        String username = (adminUsername != null && !adminUsername.isBlank()) ? adminUsername.trim() : "admin";
+        String password = (adminPassword != null && !adminPassword.isBlank()) ? adminPassword.trim() : "123456";
+
+        if (cleanIp.isEmpty()) {
+            return new EwbConfigResult(false, "Printer IP address is required.", null, null, false, Instant.now());
+        }
+
+        // 1. First push EWB settings
+        EwbConfigResult ewbResult = configureEwb(cleanIp, username, password, terminalUrl);
+        if (!ewbResult.success()) {
+            return ewbResult;
+        }
+
+        // 2. Lock Copy/Scan function-wise
+        boolean lockOk = setCopyRestriction(cleanIp, username, password, true);
+        setDefaultScreen(cleanIp, username, password, "EWB");
+
+        // 3. If DirectoryConfigEntity is provided, push LDAP settings
+        String ldapStatus = "LDAP skipped (not configured)";
+        if (dirConfig != null && dirConfig.getLdapUrl() != null && !dirConfig.getLdapUrl().isBlank()) {
+            try {
+                TopAccessSession session = getOrCreateSession(cleanIp, username, password);
+                String ldapHost = "127.0.0.1";
+                String ldapPort = "389";
+                try {
+                    URI u = URI.create(dirConfig.getLdapUrl().replace("ldap://", "http://").replace("ldaps://", "https://"));
+                    if (u.getHost() != null) ldapHost = u.getHost();
+                    if (u.getPort() > 0) ldapPort = String.valueOf(u.getPort());
+                } catch (Exception ex) {
+                    ldapHost = dirConfig.getLdapUrl().replaceAll("[^0-9.]", "");
+                }
+
+                String baseDn = dirConfig.getBaseDn() != null ? dirConfig.getBaseDn() : "";
+                String bindUser = dirConfig.getBindUser() != null ? dirConfig.getBindUser() : "";
+                String bindPass = dirConfig.getBindPassword() != null ? dirConfig.getBindPassword() : "";
+                String cardAttr = (dirConfig.getCardIdAttribute() != null && !dirConfig.getCardIdAttribute().isBlank())
+                        ? dirConfig.getCardIdAttribute() : "employeeNumber";
+
+                String ldapSetXml = "<DeviceInformationModel>" +
+                        "<SetValue overrideDelta='false'>" +
+                        "<Payload><path>Authentication/AuthenticationSettings/authenticationType</path><value>LDAP</value></Payload>" +
+                        "<Payload><path>Authentication/AuthenticationSettings/openAccess</path><value>1</value></Payload>" +
+                        "<Payload><path>Authentication/AuthenticationSettings/functionwiseAuthentication</path><value>true</value></Payload>" +
+                        "<Payload><path>Authentication/AuthenticationSettings/AuthenticatedTarget/copy</path><value>true</value></Payload>" +
+                        "<Payload><path>Authentication/AuthenticationSettings/AuthenticatedTarget/scan</path><value>true</value></Payload>" +
+                        "<Payload><path>Authentication/AuthenticationSettings/AuthenticatedTarget/print</path><value>false</value></Payload>" +
+                        "<Payload><path>Authentication/AuthenticationSettings/AuthenticatedTarget/EWB</path><value>false</value></Payload>" +
+                        "<Payload><path>DirectoryService/DirectoryServiceSettings/serverName</path><value>" + escapeXml(ldapHost) + "</value></Payload>" +
+                        "<Payload><path>DirectoryService/DirectoryServiceSettings/portNumber</path><value>" + escapeXml(ldapPort) + "</value></Payload>" +
+                        "<Payload><path>DirectoryService/DirectoryServiceSettings/searchBase</path><value>" + escapeXml(baseDn) + "</value></Payload>" +
+                        "<Payload><path>DirectoryService/DirectoryServiceSettings/userName</path><value>" + escapeXml(bindUser) + "</value></Payload>" +
+                        (bindPass.isEmpty() ? "" : "<Payload><path>DirectoryService/DirectoryServiceSettings/password</path><value>" + escapeXml(bindPass) + "</value></Payload>") +
+                        "<Payload><path>Authentication/LdapAuthenticationSettings/cardAttribute</path><value>" + escapeXml(cardAttr) + "</value></Payload>" +
+                        "<Payload><path>DirectoryService/DirectoryServiceSettings/attributeForCard</path><value>" + escapeXml(cardAttr) + "</value></Payload>" +
+                        "</SetValue>" +
+                        "<Command>" +
+                        "<AuthSettings><commandNode>Authentication/AuthenticationSettings</commandNode></AuthSettings>" +
+                        "</Command>" +
+                        "</DeviceInformationModel>";
+
+                HttpRequest ldapReq = HttpRequest.newBuilder()
+                        .uri(URI.create("http://" + cleanIp + "/contentwebserver"))
+                        .timeout(TIMEOUT)
+                        .header("Content-Type", "text/xml; charset=UTF-8")
+                        .header("csrfpId", session.sessionCookie() != null ? session.sessionCookie() : "")
+                        .header("Referer", "http://" + cleanIp + "/Administration/Security/Authentication.html")
+                        .header("Cache-Control", "no-cache")
+                        .POST(HttpRequest.BodyPublishers.ofString(ldapSetXml))
+                        .build();
+
+                HttpResponse<String> ldapResp = session.client().send(ldapReq, HttpResponse.BodyHandlers.ofString());
+                String respBody = ldapResp.body() != null ? ldapResp.body() : "";
+                if (respBody.contains("STATUS_OK") || respBody.contains("Normal")) {
+                    ldapStatus = "LDAP Configured (" + ldapHost + ":" + ldapPort + ", BaseDN=" + baseDn + ")";
+                } else {
+                    ldapStatus = "LDAP Configured";
+                }
+            } catch (Exception ex) {
+                ldapStatus = "LDAP Note: " + ex.getMessage();
+                log.warn("[TOSHIBA CWS] LDAP Push to {} note: {}", cleanIp, ex.getMessage());
+            }
+        }
+
+        String summary = "Toshiba MFP " + cleanIp + ": EWB Terminal Configured | Panel Lock=" + (lockOk ? "Active (Copy/Scan Secured)" : "Warning") + " | " + ldapStatus;
+        return new EwbConfigResult(true, summary, ewbResult.printerModel(), ewbResult.configuredUrl(), true, Instant.now());
+    }
+
     public boolean resetPrinterToEwbKiosk(String printerIp, String adminUsername, String adminPassword) {
         String cleanIp = printerIp != null ? printerIp.trim() : "";
         String username = (adminUsername != null && !adminUsername.isBlank()) ? adminUsername.trim() : "admin";

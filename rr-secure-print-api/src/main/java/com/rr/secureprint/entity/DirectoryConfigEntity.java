@@ -52,6 +52,33 @@ public class DirectoryConfigEntity {
     @Column(name = "synced_user_count")
     private int syncedUserCount = 0;
 
+    @Column(name = "card_id_attribute", length = 64)
+    private String cardIdAttribute = "employeeNumber";
+
+    @Column(name = "secondary_card_attribute", length = 64)
+    private String secondaryCardAttribute = "extensionAttribute2";
+
+    @Column(name = "external_attr_1_name", length = 64)
+    private String externalAttr1Name = "extensionAttribute1";
+
+    @Column(name = "external_attr_2_name", length = 64)
+    private String externalAttr2Name = "extensionAttribute2";
+
+    @Column(name = "external_attr_3_name", length = 64)
+    private String externalAttr3Name = "extensionAttribute3";
+
+    @Column(name = "username_attribute", length = 64)
+    private String usernameAttribute = "sAMAccountName";
+
+    @Column(name = "display_name_attribute", length = 64)
+    private String displayNameAttribute = "displayName";
+
+    @Column(name = "email_attribute", length = 64)
+    private String emailAttribute = "mail";
+
+    @Column(name = "department_attribute", length = 64)
+    private String departmentAttribute = "department";
+
     @Column(name = "created_at")
     private Instant createdAt = Instant.now();
 
@@ -105,6 +132,33 @@ public class DirectoryConfigEntity {
 
     public int getSyncedUserCount() { return syncedUserCount; }
     public void setSyncedUserCount(int syncedUserCount) { this.syncedUserCount = syncedUserCount; }
+
+    public String getCardIdAttribute() { return cardIdAttribute != null ? cardIdAttribute : "employeeNumber"; }
+    public void setCardIdAttribute(String cardIdAttribute) { this.cardIdAttribute = cardIdAttribute; }
+
+    public String getSecondaryCardAttribute() { return secondaryCardAttribute != null ? secondaryCardAttribute : "extensionAttribute2"; }
+    public void setSecondaryCardAttribute(String secondaryCardAttribute) { this.secondaryCardAttribute = secondaryCardAttribute; }
+
+    public String getExternalAttr1Name() { return externalAttr1Name != null ? externalAttr1Name : "extensionAttribute1"; }
+    public void setExternalAttr1Name(String externalAttr1Name) { this.externalAttr1Name = externalAttr1Name; }
+
+    public String getExternalAttr2Name() { return externalAttr2Name != null ? externalAttr2Name : "extensionAttribute2"; }
+    public void setExternalAttr2Name(String externalAttr2Name) { this.externalAttr2Name = externalAttr2Name; }
+
+    public String getExternalAttr3Name() { return externalAttr3Name != null ? externalAttr3Name : "extensionAttribute3"; }
+    public void setExternalAttr3Name(String externalAttr3Name) { this.externalAttr3Name = externalAttr3Name; }
+
+    public String getUsernameAttribute() { return usernameAttribute != null ? usernameAttribute : "sAMAccountName"; }
+    public void setUsernameAttribute(String usernameAttribute) { this.usernameAttribute = usernameAttribute; }
+
+    public String getDisplayNameAttribute() { return displayNameAttribute != null ? displayNameAttribute : "displayName"; }
+    public void setDisplayNameAttribute(String displayNameAttribute) { this.displayNameAttribute = displayNameAttribute; }
+
+    public String getEmailAttribute() { return emailAttribute != null ? emailAttribute : "mail"; }
+    public void setEmailAttribute(String emailAttribute) { this.emailAttribute = emailAttribute; }
+
+    public String getDepartmentAttribute() { return departmentAttribute != null ? departmentAttribute : "department"; }
+    public void setDepartmentAttribute(String departmentAttribute) { this.departmentAttribute = departmentAttribute; }
 
     public Instant getCreatedAt() { return createdAt; }
     public void setCreatedAt(Instant createdAt) { this.createdAt = createdAt; }

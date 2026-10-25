@@ -22,7 +22,10 @@ public record UserDto(
         long totalPages,
         Integer pageQuota,
         int heldJobsCount,
-        Instant createdAt
+        Instant createdAt,
+        String externalAttribute1,
+        String externalAttribute2,
+        String externalAttribute3
 ) {
     public static UserDto fromEntity(UserEntity user) {
         return fromEntity(user, 0);
@@ -48,7 +51,10 @@ public record UserDto(
                 user.getTotalPages(),
                 user.getPageQuota(),
                 heldJobsCount,
-                user.getCreatedAt()
+                user.getCreatedAt(),
+                user.getExternalAttribute1(),
+                user.getExternalAttribute2(),
+                user.getExternalAttribute3()
         );
     }
 }

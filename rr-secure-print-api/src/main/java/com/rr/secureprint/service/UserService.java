@@ -94,11 +94,29 @@ public class UserService {
         if (request.isActive() != null) {
             user.setActive(request.isActive());
         }
+        if (request.externalAttribute1() != null) {
+            user.setExternalAttribute1(request.externalAttribute1().trim());
+        }
+        if (request.externalAttribute2() != null) {
+            user.setExternalAttribute2(request.externalAttribute2().trim());
+        }
+        if (request.externalAttribute3() != null) {
+            user.setExternalAttribute3(request.externalAttribute3().trim());
+        }
         if (request.secondaryBadgeId() != null && !request.secondaryBadgeId().isBlank()) {
             user.setSecondaryBadgeId(request.secondaryBadgeId().trim());
         }
         if (request.password() != null && !request.password().isBlank()) {
             user.setPasswordHash(request.password().trim());
+        }
+        if (request.externalAttribute1() != null) {
+            user.setExternalAttribute1(request.externalAttribute1().trim());
+        }
+        if (request.externalAttribute2() != null) {
+            user.setExternalAttribute2(request.externalAttribute2().trim());
+        }
+        if (request.externalAttribute3() != null) {
+            user.setExternalAttribute3(request.externalAttribute3().trim());
         }
 
         UserEntity saved = userRepository.save(user);

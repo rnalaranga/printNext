@@ -6,6 +6,7 @@ import com.rr.secureprint.dto.PrinterSaveRequest;
 import com.rr.secureprint.dto.PrinterTestResult;
 import com.rr.secureprint.entity.PrinterEntity;
 import com.rr.secureprint.repository.PrinterRepository;
+import java.util.LinkedHashMap;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -28,17 +29,20 @@ public class PrinterService {
     private final ToshibaEwbService toshibaEwbService;
     private final com.rr.secureprint.repository.PrintJobRepository printJobRepository;
     private final AuditService auditService;
+    private final com.rr.secureprint.repository.DirectoryConfigRepository directoryConfigRepository;
 
     public PrinterService(PrinterRepository printerRepository,
                           RawSocketPrinterService rawSocketPrinterService,
                           ToshibaEwbService toshibaEwbService,
                           com.rr.secureprint.repository.PrintJobRepository printJobRepository,
-                          AuditService auditService) {
+                          AuditService auditService,
+                          com.rr.secureprint.repository.DirectoryConfigRepository directoryConfigRepository) {
         this.printerRepository = printerRepository;
         this.rawSocketPrinterService = rawSocketPrinterService;
         this.toshibaEwbService = toshibaEwbService;
         this.printJobRepository = printJobRepository;
         this.auditService = auditService;
+        this.directoryConfigRepository = directoryConfigRepository;
     }
 
     public List<PrinterEntity> getAllPrinters() {
@@ -505,6 +509,93 @@ public class PrinterService {
         PrinterEntity printer = printerRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Printer id " + id + " not found."));
         return toshibaEwbService.dumpAllSettings(printer.getIpAddress(), printer.getAdminUsername(), printer.getAdminPassword());
+    }
+
+        public EwbConfigResult pushLdapAndLockPrinter(Long id, String adminActor, String clientIp) {
+        PrinterEntity printer = printerRepository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("Printer id " + id + " not found."));
+        var dirConfig = directoryConfigRepository.findById(1L).orElse(null);
+        String targetUrl = printer.getEwbUrl();
+        EwbConfigResult result = toshibaEwbService.pushLdapAndLock(
+                printer.getIpAddress(),
+                printer.getAdminUsername(),
+                printer.getAdminPassword(),
+                targetUrl,
+                dirConfig
+        );
+        if (result.success()) {
+            printer.setFunctionsLocked(true);
+            printer.setStatus("ONLINE");
+            printerRepository.save(printer);
+        }
+        auditService.logEvent("PRINTER_PUSH_LDAP_LOCK", null, adminActor, null, printer.getPrinterCode(), clientIp,
+                "Push LDAP & Function Lock on " + printer.getIpAddress() + ": " + result.message(), result.success() ? "SUCCESS" : "FAILURE");
+        return result;
+    }
+
+    public EwbConfigResult pushLdapAndLockDirect(EwbConfigRequest request, String adminActor, String clientIp) {
+        if (request.printerIp() == null || request.printerIp().isBlank()) {
+            throw new IllegalArgumentException("Printer IP is required.");
+        }
+        var dirConfig = directoryConfigRepository.findById(1L).orElse(null);
+        EwbConfigResult result = toshibaEwbService.pushLdapAndLock(
+                request.printerIp(),
+                request.adminUsername(),
+                request.adminPassword(),
+                request.terminalUrl(),
+                dirConfig
+        );
+        auditService.logEvent("PRINTER_PUSH_LDAP_LOCK_DIRECT", null, adminActor, null, null, clientIp,
+                "Direct Push LDAP & Function Lock on " + request.printerIp() + ": " + result.message(), result.success() ? "SUCCESS" : "FAILURE");
+        return result;
+    }
+
+    public Map<String, Object> pushLdapAndLockAllFleet(String adminActor, String clientIp) {
+        List<PrinterEntity> printers = printerRepository.findAll().stream()
+                .filter(PrinterEntity::isActive)
+                .filter(p -> !"TOSHIBA_OLD".equalsIgnoreCase(p.getDeviceGeneration()))
+                .toList();
+
+        var dirConfig = directoryConfigRepository.findById(1L).orElse(null);
+        int successCount = 0;
+        int failCount = 0;
+        List<String> failedIps = new ArrayList<>();
+
+        for (PrinterEntity p : printers) {
+            try {
+                EwbConfigResult r = toshibaEwbService.pushLdapAndLock(
+                        p.getIpAddress(),
+                        p.getAdminUsername(),
+                        p.getAdminPassword(),
+                        p.getEwbUrl(),
+                        dirConfig
+                );
+                if (r.success()) {
+                    p.setFunctionsLocked(true);
+                    p.setStatus("ONLINE");
+                    printerRepository.save(p);
+                    successCount++;
+                } else {
+                    failCount++;
+                    failedIps.add(p.getIpAddress());
+                }
+            } catch (Exception ex) {
+                failCount++;
+                failedIps.add(p.getIpAddress());
+            }
+        }
+
+        auditService.logEvent("FLEET_PUSH_LDAP_LOCK", null, adminActor, null, null, clientIp,
+                "Fleet LDAP & Card Lock applied: " + successCount + " success, " + failCount + " failed", "SUCCESS");
+
+        Map<String, Object> resp = new LinkedHashMap<>();
+        resp.put("success", true);
+        resp.put("totalCount", printers.size());
+        resp.put("successCount", successCount);
+        resp.put("failCount", failCount);
+        resp.put("failedIps", failedIps);
+        resp.put("message", "Fleet Push completed: " + successCount + " of " + printers.size() + " MFPs successfully updated with LDAP & Card Lockdown.");
+        return resp;
     }
 
     public EwbConfigResult testEwbDirect(EwbConfigRequest request) {

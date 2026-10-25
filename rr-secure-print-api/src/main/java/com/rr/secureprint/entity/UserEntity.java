@@ -44,6 +44,15 @@ public class UserEntity {
     @Column(name = "auth_source", length = 32)
     private String authSource = "MANUAL";
 
+    @Column(name = "external_attr_1", length = 128)
+    private String externalAttribute1;
+
+    @Column(name = "external_attr_2", length = 128)
+    private String externalAttribute2;
+
+    @Column(name = "external_attr_3", length = 128)
+    private String externalAttribute3;
+
     @Column(name = "is_active", nullable = false)
     private boolean isActive = true;
 
@@ -119,6 +128,15 @@ public class UserEntity {
 
     public String getAuthSource() { return authSource != null ? authSource : "MANUAL"; }
     public void setAuthSource(String authSource) { this.authSource = authSource; }
+
+    public String getExternalAttribute1() { return externalAttribute1; }
+    public void setExternalAttribute1(String externalAttribute1) { this.externalAttribute1 = externalAttribute1; }
+
+    public String getExternalAttribute2() { return externalAttribute2; }
+    public void setExternalAttribute2(String externalAttribute2) { this.externalAttribute2 = externalAttribute2; }
+
+    public String getExternalAttribute3() { return externalAttribute3; }
+    public void setExternalAttribute3(String externalAttribute3) { this.externalAttribute3 = externalAttribute3; }
 
     public boolean isActive() { return isActive; }
     public void setActive(boolean active) { isActive = active; }

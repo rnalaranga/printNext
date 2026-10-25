@@ -49,7 +49,7 @@
 
       // Determine page from URL hash (e.g. #printers, #users, #virtual-queue)
       var hash = (window.location.hash || '').replace('#', '').toLowerCase();
-      var validPages = ['dashboard', 'virtual-queue', 'printers', 'users', 'queue', 'copy-logs', 'audit', 'settings'];
+      var validPages = ['dashboard', 'virtual-queue', 'printers', 'users', 'directory', 'queue', 'copy-logs', 'audit', 'settings'];
       var targetPage = validPages.indexOf(hash) !== -1 ? hash : 'dashboard';
       window.navigatePage(targetPage);
 
@@ -113,6 +113,10 @@
       topbarTitle.textContent = 'Physical Printer Device Management';
       topbarSub.textContent   = 'Toshiba Multifunction Printers & Network Port 9100 Terminals';
       loadPrinters();
+    } else if (pageId === 'directory') {
+      topbarTitle.textContent = 'Active Directory & LDAP Management';
+      topbarSub.textContent   = 'Enterprise Directory Synchronization, Attribute Mapping & Toshiba Fleet LDAP Lockdown';
+      loadDirectoryPageConfig();
     } else if (pageId === 'users') {
       topbarTitle.textContent = 'User Identity Management';
       topbarSub.textContent   = 'Security Credentials, Touchscreen PINs, and Windows SIDs';
@@ -1011,6 +1015,13 @@
       if (u.badgeId) cardHtml += '<span class="badge" style="background:#eff6ff; color:#1d4ed8; font-weight:700; margin-right:4px;">RFID: ' + esc(u.badgeId) + '</span>';
       if (u.secondaryBadgeId) cardHtml += '<span class="badge" style="background:#f0fdf4; color:#15803d; font-weight:700;">NFC: ' + esc(u.secondaryBadgeId) + '</span>';
       if (!cardHtml) cardHtml = '<span style="color:#94a3b8;">None</span>';
+      var extAttrs = [];
+      if (u.externalAttribute1) extAttrs.push('<span class="badge" style="background:#F1F5F9; color:#334155; border:1px solid #CBD5E1; font-size:10.5px; font-weight:600;">Ext1: ' + esc(u.externalAttribute1) + '</span>');
+      if (u.externalAttribute2) extAttrs.push('<span class="badge" style="background:#F1F5F9; color:#334155; border:1px solid #CBD5E1; font-size:10.5px; font-weight:600;">Ext2: ' + esc(u.externalAttribute2) + '</span>');
+      if (u.externalAttribute3) extAttrs.push('<span class="badge" style="background:#F1F5F9; color:#334155; border:1px solid #CBD5E1; font-size:10.5px; font-weight:600;">Ext3: ' + esc(u.externalAttribute3) + '</span>');
+      if (extAttrs.length > 0) {
+        cardHtml += '<div style="margin-top:4px;display:flex;gap:4px;flex-wrap:wrap;">' + extAttrs.join(' ') + '</div>';
+      }
 
       tr.innerHTML =
         '<td><strong>' + esc(u.username) + '</strong></td>' +
@@ -3133,3 +3144,366 @@
   } catch (e) {}
 
 })();
+
+  window.pushLdapAndLockInModal = function () {
+    var ip = document.getElementById('printerIp').value.trim();
+    var user = document.getElementById('printerAdminUser').value.trim() || 'admin';
+    var pass = document.getElementById('printerAdminPass').value || '123456';
+    var url = document.getElementById('printerTerminalUrl').value.trim();
+    var logBox = document.getElementById('modalEwbLog');
+    var btn = document.getElementById('btnModalPushLdapLock');
+
+    if (!ip) {
+      showToast('Please enter Printer IP address first.', 'error');
+      return;
+    }
+
+    if (btn) btn.disabled = true;
+    if (logBox) {
+      logBox.style.display = 'block';
+      logBox.textContent = 'Connecting to TopAccess CWS and pushing System LDAP Settings & Card Lockdown to ' + ip + '...';
+    }
+
+    fetch('/api/admin/printers/push-ldap-lock-direct', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        printerIp: ip,
+        adminUsername: user,
+        adminPassword: pass,
+        terminalUrl: url
+      })
+    })
+      .then(function (res) { return res.json(); })
+      .then(function (data) {
+        if (btn) btn.disabled = false;
+        if (data.success) {
+          showToast('LDAP & Card Lock pushed to ' + ip + ' successfully!', 'success');
+          if (logBox) logBox.textContent = '✅ SUCCESS: ' + (data.message || 'Configured for LDAP & Card Lockdown.') + '\nConfigured At: ' + (data.configuredAt || new Date().toISOString());
+        } else {
+          showToast('Push failed: ' + (data.message || 'Error communicating with MFP'), 'error');
+          if (logBox) logBox.textContent = '❌ FAILED: ' + (data.message || 'Unknown error');
+        }
+      })
+      .catch(function (err) {
+        if (btn) btn.disabled = false;
+        showToast('Network error: ' + err.message, 'error');
+        if (logBox) logBox.textContent = '❌ ERROR: ' + err.message;
+      });
+  };
+
+  window.pushLdapAndLockSinglePrinter = function (id) {
+    var p = state.printers.find(function (x) { return x.id === id; });
+    var pName = p ? (p.name + ' (' + p.ipAddress + ')') : ('Printer #' + id);
+
+    customConfirm(
+      'Push LDAP & Card Lock',
+      'This will connect to TopAccess on ' + pName + ' and push System LDAP settings, Function Lockdown (Copy/Scan locked), and EWB Terminal URL. Continue?',
+      'Push LDAP & Lock',
+      'btn-action-primary'
+    ).then(function (confirmed) {
+      if (!confirmed) return;
+      showToast('Pushing LDAP & Card Lock to ' + pName + '...', 'info');
+
+      fetch('/api/admin/printers/' + id + '/push-ldap-lock', { method: 'POST' })
+        .then(function (res) { return res.json(); })
+        .then(function (data) {
+          if (data.success) {
+            showToast('✅ ' + (data.message || 'LDAP & Card Lock configured successfully!'), 'success');
+            loadPrinters();
+          } else {
+            showToast('❌ Push failed: ' + (data.message || 'Unknown error'), 'error');
+          }
+        })
+        .catch(function (err) {
+          showToast('❌ Network error: ' + err.message, 'error');
+        });
+    });
+  };
+
+  window.pushLdapLockAllFleet = function () {
+    customConfirm(
+      'Push LDAP & Card Lock to All MFPs',
+      'This will connect to all active Toshiba MFPs across the fleet and automatically push System LDAP settings, Function Lockdown (Copy/Scan locked), and EWB Terminal screens. Continue?',
+      'Push to All MFPs',
+      'btn-action-primary'
+    ).then(function (confirmed) {
+      if (!confirmed) return;
+      var btn = document.getElementById('btnPushLdapFleet');
+      if (btn) btn.disabled = true;
+      showToast('Pushing LDAP & Card Lock to entire fleet in background...', 'info');
+
+      fetch('/api/admin/printers/push-ldap-lock-fleet', { method: 'POST' })
+        .then(function (res) { return res.json(); })
+        .then(function (data) {
+          if (btn) btn.disabled = false;
+          showToast('Fleet LDAP & Card Lock completed! ' + (data.successCount || 0) + ' of ' + (data.totalCount || 0) + ' MFPs updated.', 'success');
+          loadPrinters();
+        })
+        .catch(function (err) {
+          if (btn) btn.disabled = false;
+          showToast('Fleet push error: ' + err.message, 'error');
+        });
+    });
+  };
+
+
+
+  /* =========================================================================
+     STANDALONE DIRECTORY PAGE CONTROLLER & ATTRIBUTE INSPECTOR
+     ========================================================================= */
+
+  window.loadDirectoryPageConfig = function () {
+    fetch('/api/admin/directory/config')
+      .then(function (res) { return res.json(); })
+      .then(function (cfg) {
+        state.directoryConfig = cfg;
+        var setVal = function(id, val) {
+          var el = document.getElementById(id);
+          if (el && val !== undefined && val !== null) el.value = val;
+        };
+
+        setVal('dirLdapUrl', cfg.ldapUrl || 'ldap://127.0.0.1:389');
+        setVal('dirDomain', cfg.domainName || 'qoa.local');
+        setVal('dirBaseDn', cfg.baseDn || 'DC=qoa,DC=local');
+        setVal('dirBindUser', cfg.bindUser || 'Administrator@qoa.local');
+        setVal('dirBindPass', cfg.bindPassword || '');
+        setVal('dirFilter', cfg.userSearchFilter || '(&(objectCategory=person)(objectClass=user))');
+        setVal('dirDefaultPin', cfg.defaultPin || '1234');
+
+        // Attribute mappings
+        setVal('dirCardAttr', cfg.cardIdAttribute || 'employeeNumber');
+        setVal('dirSecondaryCardAttr', cfg.secondaryCardAttribute || 'extensionAttribute2');
+        setVal('dirExtAttr1', cfg.externalAttr1Name || 'extensionAttribute1');
+        setVal('dirExtAttr2', cfg.externalAttr2Name || 'extensionAttribute2');
+        setVal('dirExtAttr3', cfg.externalAttr3Name || 'extensionAttribute3');
+        setVal('dirUserAttr', cfg.usernameAttribute || 'sAMAccountName');
+        setVal('dirDispAttr', cfg.displayNameAttribute || 'displayName');
+        setVal('dirDeptAttr', cfg.departmentAttribute || 'department');
+
+        // Status KPIs
+        var elDomain = document.getElementById('dirStatDomain');
+        if (elDomain) elDomain.textContent = cfg.domainName || 'qoa.local';
+        var elUrl = document.getElementById('dirStatLdapUrl');
+        if (elUrl) elUrl.textContent = cfg.ldapUrl || 'ldap://127.0.0.1:389';
+        var elCount = document.getElementById('dirStatUserCount');
+        if (elCount) elCount.textContent = (cfg.syncedUserCount || 0) + ' Users';
+        var elCard = document.getElementById('dirStatCardAttr');
+        if (elCard) elCard.textContent = cfg.cardIdAttribute || 'employeeNumber';
+
+        var logBox = document.getElementById('dirPageLogBox');
+        if (logBox && cfg.lastSyncMessage) {
+          logBox.textContent = '[' + new Date().toLocaleTimeString() + '] Directory Status: ' + cfg.lastSyncMessage;
+        }
+      })
+      .catch(function (err) {
+        console.warn('loadDirectoryPageConfig error:', err);
+      });
+  };
+
+  window.saveDirectoryPageConfig = function () {
+    var payload = {
+      ldapUrl: (document.getElementById('dirLdapUrl') ? document.getElementById('dirLdapUrl').value.trim() : ''),
+      domainName: (document.getElementById('dirDomain') ? document.getElementById('dirDomain').value.trim() : ''),
+      baseDn: (document.getElementById('dirBaseDn') ? document.getElementById('dirBaseDn').value.trim() : ''),
+      bindUser: (document.getElementById('dirBindUser') ? document.getElementById('dirBindUser').value.trim() : ''),
+      bindPassword: (document.getElementById('dirBindPass') ? document.getElementById('dirBindPass').value : ''),
+      userSearchFilter: (document.getElementById('dirFilter') ? document.getElementById('dirFilter').value.trim() : ''),
+      defaultPin: (document.getElementById('dirDefaultPin') ? document.getElementById('dirDefaultPin').value.trim() : '1234'),
+      cardIdAttribute: (document.getElementById('dirCardAttr') ? document.getElementById('dirCardAttr').value.trim() : 'employeeNumber'),
+      secondaryCardAttribute: (document.getElementById('dirSecondaryCardAttr') ? document.getElementById('dirSecondaryCardAttr').value.trim() : 'extensionAttribute2'),
+      externalAttr1Name: (document.getElementById('dirExtAttr1') ? document.getElementById('dirExtAttr1').value.trim() : 'extensionAttribute1'),
+      externalAttr2Name: (document.getElementById('dirExtAttr2') ? document.getElementById('dirExtAttr2').value.trim() : 'extensionAttribute2'),
+      externalAttr3Name: (document.getElementById('dirExtAttr3') ? document.getElementById('dirExtAttr3').value.trim() : 'extensionAttribute3'),
+      usernameAttribute: (document.getElementById('dirUserAttr') ? document.getElementById('dirUserAttr').value.trim() : 'sAMAccountName'),
+      displayNameAttribute: (document.getElementById('dirDispAttr') ? document.getElementById('dirDispAttr').value.trim() : 'displayName'),
+      departmentAttribute: (document.getElementById('dirDeptAttr') ? document.getElementById('dirDeptAttr').value.trim() : 'department'),
+      isEnabled: true
+    };
+
+    var logBox = document.getElementById('dirPageLogBox');
+    if (logBox) logBox.textContent = '[' + new Date().toLocaleTimeString() + '] Saving Directory configuration & attribute mappings...';
+
+    fetch('/api/admin/directory/config', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    })
+      .then(function (res) { return res.json(); })
+      .then(function (data) {
+        if (logBox) logBox.textContent = '[' + new Date().toLocaleTimeString() + '] Configuration & Attribute Mappings saved successfully!';
+        showToast('Active Directory & Attributes saved!', 'success');
+        loadDirectoryPageConfig();
+      })
+      .catch(function (err) {
+        if (logBox) logBox.textContent = '[' + new Date().toLocaleTimeString() + '] Save failed: ' + err.message;
+        showToast('Save failed: ' + err.message, 'error');
+      });
+  };
+
+  window.testDirectoryConnectionFromPage = function () {
+    var logBox = document.getElementById('dirPageLogBox');
+    if (logBox) logBox.textContent = '[' + new Date().toLocaleTimeString() + '] Testing connection to Active Directory Domain Controller...';
+    var payload = {
+      ldapUrl: document.getElementById('dirLdapUrl') ? document.getElementById('dirLdapUrl').value.trim() : '',
+      domainName: document.getElementById('dirDomain') ? document.getElementById('dirDomain').value.trim() : '',
+      baseDn: document.getElementById('dirBaseDn') ? document.getElementById('dirBaseDn').value.trim() : ''
+    };
+    fetch('/api/admin/directory/test', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    })
+      .then(function (res) { return res.json(); })
+      .then(function (res) {
+        if (logBox) logBox.textContent = '[' + new Date().toLocaleTimeString() + '] Test Result: ' + (res.message || JSON.stringify(res));
+        showToast(res.message || 'Connection test completed', res.success ? 'success' : 'warning');
+      })
+      .catch(function (err) {
+        if (logBox) logBox.textContent = '[' + new Date().toLocaleTimeString() + '] Connection Test Error: ' + err.message;
+        showToast('Test failed: ' + err.message, 'error');
+      });
+  };
+
+  window.syncActiveDirectoryFromPage = function () {
+    var logBox = document.getElementById('dirPageLogBox');
+    if (logBox) logBox.textContent = '[' + new Date().toLocaleTimeString() + '] Synchronizing Active Directory users with externalAttributes...';
+    fetch('/api/admin/directory/sync-ad', { method: 'POST' })
+      .then(function (res) { return res.json(); })
+      .then(function (res) {
+        if (logBox) {
+          logBox.textContent = '[' + new Date().toLocaleTimeString() + '] ' + res.message + '\nImported: ' + res.importedCount + ' | Updated: ' + res.updatedCount;
+        }
+        showToast('AD Sync complete! ' + res.importedCount + ' imported, ' + res.updatedCount + ' updated.', 'success');
+        loadUsers();
+        loadDirectoryPageConfig();
+      })
+      .catch(function (err) {
+        if (logBox) logBox.textContent = '[' + new Date().toLocaleTimeString() + '] AD Sync Error: ' + err.message;
+        showToast('Sync error: ' + err.message, 'error');
+      });
+  };
+
+  window.previewAdUserAttributes = function () {
+    var username = (document.getElementById('dirPreviewUsername') ? document.getElementById('dirPreviewUsername').value.trim() : '');
+    if (!username) {
+      showToast('Please enter an AD username to inspect', 'warning');
+      return;
+    }
+    var logBox = document.getElementById('dirPageLogBox');
+    if (logBox) logBox.textContent = '[' + new Date().toLocaleTimeString() + '] Querying Active Directory for attributes of: ' + username + '...';
+    var wrap = document.getElementById('dirPreviewResultWrap');
+    if (wrap) wrap.style.display = 'block';
+    var tbl = document.getElementById('dirPreviewResultTable');
+    if (tbl) tbl.innerHTML = '<tr><td colspan="4" style="text-align:center;padding:12px;color:#64748b;">Querying Active Directory attributes...</td></tr>';
+
+    fetch('/api/admin/directory/preview-user?username=' + encodeURIComponent(username))
+      .then(function (res) { return res.json(); })
+      .then(function (data) {
+        if (!data.success) {
+          if (logBox) logBox.textContent = '[' + new Date().toLocaleTimeString() + '] Notice: ' + (data.message || 'User not found in AD.');
+          if (tbl) tbl.innerHTML = '<tr><td colspan="4" style="color:#ef4444;text-align:center;padding:12px;">' + esc(data.message || 'User not found.') + '</td></tr>';
+          return;
+        }
+        if (logBox) logBox.textContent = '[' + new Date().toLocaleTimeString() + '] Attributes retrieved successfully for ' + username;
+        if (tbl) {
+          tbl.innerHTML =
+            '<tr style="background:#f8fafc;"><td style="font-weight:700;width:25%;">sAMAccountName</td><td style="width:25%;"><code>' + esc(data.username) + '</code></td><td style="font-weight:700;width:25%;">Card Match Attribute (' + esc(data.cardIdAttribute) + ')</td><td style="width:25%;"><span class="badge" style="background:#eff6ff;color:#1d4ed8;font-weight:700;">' + esc(data.cardIdValue || 'Not Set') + '</span></td></tr>' +
+            '<tr><td style="font-weight:700;">Display Name</td><td>' + esc(data.displayName || 'None') + '</td><td style="font-weight:700;">External Attribute 1 (' + esc(data.externalAttr1Name) + ')</td><td><code style="color:#0284c7;font-weight:600;">' + esc(data.externalAttr1Value || 'None') + '</code></td></tr>' +
+            '<tr style="background:#f8fafc;"><td style="font-weight:700;">Mail</td><td>' + esc(data.mail || 'None') + '</td><td style="font-weight:700;">External Attribute 2 (' + esc(data.externalAttr2Name) + ')</td><td><code style="color:#059669;font-weight:600;">' + esc(data.externalAttr2Value || 'None') + '</code></td></tr>' +
+            '<tr><td style="font-weight:700;">Department</td><td>' + esc(data.department || 'None') + '</td><td style="font-weight:700;">External Attribute 3 (' + esc(data.externalAttr3Name) + ')</td><td><code style="color:#d97706;font-weight:600;">' + esc(data.externalAttr3Value || 'None') + '</code></td></tr>';
+        }
+      })
+      .catch(function (err) {
+        if (logBox) logBox.textContent = '[' + new Date().toLocaleTimeString() + '] Error inspecting user: ' + err.message;
+        if (tbl) tbl.innerHTML = '<tr><td colspan="4" style="color:#ef4444;text-align:center;padding:12px;">' + esc(err.message) + '</td></tr>';
+      });
+  };
+
+
+  window.toggleFleetActionsDropdown = function (event) {
+    if (event) {
+      event.preventDefault();
+      event.stopPropagation();
+    }
+    var btn = document.getElementById('btnFleetActionsDropdown');
+    var menu = document.getElementById('fleetActionsDropdownMenu');
+    if (!btn || !menu) return;
+
+    var isOpen = menu.classList.contains('show');
+
+    // Close all open dropdowns
+    var allMenus = document.querySelectorAll('.action-dropdown-menu');
+    for (var i = 0; i < allMenus.length; i++) {
+      allMenus[i].classList.remove('show');
+    }
+    var allBtns = document.querySelectorAll('.btn-action-dropdown');
+    for (var j = 0; j < allBtns.length; j++) {
+      allBtns[j].classList.remove('active');
+    }
+
+    if (!isOpen) {
+      var rect = btn.getBoundingClientRect();
+      var menuWidth = 280;
+      menu.style.top = (rect.bottom + 6) + 'px';
+      var leftPos = rect.right - menuWidth;
+      if (leftPos < 10) leftPos = 10;
+      menu.style.left = leftPos + 'px';
+      menu.style.minWidth = menuWidth + 'px';
+      menu.classList.add('show');
+      btn.classList.add('active');
+    }
+  };
+
+
+  window.toggleDirectoryActionsDropdown = function (event) {
+    if (event) {
+      event.preventDefault();
+      event.stopPropagation();
+    }
+    var btn = document.getElementById('btnDirActionsDropdown');
+    var menu = document.getElementById('dirActionsDropdownMenu');
+    if (!btn || !menu) return;
+
+    var isOpen = menu.classList.contains('show');
+
+    // Close all open dropdowns
+    var allMenus = document.querySelectorAll('.action-dropdown-menu');
+    for (var i = 0; i < allMenus.length; i++) {
+      allMenus[i].classList.remove('show');
+    }
+    var allBtns = document.querySelectorAll('.btn-action-dropdown');
+    for (var j = 0; j < allBtns.length; j++) {
+      allBtns[j].classList.remove('active');
+    }
+
+    if (!isOpen) {
+      var rect = btn.getBoundingClientRect();
+      var menuWidth = 260;
+      menu.style.top = (rect.bottom + 6) + 'px';
+      var leftPos = rect.right - menuWidth;
+      if (leftPos < 10) leftPos = 10;
+      menu.style.left = leftPos + 'px';
+      menu.style.minWidth = menuWidth + 'px';
+      menu.classList.add('show');
+      btn.classList.add('active');
+    }
+  };
+
+  window.importWindowsUsersFromPage = function () {
+    var logBox = document.getElementById('dirPageLogBox');
+    if (logBox) logBox.textContent = '[' + new Date().toLocaleTimeString() + '] Scanning local Windows user accounts...';
+    fetch('/api/admin/directory/import-windows', { method: 'POST' })
+      .then(function (res) { return res.json(); })
+      .then(function (res) {
+        if (logBox) {
+          logBox.textContent = '[' + new Date().toLocaleTimeString() + '] ' + (res.message || 'Local Windows accounts scanned.');
+        }
+        showToast(res.message || 'Local Windows accounts scanned', res.success ? 'success' : 'warning');
+        loadUsers();
+      })
+      .catch(function (err) {
+        if (logBox) logBox.textContent = '[' + new Date().toLocaleTimeString() + '] Error: ' + err.message;
+        showToast('Scan error: ' + err.message, 'error');
+      });
+  };
