@@ -1,0 +1,4086 @@
+<HTML>
+<META HTTP-EQUIV="Content-Type" CONTENT="text/html; charset=windows-1252">
+<HEAD>
+    <LINK REL="stylesheet" TYPE="text/css" HREF="/styles/style.css?v=1717026199ta">
+
+    <script language="javascript" type="text/javascript" src="/js/jquery.min.js?v=1717026199ta"></script>
+    <script language="javascript" type="text/javascript" src="/js/handlebars.js?v=1717026199ta"></script>
+	<script language="javascript" type="text/javascript" src="/js/handlebarsHelper.js?v=1717026199ta"></script>
+    <script language="javascript" type="text/javascript" src="/js/AjaxReqRespHandler.js?v=1717026199ta"></script>
+    <script language="javascript" type="text/javascript" src="/js/TopAccessUtil.js?v=1717026199ta"></script>
+    <script language="javascript" type="text/javascript" src="/js/Security.js?v=1717026199ta"></script>
+    <script language="javascript" type="text/javascript" src="/js/Validation.js?v=1717026199ta"></script>
+    <script language="javascript" type="text/javascript" src="/js/Cookies.js?v=1717026199ta"></script>
+    <script language="javascript" type="text/javascript" src="/js/WindowOperations.js?v=1717026199ta"></script>
+
+
+    <style type="text/css">
+        .selected {background-color: #FCFC6D; color:white;}
+        div#idLDAPAuthTable{float:left;margin-left:0px;margin-top:0px;padding:0px;position: relative;clear:both;}
+        div#idCardAuthLDAPAuthTable{float:left;margin-left:0px;margin-top:0px;padding:0px;position: relative;clear:both;}
+        div#idPinAuthTable{float:left;margin-left:0px;margin-top:0px;padding:0px;position: relative;clear:both;}
+        div#idHomeDirAuthTable{float:left;margin-left:0px;margin-top:0px;padding:0px;position: relative;clear:both;}
+        div#idCardAuthTable{float:left;margin-left:0px;margin-top:0px;padding:0px;position: relative;clear:both;}
+        div#idWinDomainAuthTable{float:left;margin-left:0px;margin-top:0px;padding:0px;position: relative;clear:both;}
+        div#idCardAuthWinDomainAuthTable{float:left;margin-left:0px;margin-top:0px;padding:0px;position: relative;clear:both;}
+
+        table.clsMarker td
+        {
+            min-width: 400px;
+        }
+    </style>
+
+    <script type="text/javascript">
+
+        var iScrnW = screen.width;//width of the screen
+        var iScrnH	= screen.height;//height of the screen
+        var iWinW = 1250;//window width
+        var iWinH = 330;//window height
+        var iXCoord = (iScrnW - iWinW) / 2;//new window X coordinate
+        var iYCoord = (iScrnH - iWinH) / 2;//new window Y coordinate
+        var popUpWindow = null;
+		var popUpWindowDomain = null;
+        var lblServerIPAddress = fnGetLocaleString("101693","Server IP Address");
+        var lblLdapServer = fnGetLocaleString("101048","LDAP Server");
+        var lblType =fnGetLocaleString("101946","Type");
+        var lblLdapUserName = fnGetLocaleString("103396","Attribute type of 'User Name'");
+        var lblLdapFromName = fnGetLocaleString("103917","Attribute type of 'From Name'");
+        var lblLdapFromAddr = fnGetLocaleString("103914","Attribute type of 'Email Address'");
+        var lblAttrTypePin = fnGetLocaleString("104274","Attribute type of \"PIN\"");
+        var lblAttrTypeCardInfo =fnGetLocaleString("104403","Attribute type of \"Card information\"");
+        var lblAttrTypeCardIssueTime =fnGetLocaleString("104468","Attribute type of \"Card issuing times\"");
+        var lblOtherThanWindowsServer = fnGetLocaleString("103323","LDAP Server (Other than Windows Server");
+        var lblWindowsServer = fnGetLocaleString("102028","Windows Server");
+		var gblSelectedLDAPIdForAuth = -1;
+		var gblSelectedLDAPNameForAuth = "TOSHIBA eBX";
+		var strEnable = fnGetLocaleString("100604","Enable");
+		var strDisable = fnGetLocaleString("100526","Disable");
+		var strErrString = fnGetLocaleString("101392","Please enter a valid value.");
+		var lblDomainName = fnGetLocaleString("100560","Domain Name");		
+		var strPDC = fnGetLocaleString("103316","PDC");
+		var strBDC = fnGetLocaleString("103317","BDC");
+		var Diag_3642_0_code;
+		//var strDomain1 = fnGetLocaleString("102467","Domain 1");
+		var strDomain1 = fnGetLocaleString("100559","Domain");
+		var prevVal;
+        // RCR_1766 WINDOWS DOMAIN AND LDAP SERVER TABLE BUTTON ID ADDED
+        $(document).ready(function(){ 
+           $("#btnLDAPServerAssignment, #btnPinServerAssignment, #btnHomeDirServerAssignment, #btnCardServerAssignment, #btnEmailLDAPServerAssignment, #btnCardAuthLDAPServerAssignment").val(fnGetLocaleString("104590","Server Assignment"));
+           $("#btnLDAPMoveUp, #btnPinMoveUp, #btnHomeDirMoveUp, #btnCardMoveUp, #btnWinDomainMoveUp, #btnEmailLDAPMoveUp,#btnCardAuthWinDomainMoveUp,#btnCardAuthLDAPMoveUp").val(fnGetLocaleString("101213","Move Up"));
+           $("#btnLDAPMoveDown, #btnPinMoveDown, #btnHomeDirMoveDown, #btnCardMoveDown, #btnWinDomainMoveDown, #btnEmailLDAPMoveDown,#btnCardAuthWinDomainMoveDown, #btnCardAuthLDAPMoveDown").val(fnGetLocaleString("101212","Move Down"));
+           $("#btnWinDomainAdd,#btnCardAuthWinDomainAdd").val(fnGetLocaleString("100113","Add"));
+           $("#btnWinDomainEdit,#btnCardAuthWinDomainEdit").val(fnGetLocaleString("100580","Edit"));
+           $("#btnWinDomainDelete,#btnCardAuthWinDomainDelete").val(fnGetLocaleString("100466","Delete"));
+
+            $(window).resize(function() {
+                // for zoom out/ zoom in chrome issue
+                    fixColumnWidth('ldapAuthTableHeader', 'ldapAuthTable');
+                    fixColumnWidth('pinAuthTableHeader', 'pinAuthTable');
+                    fixColumnWidth('cardAuthTableHeader', 'cardAuthTable');
+                    fixColumnWidth('homeDirAuthTableHeader', 'homeDirAuthTable');
+                    fixColumnWidth('EmailldapAuthTableHeader', 'EmailldapAuthTable');
+                    fixColumnWidth('cardAuthLdapAuthTableHeader', 'cardLdapAuthTable'); //RCR_1766
+            });
+
+            $("#btnWinDomainAdd,#btnCardAuthWinDomainAdd").on("click",function() {
+				var targetPage;
+                if($(this).attr("id") == "btnWinDomainAdd")	{			
+                    targetPage = "WinDomainAuthSettings.html?v=1717026199ta&edit=false&tableName=windowsDomain";
+                    populateWindowsDomainString(windowsAuthListArray,"idWinDomainAuthTable");
+                }else if($(this).attr("id") == "btnCardAuthWinDomainAdd"){
+                    targetPage = "WinDomainAuthSettings.html?v=1717026199ta&edit=false&tableName=cardAuthWindowsDomain";
+                    populateWindowsDomainString(cardWindowsAuthListArray,"idCardAuthWinDomainAuthTable");
+                }
+                if(popUpWindowDomain != null) {
+                    if(popUpWindowDomain.closed == false )// if the window was created then bring the window in focus from background
+                    {
+                        popUpWindowDomain.focus();
+                        popUpWindowDomain.location = targetPage;
+                    }
+                    else // if the window was created and closed then bring the window in focus
+                    {
+                        popUpWindowDomain = window.open(targetPage,"","toolbar=no,height=290,width=650,resizable=yes,left=" + iXCoord + ",top=" + iYCoord);
+                    }
+                }
+                else { // Creating new window
+                    popUpWindowDomain = window.open(targetPage,"","toolbar=no,height=290,width=650,resizable=yes,left=" + iXCoord + ",top=" + iYCoord);
+                }
+            });
+            //RCR_1766
+            $("#btnWinDomainEdit,#btnCardAuthWinDomainEdit").on("click",function() {
+                var targetPage;
+                if($(this).attr("id") == "btnWinDomainEdit"){
+				    var selectedRow =  $("#WinDomainAuthTable tr.selected");
+                    if(selectedRow.index() < 0 || selectedRow.index() === undefined){ return; }
+                    targetPage = "WinDomainAuthSettings.html?v=1717026199ta&edit=true&tableName=windowsDomain&editedRow="+selectedRow.index();				
+                }else if($(this).attr("id") == "btnCardAuthWinDomainEdit"){
+                    var selectedRow =  $("#cardWinDomainAuthTable tr.selected");
+                    targetPage = "WinDomainAuthSettings.html?v=1717026199ta&edit=true&tableName=cardAuthWindowsDomain&editedRow="+selectedRow.index();
+                }
+                if($(this).attr("id") == "btnWinDomainEdit")	{			
+                    populateWindowsDomainString(windowsAuthListArray,"idWinDomainAuthTable");
+                }else if($(this).attr("id") == "btnCardAuthWinDomainEdit"){
+                    populateWindowsDomainString(cardWindowsAuthListArray,"idCardAuthWinDomainAuthTable");
+                }
+                if(popUpWindowDomain != null) {
+                    if(popUpWindowDomain.closed == false )// if the window was created then bring the window in focus from background
+                    {
+                        popUpWindowDomain.focus();
+                        popUpWindowDomain.location = targetPage;
+                    }
+                    else // if the window was created and closed then bring the window in focus
+                    {
+                        popUpWindowDomain = window.open(targetPage,"","toolbar=no,height=330,width=820,resizable=0,scrollbars=yes,left=" + iXCoord + ",top=" + iYCoord);
+                    }
+                }
+                else { // Creating new window
+                    popUpWindowDomain = window.open(targetPage,"","toolbar=no,height=330,width=820,resizable=0,scrollbars=yes,left=" + iXCoord + ",top=" + iYCoord);
+                }
+            });
+            //RCR_1766
+            $("#btnWinDomainDelete,#btnCardAuthWinDomainDelete").on("click",function() {
+                if($(this).attr('id')== 'btnWinDomainDelete'){
+                    var selectedRow =  $("#WinDomainAuthTable tr.selected");
+                    if(selectedRow.index() < 0 || selectedRow.index() === undefined){
+                    return;
+                    }
+                    windowsAuthListArray.splice(selectedRow.index(),1);
+                    selectedRow.remove();
+                    $("#btnWinDomainEdit").attr('disabled','disabled');
+                    $("#btnWinDomainDelete").attr('disabled','disabled');
+                    $("#btnWinDomainAdd").removeAttr('disabled');
+                    fixColumnWidth('WinDomainAuthTableHeader', 'WinDomainAuthTable');
+                }else if($(this).attr('id')== 'btnCardAuthWinDomainDelete'){
+                    var selectedRow =  $("#cardWinDomainAuthTable tr.selected");
+                    if(selectedRow.index() < 0 || selectedRow.index() === undefined){
+                    return;
+                    }
+                    cardWindowsAuthListArray.splice(selectedRow.index(),1);
+                    selectedRow.remove();
+                    $("#btnCardAuthWinDomainEdit").attr('disabled','disabled');
+                    $("#btnCardAuthWinDomainDelete").attr('disabled','disabled');
+                    $("#btnCardAuthWinDomainAdd").removeAttr('disabled');
+                    fixColumnWidth('cardAuthWinDomainTableHeader', 'cardWinDomainAuthTable');
+                }
+            });
+           $("#btnLDAPServerAssignment, #btnPinServerAssignment, #btnHomeDirServerAssignment, #btnCardServerAssignment, #btnEmailLDAPServerAssignment,#btnCardAuthLDAPServerAssignment").on("click",function() {
+               if ($(this).attr("name") == "LDAP") {
+                  $("#btnLDAPMoveUp").attr('disabled', 'disabled');
+                  $("#btnLDAPMoveDown").attr('disabled', 'disabled');
+               }else if($(this).attr("name") == "cardAuthLDAP"){ //RCR_1766
+                  $("#btnCardAuthLDAPMoveUp").attr('disabled', 'disabled');
+                  $("#btnCardAuthLDAPMoveDown").attr('disabled', 'disabled');
+               }else if ($(this).attr("name") == "PIN") {
+                   $("#btnPinMoveUp").attr('disabled', 'disabled');
+                   $("#btnPinMoveDown").attr('disabled', 'disabled');
+               }else if ($(this).attr("name") == "HOMEDIRBTN") {
+                   $("#btnHomeDirMoveUp").attr('disabled', 'disabled');
+                   $("#btnHomeDirMoveDown").attr('disabled', 'disabled');
+               }else if ($(this).attr("name") == "CARDAUTHBTN") {
+                   $("#btnCardMoveUp").attr('disabled', 'disabled');
+                   $("#btnCardMoveDown").attr('disabled', 'disabled');
+               }else if ($(this).attr("name") == "EmailLDAP") {
+                   $("#btnEmailLDAPMoveUp").attr('disabled', 'disabled');
+                   $("#btnEmailLDAPMoveDown").attr('disabled', 'disabled');
+               }
+               loadPopUp($(this).attr("name"));
+            });
+
+            $("#idLDAPAuthTable").on("click", "#ldapAuthTable tr", function(){
+                var totRows = assignedLDAPServerList.length;
+                var selectedRow = $(this).index();
+                $(this).addClass('selected').siblings().removeClass('selected');
+
+                $("#btnLDAPMoveUp").attr('disabled','disabled');
+                $("#btnLDAPMoveDown").attr('disabled','disabled');
+                if(selectedRow != 0){
+                    $("#btnLDAPMoveUp").removeAttr('disabled');
+                }
+                if(selectedRow != totRows-1){
+                    $("#btnLDAPMoveDown").removeAttr('disabled');
+                }
+            });
+            //RCR_1766 START FOR CARD AUTH LDAP TABLE
+            $("#idCardAuthLDAPAuthTable").on("click", "#cardLdapAuthTable tr", function(){
+                var totRows = assignedCardAuthLDAPServerList.length;
+                var selectedRow = $(this).index();
+                $(this).addClass('selected').siblings().removeClass('selected');
+
+                $("#btnCardAuthLDAPMoveUp").attr('disabled','disabled');
+                $("#btnCardAuthLDAPMoveDown").attr('disabled','disabled');
+                if(selectedRow != 0){
+                    $("#btnCardAuthLDAPMoveUp").removeAttr('disabled');
+                }
+                if(selectedRow != totRows-1){
+                    $("#btnCardAuthLDAPMoveDown").removeAttr('disabled');
+                }
+            });
+            //RCR_1766 END
+            $("#idPinAuthTable").on("click", "#pinAuthTable tr", function(){
+                var totRows =  assignedPinServerList.length;
+                var selectedRow = $(this).index();
+                $(this).addClass('selected').siblings().removeClass('selected');
+
+                $("#btnPinMoveUp").attr('disabled','disabled');
+                $("#btnPinMoveDown").attr('disabled','disabled');
+                if(selectedRow != 0){
+                    $("#btnPinMoveUp").removeAttr('disabled');
+                }
+                if(selectedRow != totRows-1){
+                    $("#btnPinMoveDown").removeAttr('disabled');
+                }
+            });
+            $("#idHomeDirAuthTable").on("click", "#homeDirAuthTable tr", function(){
+                var totRows =  assignedHomeDirServerList.length;
+                var selectedRow = $(this).index();
+                $(this).addClass('selected').siblings().removeClass('selected');
+
+                $("#btnHomeDirMoveUp").attr('disabled','disabled');
+                $("#btnHomeDirMoveDown").attr('disabled','disabled');
+                if(selectedRow != 0){
+                    $("#btnHomeDirMoveUp").removeAttr('disabled');
+                }
+                if(selectedRow != totRows-1){
+                    $("#btnHomeDirMoveDown").removeAttr('disabled');
+                }
+            });
+
+            $("#idCardAuthTable").on("click", "#cardAuthTable tr", function(){
+                var totRows =  assignedCardServerList.length;
+                var selectedRow = $(this).index();
+                $(this).addClass('selected').siblings().removeClass('selected');
+
+                $("#btnCardMoveUp").attr('disabled','disabled');
+                $("#btnCardMoveDown").attr('disabled','disabled');
+                if(selectedRow != 0){
+                    $("#btnCardMoveUp").removeAttr('disabled');
+                }
+                if(selectedRow != totRows-1){
+                    $("#btnCardMoveDown").removeAttr('disabled');
+                }
+            });
+			
+			$("#idWinDomainAuthTable").on("click", "#WinDomainAuthTable tr", function(){
+			    var totRows =  windowsAuthListArray.length;
+                var selectedRow = $(this).index();                 
+                $(this).addClass('selected').siblings().removeClass('selected');
+                $("#btnWinDomainMoveUp").attr('disabled','disabled');
+                $("#btnWinDomainMoveDown").attr('disabled','disabled');
+				$("#btnWinDomainEdit").removeAttr('disabled');
+				$("#btnWinDomainDelete").removeAttr('disabled');				
+                if(selectedRow != 0){
+                    $("#btnWinDomainMoveUp").removeAttr('disabled');
+                }
+                if(selectedRow != totRows-1){
+                    $("#btnWinDomainMoveDown").removeAttr('disabled');
+                }
+            });
+            // RCR_1766 START 
+            $("#idCardAuthWinDomainAuthTable").on("click", "#cardWinDomainAuthTable tr", function(){
+			    var totRows =  cardWindowsAuthListArray.length;
+                var selectedRow = $(this).index();                 
+                $(this).addClass('selected').siblings().removeClass('selected');
+                $("#btnCardAuthWinDomainMoveUp").attr('disabled','disabled');
+                $("#btnCardAuthWinDomainMoveDown").attr('disabled','disabled');
+				$("#btnCardAuthWinDomainEdit").removeAttr('disabled');
+				$("#btnCardAuthWinDomainDelete").removeAttr('disabled');				
+                if(selectedRow != 0){
+                    $("#btnCardAuthWinDomainMoveUp").removeAttr('disabled');
+                }
+                if(selectedRow != totRows-1){
+                    $("#btnCardAuthWinDomainMoveDown").removeAttr('disabled');
+                }
+            });
+            // RCR_1766 END
+            
+            $("#idEmailLDAPAuthTable").on("click", "#EmailldapAuthTable tr", function(){
+                var totRows = assignedEmailLDAPServerList.length;
+                var selectedRow = $(this).index();
+                $(this).addClass('selected').siblings().removeClass('selected');
+
+                $("#btnEmailLDAPMoveUp").attr('disabled','disabled');
+                $("#btnEmailLDAPMoveDown").attr('disabled','disabled');
+                if(selectedRow != 0){
+                    $("#btnEmailLDAPMoveUp").removeAttr('disabled');
+                }
+                if(selectedRow != totRows-1){
+                    $("#btnEmailLDAPMoveDown").removeAttr('disabled');
+                }
+            });
+
+             //RCR_1766 CARD AUTH WINDOWS DOMAIN BTN MOVE UP               
+
+            $("#btnLDAPMoveUp,#btnPinMoveUp,#btnHomeDirMoveUp, #btnCardMoveUp, #btnWinDomainMoveUp, #btnEmailLDAPMoveUp, #btnCardAuthWinDomainMoveUp, #btnCardAuthLDAPMoveUp").click(function(){
+                var srcTableId="";
+
+                if($(this).attr('id')=="btnLDAPMoveUp"){
+                    srcTableId="ldapAuthTable";
+                }else if($(this).attr('id')=="btnCardAuthLDAPMoveUp"){ //RCR_1766
+                    srcTableId="cardLdapAuthTable";
+                }else if($(this).attr('id')=="btnPinMoveUp"){
+                    srcTableId="pinAuthTable";
+                }else if($(this).attr('id')=="btnHomeDirMoveUp"){
+                    srcTableId="homeDirAuthTable";
+                }else if($(this).attr('id')=="btnCardMoveUp"){
+                    srcTableId="cardAuthTable";
+                }else if($(this).attr('id')=="btnWinDomainMoveUp"){
+                    srcTableId="WinDomainAuthTable";
+                }else if($(this).attr('id')=="btnEmailLDAPMoveUp"){
+                    srcTableId="EmailldapAuthTable";
+                }else if($(this).attr('id')=="btnCardAuthWinDomainMoveUp"){ //RCR_1766
+                    srcTableId="cardWinDomainAuthTable";
+                }
+
+
+                var selectedRow =  $("#"+ srcTableId + " tr.selected").index();
+                if(selectedRow == undefined || selectedRow<=0){
+                    return;
+                }
+                $("#"+ srcTableId +" tr.selected").prev().before($("#"+ srcTableId +" tr.selected"));
+                $("#"+ srcTableId +" tr.selected").click();
+
+                //Swapping
+                var t;
+                if(srcTableId=="ldapAuthTable") {
+                    t = assignedLDAPServerList[selectedRow];
+                    assignedLDAPServerList[selectedRow] = assignedLDAPServerList[selectedRow - 1];
+                    assignedLDAPServerList[selectedRow - 1] = t;
+                }else if(srcTableId=="cardLdapAuthTable") { //RCR_1766
+                    t = assignedCardAuthLDAPServerList[selectedRow];
+                    assignedCardAuthLDAPServerList[selectedRow] = assignedCardAuthLDAPServerList[selectedRow - 1];
+                    assignedCardAuthLDAPServerList[selectedRow - 1] = t;
+                }else if(srcTableId=="pinAuthTable") {
+                    t = assignedPinServerList[selectedRow];
+                    assignedPinServerList[selectedRow] = assignedPinServerList[selectedRow - 1];
+                    assignedPinServerList[selectedRow - 1] = t;
+                }else if(srcTableId=="homeDirAuthTable") {
+                    t = assignedHomeDirServerList[selectedRow];
+                    assignedHomeDirServerList[selectedRow] = assignedHomeDirServerList[selectedRow - 1];
+                    assignedHomeDirServerList[selectedRow - 1] = t;
+                }else if(srcTableId=="cardAuthTable") {
+                    t = assignedCardServerList[selectedRow];
+                    assignedCardServerList[selectedRow] = assignedCardServerList[selectedRow - 1];
+                    assignedCardServerList[selectedRow - 1] = t;
+                }else if(srcTableId=="WinDomainAuthTable") {
+				    t = windowsAuthListArray[selectedRow];
+                    windowsAuthListArray[selectedRow] = windowsAuthListArray[selectedRow - 1];
+                    windowsAuthListArray[selectedRow - 1] = t;
+                }else if(srcTableId=="cardWinDomainAuthTable") { //RCR_1766
+				    t = cardWindowsAuthListArray[selectedRow];
+                    cardWindowsAuthListArray[selectedRow] = cardWindowsAuthListArray[selectedRow - 1];
+                    cardWindowsAuthListArray[selectedRow - 1] = t;
+                }
+                if(srcTableId=="EmailldapAuthTable") {
+                    t = assignedEmailLDAPServerList[selectedRow];
+                    assignedEmailLDAPServerList[selectedRow] = assignedEmailLDAPServerList[selectedRow - 1];
+                    assignedEmailLDAPServerList[selectedRow - 1] = t;
+                }
+
+
+
+            });
+            $("#btnLDAPMoveDown,#btnPinMoveDown,#btnHomeDirMoveDown, #btnCardMoveDown, #btnWinDomainMoveDown, #btnEmailLDAPMoveDown, #btnCardAuthWinDomainMoveDown, #btnCardAuthLDAPMoveDown").click(function(){
+                var srcTableId="";
+
+                if($(this).attr('id')=="btnLDAPMoveDown"){
+                    srcTableId="ldapAuthTable";
+                }else if($(this).attr('id')=="btnCardAuthLDAPMoveDown"){ //RCR_1766
+                    srcTableId="cardLdapAuthTable";
+                }else if($(this).attr('id')=="btnPinMoveDown"){
+                    srcTableId="pinAuthTable";
+                }else if($(this).attr('id')=="btnHomeDirMoveDown"){
+                    srcTableId="homeDirAuthTable";
+                }else if($(this).attr('id')=="btnCardMoveDown"){
+                    srcTableId="cardAuthTable";
+                }else if($(this).attr('id')=="btnWinDomainMoveDown"){
+                    srcTableId="WinDomainAuthTable";
+                }else if($(this).attr('id')=="btnCardAuthWinDomainMoveDown"){ //RCR_1766
+                    srcTableId="cardWinDomainAuthTable";
+                }if($(this).attr('id')=="btnEmailLDAPMoveDown"){
+                    srcTableId="EmailldapAuthTable";
+                }
+
+
+                var selectedRow =  $("#"+ srcTableId +" tr.selected").index();
+                if(selectedRow == undefined){
+                    return;
+                }
+                $("#"+ srcTableId +" tr.selected").next().after($("#"+ srcTableId +" tr.selected"));
+                $("#"+ srcTableId +" tr.selected").click();
+
+                //Swapping
+                var t;
+                if(srcTableId=="ldapAuthTable") {
+                    t = assignedLDAPServerList[selectedRow];
+                    assignedLDAPServerList[selectedRow] = assignedLDAPServerList[selectedRow + 1];
+                    assignedLDAPServerList[selectedRow + 1] = t;
+                }else if(srcTableId=="cardLdapAuthTable") { //RCR_1766
+                    t = assignedCardAuthLDAPServerList[selectedRow];
+                    assignedCardAuthLDAPServerList[selectedRow] = assignedCardAuthLDAPServerList[selectedRow + 1];
+                    assignedCardAuthLDAPServerList[selectedRow + 1] = t;
+                }else if(srcTableId=="pinAuthTable") {
+                    t = assignedPinServerList[selectedRow];
+                    assignedPinServerList[selectedRow] = assignedPinServerList[selectedRow + 1];
+                    assignedPinServerList[selectedRow + 1] = t;
+                }else if(srcTableId=="homeDirAuthTable") {
+                    t = assignedHomeDirServerList[selectedRow];
+                    assignedHomeDirServerList[selectedRow] = assignedHomeDirServerList[selectedRow + 1];
+                    assignedHomeDirServerList[selectedRow + 1] = t;
+                }else if(srcTableId=="cardAuthTable") {
+                    t = assignedCardServerList[selectedRow];
+                    assignedCardServerList[selectedRow] = assignedCardServerList[selectedRow + 1];
+                    assignedCardServerList[selectedRow + 1] = t;
+                }else if(srcTableId=="WinDomainAuthTable") {
+				    t = windowsAuthListArray[selectedRow];
+                    windowsAuthListArray[selectedRow] = windowsAuthListArray[selectedRow + 1];
+                    windowsAuthListArray[selectedRow + 1] = t;
+                }else if(srcTableId=="EmailldapAuthTable") {
+                    t = assignedEmailLDAPServerList[selectedRow];
+                    assignedEmailLDAPServerList[selectedRow] = assignedEmailLDAPServerList[selectedRow + 1];
+                    assignedEmailLDAPServerList[selectedRow + 1] = t;
+                }else if(srcTableId=="cardWinDomainAuthTable") { //RCR_1766
+                    t = cardWindowsAuthListArray[selectedRow];
+                    cardWindowsAuthListArray[selectedRow] = cardWindowsAuthListArray[selectedRow + 1];
+                    cardWindowsAuthListArray[selectedRow + 1] = t;
+                }
+
+            });
+
+
+            function loadPopUp(id){
+                var targetPage;
+                targetPage = "ServerAssignment.html?v=1717026199ta";
+
+                $("#spnButtonSource").val(id);
+                if(id=="LDAP"){
+                    populateAvailableAndAssignedStrings(availableLDAPServerList,assignedLDAPServerList);
+                }else if(id=="PIN"){
+                    populateAvailableAndAssignedStrings(availablePinServerList,assignedPinServerList);
+                }else if(id=="HOMEDIRBTN"){
+                    populateAvailableAndAssignedStrings(availableHomeDirServerList,assignedHomeDirServerList);
+                }else if(id=="CARDAUTHBTN"){
+                    populateAvailableAndAssignedStrings(availableCardServerList,assignedCardServerList);
+                }else if(id=="EmailLDAP"){
+                    populateAvailableAndAssignedStrings(availableEmailLDAPServerList,assignedEmailLDAPServerList);
+                }else if(id =="cardAuthLDAP"){ //RCR_1766
+                    populateAvailableAndAssignedStrings(availableCardAuthLDAPServerList,assignedCardAuthLDAPServerList);
+                }
+
+                if(popUpWindow != null) {
+                    if(popUpWindow.closed == false )// if the window was created then bring the window in focus from background
+                    {
+                        popUpWindow.focus();
+                        popUpWindow.location = targetPage;
+                    }
+                    else // if the window was created and closed then bring the window in focus
+                    {
+                        popUpWindow = window.open(targetPage,"","toolbar=no,height=330,width=1150,resizable=yes,scrollbars=yes,left=" + iXCoord + ",top=" + iYCoord);
+                    }
+                }
+                else { // Creating new window
+                    popUpWindow = window.open(targetPage,"","toolbar=no,height=330,width=1150,resizable=yes,scrollbars=yes,left=" + iXCoord + ",top=" + iYCoord);
+                }
+
+
+            }
+
+            window.closePopup = function(){
+                //cloning the array to preserve the values even after the popup closes
+
+                var availableList = document.getElementById('spnAvailableServerList').value;
+                var assignedList = document.getElementById('spnAssignedServerList').value;
+                if(popUpWindow.sourceID =="LDAP") {
+                    availableLDAPServerList = construct2DArray(availableList);
+                    assignedLDAPServerList = construct2DArray(assignedList);
+                }else if(popUpWindow.sourceID =="cardAuthLDAP") { //RCR_1766
+                    availableCardAuthLDAPServerList = construct2DArray(availableList);
+                    assignedCardAuthLDAPServerList = construct2DArray(assignedList);
+
+                }else if(popUpWindow.sourceID=="PIN"){
+                    availablePinServerList = construct2DArray(availableList);
+                    assignedPinServerList = construct2DArray(assignedList);
+                }else if(popUpWindow.sourceID=="HOMEDIRBTN"){
+                    availableHomeDirServerList = construct2DArray(availableList);
+                    assignedHomeDirServerList = construct2DArray(assignedList);
+                }else if(popUpWindow.sourceID=="CARDAUTHBTN"){
+                    availableCardServerList = construct2DArray(availableList);
+                    assignedCardServerList = construct2DArray(assignedList);
+                }else if(popUpWindow.sourceID=="EmailLDAP"){
+                    availableEmailLDAPServerList = construct2DArray(availableList);
+                    assignedEmailLDAPServerList = construct2DArray(assignedList);
+                }
+                popUpWindow.close();
+            }
+			
+			window.closeWindowsDomainPopup = function(tableName){
+             if(tableName =="windowsDomain")   {
+                 var availableList = document.getElementById('spnWindowsDomainServerList').value;
+                 windowsAuthListArray = construct2DArray(availableList);
+             }else{
+                 var cardWindowsDomainAvailableList = document.getElementById('spnCardAuthWindowsDomainServerList').value;
+                cardWindowsAuthListArray = construct2DArray(cardWindowsDomainAvailableList);
+             }
+                popUpWindowDomain.close();
+			}
+
+            function populateAvailableAndAssignedStrings(available,assigned){
+                var availableString = "";
+                var assignedString = "";
+                $.each(available, function(index, item) {
+                    availableString = availableString + item.join(gblSep2) + gblSep1;
+                });
+                $("#spnAvailableServerList").val(availableString);
+                $.each(assigned, function(index, item) {
+                    assignedString = assignedString + item.join(gblSep2) + gblSep1;
+                });
+                $("#spnAssignedServerList").val(assignedString);
+            }
+			//RCR_1766
+			function populateWindowsDomainString(available,tableName){
+                var availableString = "";
+                $.each(available, function(index, item) {
+				    availableString = availableString + item.join(gblSep2) + gblSep1;
+                });
+                if(tableName =="idWinDomainAuthTable"){
+                    $("#spnWindowsDomainServerList").val(availableString);                
+                }else if(tableName == "idCardAuthWinDomainAuthTable"){
+                    $("#spnCardAuthWindowsDomainServerList").val(availableString);
+                }
+            }
+			
+			
+			$("#cmbLdapAuth").on("change",function(){
+			    var selectedLdap = $("#cmbLdapAuth option:selected").text();
+				$("#cmbLdapAuthServerType").val(selectedLdap);
+				$("#cmbLdapAuthAttrName").val(selectedLdap);	
+				$("input[name='SERVERUSERNAME']").val($("#cmbLdapAuthAttrName option:selected").text());
+			});
+
+		/*
+		    //Fix : Hide the blinking cursor for ready only fields in IE and Firefox
+			$('input[readonly]').focus(function(){
+				this.blur();
+			});
+        */
+            fixColumnWidth('ldapAuthTableHeader', 'ldapAuthTable');
+            fixColumnWidth('pinAuthTableHeader', 'pinAuthTable');
+            fixColumnWidth('cardAuthTableHeader', 'cardAuthTable');
+            fixColumnWidth('homeDirAuthTableHeader', 'homeDirAuthTable');
+            fixColumnWidth('EmailldapAuthTableHeader', 'EmailldapAuthTable');
+            fixColumnWidth('cardAuthLdapAuthTableHeader', 'cardLdapAuthTable'); //RCR_1766
+
+
+        });
+
+
+    function fnDeptCodeChange()
+
+    {
+
+        var lsForm=document.frmAuth;
+
+        if(getValue("SELDEPTCODE") =="false")
+
+        {
+
+            lsForm.SELDEPTNUMREQ.disabled=true;
+
+            lsForm.SELDEPTENFORCE.disabled=true;
+
+            lsForm.SELDEPTMGMTCOPY.disabled=true;
+
+            lsForm.SELDEPTMGMTFAX.disabled=true;
+
+            lsForm.SELDEPTMGMTPRINT.disabled=true;
+
+            lsForm.SELDEPTMGMTSCAN.disabled=true;
+
+            lsForm.SELDEPTMGMTLIST.disabled=true;
+
+            lsForm.SELDEPTMGMTUSERFN.disabled=true;
+
+            lsForm.SELDEPTMGMTEWB.disabled=true;  //added on 19April2017[EBX_DCR_53407]
+
+        }
+
+        else if(getValue("SELDEPTCODE") =="true")
+
+        {
+
+            lsForm.SELDEPTNUMREQ.disabled=false;
+
+            lsForm.SELDEPTENFORCE.disabled=false;
+
+            if(getValue('SELUSERAUTH') == "1" ){
+
+                lsForm.SELDEPTMGMTCOPY.disabled=true;
+
+                lsForm.SELDEPTMGMTFAX.disabled=true;
+
+                lsForm.SELDEPTMGMTPRINT.disabled=true;
+
+                lsForm.SELDEPTMGMTSCAN.disabled=true;
+
+                lsForm.SELDEPTMGMTLIST.disabled=true;
+
+                lsForm.SELDEPTMGMTUSERFN.disabled=true;
+
+                lsForm.SELDEPTMGMTEWB.disabled=true;  //added on 19April2017[EBX_DCR_53407]
+
+            }
+
+            else{
+
+                lsForm.SELDEPTMGMTCOPY.disabled=false;
+
+                lsForm.SELDEPTMGMTFAX.disabled=false;
+
+                lsForm.SELDEPTMGMTPRINT.disabled=false;
+
+                lsForm.SELDEPTMGMTSCAN.disabled=false;
+
+                lsForm.SELDEPTMGMTLIST.disabled=false;
+
+                lsForm.SELDEPTMGMTUSERFN.disabled=false;
+
+                //added on 19April2017[EBX_DCR_53407]
+                var isEWBElectronicKey = fnTrackCookie("LICENSE_SETTINGS","GET","EWB");
+                if(isEWBElectronicKey == "YES")
+                    $('[name=SELDEPTMGMTEWB]').removeAttr('disabled');
+
+            }
+
+        }
+
+    }
+
+
+
+    function fnHomeDirOnChange() {
+
+        var lsForm=document.frmAuth;
+
+        if(getValue("HOMEDIR") == "true") {
+
+            if(lsForm.AUTH_SERVER_TYPE[0].checked == true || lsForm.AUTH_SERVER_TYPE[1].checked == true)
+
+                document.getElementById("HomeDirectory_id").style.display = 'none';
+
+            else
+
+                document.getElementById("HomeDirectory_id").style.display = '';
+
+            lsForm.AUTH_SERVER_TYPE[0].disabled = false;
+
+            lsForm.AUTH_SERVER_TYPE[1].disabled = false;
+
+            lsForm.AUTH_SERVER_TYPE[2].disabled = false;
+
+            lsForm.AUTH_SERVER_TYPE[3].disabled = false;
+        } else if(getValue("HOMEDIR") == "false") {
+
+            document.getElementById("HomeDirectory_id").style.display = 'none';
+
+            lsForm.AUTH_SERVER_TYPE[0].disabled = true;
+
+            lsForm.AUTH_SERVER_TYPE[1].disabled = true;
+
+            lsForm.AUTH_SERVER_TYPE[2].disabled = true;
+
+            lsForm.AUTH_SERVER_TYPE[3].disabled = true;
+
+
+            if(getValue("USERAUTHTYPE") == "Local")
+                lsForm.AUTH_SERVER_TYPE[0].checked = true;
+            else
+                lsForm.AUTH_SERVER_TYPE[1].checked = true;
+        }
+
+    }
+
+
+    function fnUserAuthChange() {
+
+        try{
+
+        var lsForm = document.frmAuth;
+
+        if (getValue("SELUSERAUTH") == 0) {
+
+            lsForm.USERAUTHTYPE.disabled = true;
+
+            hideDivs("AUTOCREATEUSER_ID");
+
+            hideDivs("AUTODELUSERS_ID"); //RCR_1766
+
+            document.getElementById("cardAuthAutoReg_div").style.display="none"; //RCR_1766
+
+            lsForm.AUTOCREATEUSER.disabled = true;
+
+            lsForm.USECACHEINFO.disabled = true;
+
+            lsForm.VALIDITYCACHE.disabled = true;
+
+            lsForm.REGGUESTLOCALUSER.disabled = true;
+
+            lsForm.VALIDITYGUESTUSER.disabled = true;
+
+            if (getValue("USERAUTHTYPE") == "WindowsDomain" || getValue("USERAUTHTYPE") == "Ldap")
+
+                showDivs("AUTOCREATEUSER_ID");
+
+
+            lsForm.PWDAUTHPRINTJOB.disabled = true;
+
+            lsForm.USERGUEST.disabled = true;
+
+            lsForm.USERINFOCREATE.disabled = true;
+
+            lsForm.CARDIDUSERNAME.disabled = true;
+
+            lsForm.CARDIDSPLSRN.disabled = true;
+
+            lsForm.CARDREQPINCODE.disabled = true;
+
+            lsForm.SELUSERAUTHENFORCE.disabled = true;
+
+            lsForm.SELAUTORELONLOGIN.disabled = true;
+
+            lsForm.PINCODEAUTH.disabled = true;
+
+            lsForm.PINCODELEN.disabled = true;
+
+            lsForm.SELAUTHCOPY.disabled = true;
+
+            lsForm.SELAUTHFAX.disabled = true;
+
+            lsForm.SELAUTHPRINT.disabled = true;
+
+            lsForm.SELAUTHSCAN.disabled = true;
+
+            lsForm.SELAUTHLIST.disabled = true;
+
+            lsForm.SELAUTHUSERFN.disabled = true;
+
+            lsForm.SELAUTHADMIN.disabled = true;
+            lsForm.SELUSERAUTHACCTOFUNCT.disabled = true
+            lsForm.SELAUTHEWB.disabled = true
+
+            lsForm.SELCARDAUTH.disabled=true;
+
+            lsForm.SELMOBAUTH.disabled=true;
+
+            lsForm.SELAUTOCHNG.disabled=true;
+
+            if (getValue("SELDEPTCODE") == "true") {
+
+                lsForm.SELDEPTMGMTCOPY.disabled = false;
+
+                lsForm.SELDEPTMGMTFAX.disabled = false;
+
+                lsForm.SELDEPTMGMTPRINT.disabled = false;
+
+                lsForm.SELDEPTMGMTSCAN.disabled = false;
+
+                lsForm.SELDEPTMGMTLIST.disabled = false;
+
+                lsForm.SELDEPTMGMTUSERFN.disabled = false;
+
+                //added on 19April2017[EBX_DCR_53407]
+                var isEWBElectronicKey = fnTrackCookie("LICENSE_SETTINGS","GET","EWB");
+                if(isEWBElectronicKey == "YES")
+                    $('[name=SELDEPTMGMTEWB]').removeAttr('disabled');
+
+            }
+
+            else {
+
+                lsForm.SELDEPTMGMTCOPY.disabled = true;
+
+                lsForm.SELDEPTMGMTFAX.disabled = true;
+
+                lsForm.SELDEPTMGMTPRINT.disabled = true;
+
+                lsForm.SELDEPTMGMTSCAN.disabled = true;
+
+                lsForm.SELDEPTMGMTLIST.disabled = true;
+
+                lsForm.SELDEPTMGMTUSERFN.disabled = true;
+
+                lsForm.SELDEPTMGMTEWB.disabled=true; //added on 19April2017[EBX_DCR_53407]
+
+
+
+            }
+
+            document.getElementById("PINCODE_ID").disabled = 'none';
+
+
+            if(getValue("CARDAUTHENABLED") !="NotInstalled") {
+
+                showDivs("CARDAUTH_SPLSRN");
+                if (getValue("USERAUTHTYPE") == "Local") {
+
+                    showDivs("CARDAUTH");
+
+                    lsForm.SELAUTOCHNGLGN.disabled = true;
+
+                } else
+
+                    hideDivs("CARDAUTH");
+
+            } else
+
+                hideDivs("CARDAUTH~CARDAUTH_SPLSRN");
+
+            hideDivs("PinCodeAuth_id");
+
+            hideDivs("LDAPAuthentication_id")
+
+            hideDivs("WindowsDomainAuthentication_id")
+
+            hideDivs("RBASETTINGS");
+
+            lsForm.AUTHMETH.disabled = false;
+
+            setValue("HOMEDIR", "false");
+
+            lsForm.HOMEDIR.disabled = true;
+            lsForm.SHAREDUSERSETTING.disabled = true;
+			lsForm.CON_TIMEOUTSEC.disabled = true;
+			
+            lsForm.SELPROJECTMGMT.disabled = true; //Project Code
+            lsForm.SELPROJECTJOB.disabled = true; //Project Code
+
+            if(getValue("NFCCARDREAD") =="NotAvailable" || getValue("NFCFUNCTION") == "false")
+            {
+                hideDivs("MOBAUTH~MOBUSERAUTH");
+            }
+
+            else
+            {
+                showDivs("MOBAUTH~MOBUSERAUTH");
+            }
+        }
+
+        else if (getValue("SELUSERAUTH") == 1) {
+
+            lsForm.USERAUTHTYPE.disabled = false;
+
+            hideDivs("AUTOCREATEUSER_ID");
+
+            if (getValue("USERAUTHTYPE") == "Local" ){
+                showDivs("AUTODELUSERS_ID"); //RCR_1766
+            }
+
+            lsForm.AUTOCREATEUSER.disabled = true;
+
+            lsForm.USECACHEINFO.disabled = true;
+
+            lsForm.VALIDITYCACHE.disabled = true;
+
+            lsForm.REGGUESTLOCALUSER.disabled = true;
+
+            lsForm.VALIDITYGUESTUSER.disabled = true;
+
+            lsForm.PWDAUTHPRINTJOB.disabled = false;
+
+            lsForm.USERGUEST.disabled = false;
+            if(getValue("SHAREDUSERSETTING") == "Slave") {
+                lsForm.USERINFOCREATE.disabled = true;
+            }else{
+                lsForm.USERINFOCREATE.disabled = false;
+            }
+
+            lsForm.CARDIDUSERNAME.disabled = false;
+
+            lsForm.CARDIDSPLSRN.disabled = false;
+
+            if (Diag_3642_0_code == 1 || Diag_3642_0_code == "1")
+
+                lsForm.SELUSERAUTHENFORCE.disabled = true;
+
+            else
+
+                lsForm.SELUSERAUTHENFORCE.disabled = false;
+
+            lsForm.SELAUTORELONLOGIN.disabled = false;
+
+            lsForm.PINCODEAUTH.disabled = false;
+
+            lsForm.SELAUTHADMIN.disabled = false;
+
+
+            lsForm.SELDEPTMGMTCOPY.disabled = true;
+
+            lsForm.SELDEPTMGMTFAX.disabled = true;
+
+            lsForm.SELDEPTMGMTPRINT.disabled = true;
+
+            lsForm.SELDEPTMGMTSCAN.disabled = true;
+
+            lsForm.SELDEPTMGMTLIST.disabled = true;
+
+            lsForm.SELDEPTMGMTUSERFN.disabled = true;
+
+            lsForm.SELDEPTMGMTEWB.disabled=true; //added on 19April2017[EBX_DCR_53407]
+
+            lsForm.SELCARDAUTH.disabled=false;
+
+            lsForm.SELMOBAUTH.disabled=false;
+
+            lsForm.SELAUTOCHNG.disabled=false;
+
+            if (top.fnGetCookie("SECURITYLEVEL") != "HIGH") {
+                lsForm.SELUSERAUTHACCTOFUNCT.disabled = false;
+                if($('[name=SELUSERAUTHACCTOFUNCT]').val() != "false"){
+                    lsForm.SELAUTHCOPY.disabled = false;
+                    lsForm.SELAUTHFAX.disabled = false;
+                    lsForm.SELAUTHPRINT.disabled = false;
+                    lsForm.SELAUTHSCAN.disabled = false;
+                    lsForm.SELAUTHLIST.disabled = false;
+                    lsForm.SELAUTHUSERFN.disabled = false;
+                    var isEWBElectronicKey = fnTrackCookie("LICENSE_SETTINGS","GET","EWB");
+                    if(isEWBElectronicKey == "YES")
+                            $('[name=SELAUTHEWB]').removeAttr('disabled');
+            }else{
+               $('[name=SELAUTHEWB]').attr('disabled', true);
+            }
+            }
+            if (getValue("PINCODEAUTH") == "true")
+
+                lsForm.CARDREQPINCODE.disabled = false;
+
+            else
+
+                lsForm.CARDREQPINCODE.disabled = true;
+
+            lsForm.PINCODELEN.disabled = false;
+
+            document.getElementById("PINCODE_ID").disabled = false;
+
+
+            if (getValue("USERAUTHTYPE") == "Local") {
+
+                lsForm.EMAILDESTRESTRICT.disabled = false;
+
+                showDivs("AUTODELUSERS_ID"); //RCR_1766
+
+                hideDivs("PinCodeAuth_id");
+                if (top.fnGetCookie("SECURITYLEVEL") != "HIGH"){
+                    lsForm.SHAREDUSERSETTING.disabled = false;
+                    lsForm.CON_TIMEOUTSEC.disabled = false;
+                }
+                else if (top.fnGetCookie("SECURITYLEVEL") == "HIGH"){
+                    lsForm.SHAREDUSERSETTING.disabled = true;
+                    lsForm.CON_TIMEOUTSEC.disabled = true;
+                }
+            }
+
+            else if (getValue("USERAUTHTYPE") == "WindowsDomain" || getValue("USERAUTHTYPE") == "Ldap") {
+
+                lsForm.SHAREDUSERSETTING.disabled = true;
+				lsForm.CON_TIMEOUTSEC.disabled = true;
+                lsForm.EMAILDESTRESTRICT.disabled = false;
+
+                showDivs("AUTOCREATEUSER_ID");
+
+                hideDivs("AUTODELUSERS_ID"); //RCR_1766
+
+                lsForm.AUTOCREATEUSER.disabled = false;
+
+                lsForm.USECACHEINFO.disabled = false;
+
+                lsForm.VALIDITYCACHE.disabled = false;
+
+                lsForm.REGGUESTLOCALUSER.disabled = false;
+
+                lsForm.VALIDITYGUESTUSER.disabled = false;
+
+                if (getValue("PINCODEAUTH") == "false")
+
+                    hideDivs("PinCodeAuth_id");
+
+                else
+
+                    showDivs("PinCodeAuth_id");
+
+            }
+
+            if(getValue("CARDAUTHENABLED") !="NotInstalled")
+
+                showDivs("CARDAUTH~CARDAUTH_SPLSRN");
+
+            else
+
+                hideDivs("CARDAUTH~CARDAUTH_SPLSRN");
+
+            fnAuthTypeOnchage();
+
+            setValue("AUTHMETH", "None");
+
+            lsForm.AUTHMETH.disabled = true;
+
+            lsForm.HOMEDIR.disabled = false;
+			
+            if( isProjectCodeRegistered == true ) {
+               lsForm.SELPROJECTMGMT.disabled = false; //Project Code
+               lsForm.SELPROJECTJOB.disabled = false; //Project Code
+            }
+            if(getValue("NFCCARDREAD")=="NotAvailable" || getValue("NFCFUNCTION") == "false")
+            {
+                hideDivs("MOBAUTH~MOBUSERAUTH");
+            }
+
+            else
+            {
+                showDivs("MOBAUTH~MOBUSERAUTH");
+            }
+        }
+
+        if (getValue('SELUSERAUTH') != "1" && getValue("AUTHMETH") == "None") {
+
+            fnFromAddressOnChange();
+
+
+            lsForm.SELFROMADDRESSSETTING.disabled = true;
+
+            lsForm.STRFROMADR.disabled = true;
+
+            lsForm.EMAILDESTRESTRICT.disabled = true;
+
+
+            fnFromNameDisable(true);
+
+            lsForm.EDITFORBIT.disabled =  true;
+
+        } else {
+
+            lsForm.SELFROMADDRESSSETTING.disabled = false;
+
+            lsForm.STRFROMADR.disabled = false;
+
+            if(getValue("USERAUTHTYPE") == "Local") {
+
+                lsForm.EMAILDESTRESTRICT.disabled = false;
+
+                hideDivs("AUTOCREATEUSER_ID");
+
+                showDivs("AUTODELUSERS_ID"); //RCR_1766
+
+                lsForm.AUTOCREATEUSER.disabled = true;
+
+                lsForm.USECACHEINFO.disabled = true;
+
+                lsForm.VALIDITYCACHE.disabled = true;
+
+                lsForm.REGGUESTLOCALUSER.disabled = true;
+
+                lsForm.VALIDITYGUESTUSER.disabled = true;
+
+            }
+
+            else if(getValue("USERAUTHTYPE") == "WindowsDomain" || getValue("USERAUTHTYPE") == "Ldap") {
+
+                lsForm.EMAILDESTRESTRICT.disabled = false;
+
+                showDivs("AUTOCREATEUSER_ID");
+                
+                hideDivs("AUTODELUSERS_ID"); //RCR_1766
+
+                lsForm.AUTOCREATEUSER.disabled = false;
+
+                lsForm.USECACHEINFO.disabled = false;
+
+                lsForm.VALIDITYCACHE.disabled = false;
+
+                lsForm.REGGUESTLOCALUSER.disabled = false;
+
+                lsForm.VALIDITYGUESTUSER.disabled = false;
+
+            }
+
+            
+            if(lsForm.EMAILADDRSETFRMNAME.value != "SearchLDAP")
+                fnFromNameDisable(false);
+			
+            lsForm.EDITFORBIT.disabled =  false;
+
+            fnFromAddressOnChange();
+
+        }
+        }catch (err)
+        {
+
+        }
+
+    }
+
+
+
+    function fnFromNameDisable(IsDisable) {
+
+        var FrmObj=document.frmAuth;
+
+          FrmObj.EMAILADDRSETFRMNAME.disabled = IsDisable;
+
+    }
+
+
+// RCR_1766 START 
+    function fnCardAuthTypeOnchange(){
+        var cardAuthMode = getValue("CARDUSERAUTHTYPE");
+        var lsForm=document.frmAuth;
+        if(cardAuthMode == "CardAuthWindowsDomain"){
+            showDivs("CardWindowsDomainAuthentication_id");
+            fixColumnWidth('cardAuthWinDomainTableHeader', 'cardWinDomainAuthTable');
+            hideDivs("CardLDAPAuthentication_id")
+        }else if(cardAuthMode =="CardAuthLdap"){
+            hideDivs("CardWindowsDomainAuthentication_id");
+            showDivs("CardLDAPAuthentication_id");
+            fixColumnWidth('cardAuthLdapAuthTableHeader', 'cardLdapAuthTable'); //RCR_1766
+        }
+    }
+
+     // USER INFO CREATE CHECKBOX HANDLE FOR HIDE/DISP CARD AUTH WINDOWS OR LDAP DETAILS
+     function fnuserInfoChkHandle(){
+        var lsForm=document.frmAuth;
+        var userInfoChk = lsForm.USERINFOCREATE.checked;
+        if(userInfoChk){
+           document.getElementById("cardAuthAutoReg_div").style.display="";
+        }else{
+            document.getElementById("cardAuthAutoReg_div").style.display="none";
+        }
+     }
+    //USER AUTH AUTO REGISTRATION CHECKBOX HANDLE TO HIDE/DISP CARD AUTH TYPE
+    function fnAuthAutoRegChkHandle(){   
+        var lsForm=document.frmAuth;
+        var autoRegChk = lsForm.USERAUTHAUTOREG.checked;  
+          if(autoRegChk){
+            showDivs("CardAuthTypeSelDiv");
+          }else{
+                    hideDivs("CardAuthTypeSelDiv");
+                }
+    }
+           
+// RCR_1766 END
+    function fnAuthTypeOnchage() {
+
+        var userAuthMode = getValue("USERAUTHTYPE");
+
+        var lsForm=document.frmAuth;
+
+	    if(userAuthMode == "Local") {
+
+            hideDivs("PinCodeAuth_id");
+
+            hideDivs("cardAuthSettingButtonsDiv");
+
+            hideDivs("LDAPAuthentication_id");
+
+            hideDivs("WindowsDomainAuthentication_id");
+
+            hideDivs("RBASETTINGS");
+
+            showDivs("AUTODELUSERS_ID"); //RCR_1766
+
+            hideDivs("AUTOCREATEUSER_ID");
+
+            lsForm.AUTOCREATEUSER.disabled = true;
+
+            lsForm.USECACHEINFO.disabled = true;
+
+            lsForm.VALIDITYCACHE.disabled = true;
+
+            lsForm.REGGUESTLOCALUSER.disabled = true;
+
+            lsForm.VALIDITYGUESTUSER.disabled = true;
+
+            if(getValue("CARDAUTHENABLED") !="NotInstalled") {
+
+
+                if(top.fnGetCookie("SECURITYLEVEL") != "HIGH")
+
+                    lsForm.SELAUTOCHNGLGN.disabled = false;
+
+                document.getElementById("CARDAUTH_LOCAL").style.display = '';
+
+                document.getElementById("CARDAUTH_SPLSRN").style.display = '';
+
+                document.getElementById("CARDAUTH_REQPINCODE").style.display = '';
+
+            }
+
+			document.getElementById("TABLESHAREDUSER").style.display = '';
+            if (top.fnGetCookie("SECURITYLEVEL") != "HIGH"){
+                 lsForm.SHAREDUSERSETTING.disabled = false;
+                 lsForm.CON_TIMEOUTSEC.disabled = false;
+            }
+            else if (top.fnGetCookie("SECURITYLEVEL") == "HIGH"){
+                 lsForm.SHAREDUSERSETTING.disabled = true;
+                 lsForm.CON_TIMEOUTSEC.disabled = true;
+            }
+			var fromAddressOption = document.forms[0].SELFROMADDRESSSETTING;
+            var fromNameOption = document.forms[0].EMAILADDRSETFRMNAME;
+			
+            for(var i=0;i<fromAddressOption.length;i++) {
+               if(fromAddressOption.options[i].value == "LocalUserEmail") {
+                   fromAddressOption.remove(i);
+				   break;
+               }
+            }
+            for(var i=0;i<fromNameOption.length;i++) {
+               if(fromNameOption.options[i].value == "LoginUser") {
+                   fromNameOption.remove(i);
+				   break;   
+               }
+            }
+
+
+            var option = document.createElement("option");
+            option.text = fnGetLocaleString("104840","Use Email Address which was registered Local User")
+            option.value= "LocalUserEmail";
+            fromAddressOption.add(option,fromAddressOption.length);
+
+            var option = document.createElement("option");
+            option.text = fnGetLocaleString("104842","Login User Name");
+            option.value= "LoginUser";
+            fromNameOption.add(option,fromNameOption.length);
+            document.getElementById("RegLocalUserId").style.display="";
+
+        } else if(userAuthMode == "Ldap") {
+
+            if(getValue("PINCODEAUTH") == "false") {
+
+                hideDivs("PinCodeAuth_id");
+
+                lsForm.CARDREQPINCODE.checked = false;
+
+                lsForm.CARDREQPINCODE.disabled = true;
+
+            }
+
+            else if(getValue("PINCODEAUTH") == "true") {
+
+                lsForm.CARDREQPINCODE.disabled = false;
+
+                showDivs("PinCodeAuth_id");
+                fixColumnWidth('pinAuthTableHeader', 'pinAuthTable');
+
+            }   
+
+            showDivs("LDAPAuthentication_id");
+            fixColumnWidth('ldapAuthTableHeader', 'ldapAuthTable');
+
+            hideDivs("WindowsDomainAuthentication_id");
+
+            showDivs("RBASETTINGS");
+
+            lsForm.EMAILDESTRESTRICT.disabled = false;
+
+            showDivs("AUTOCREATEUSER_ID");
+
+            hideDivs("AUTODELUSERS_ID"); //RCR_1766
+
+            lsForm.AUTOCREATEUSER.disabled = false;
+
+            lsForm.USECACHEINFO.disabled = false;
+
+            lsForm.VALIDITYCACHE.disabled = false;
+
+            lsForm.REGGUESTLOCALUSER.disabled = false;
+
+            lsForm.VALIDITYGUESTUSER.disabled = false;
+
+            if(getValue("CARDAUTHENABLED") !="NotInstalled") {
+
+                showDivs("cardAuthSettingButtonsDiv");
+                fixColumnWidth('cardAuthTableHeader', 'cardAuthTable');
+
+                document.getElementById("CARDAUTH_LOCAL").style.display = 'none';
+
+                document.getElementById("CARDAUTH_SPLSRN").style.display = '';
+
+                document.getElementById("CARDAUTH_REQPINCODE").style.display = '';
+
+            }
+			document.getElementById("TABLESHAREDUSER").style.display = 'none';
+			
+            var SELFROMADDRESSSETTING_value = document.forms[0].SELFROMADDRESSSETTING.value
+            if(SELFROMADDRESSSETTING_value== "LocalUserEmail"){
+                SELFROMADDRESSSETTING_value = "MachineDefault"
+            } 
+			var fromAddressOption = document.forms[0].SELFROMADDRESSSETTING;
+            for(var i=0;i<fromAddressOption.length;i++) {
+               if(fromAddressOption.options[i].value == "LocalUserEmail") {
+                   fromAddressOption.remove(i);
+                   fromAddressOption.selectedIndex=0;
+                   break;
+               }
+            }
+            document.forms[0].SELFROMADDRESSSETTING.value = SELFROMADDRESSSETTING_value;
+			
+            var EMAILADDRSETFRMNAME_value = document.forms[0].EMAILADDRSETFRMNAME.value
+            if(EMAILADDRSETFRMNAME_value == "LoginUser"){
+                EMAILADDRSETFRMNAME_value =  "NonEdit"
+            }
+            var fromNameOption = document.forms[0].EMAILADDRSETFRMNAME;
+            for(var i=0;i<fromNameOption.length;i++) {
+               if(fromNameOption.options[i].value == "LoginUser") {
+                   fromNameOption.remove(i);
+                   fromNameOption.selectedIndex=1;
+                    document.getElementById("RegLocalUserId").style.display="none";
+                    if(document.forms[0].AUTH_SERVER_TYPE[0].checked == true){
+                        document.forms[0].AUTH_SERVER_TYPE[1].checked=true;
+                    }
+               }
+            }
+          
+            document.forms[0].EMAILADDRSETFRMNAME.value = EMAILADDRSETFRMNAME_value;
+            
+
+        } else if(userAuthMode == "WindowsDomain") {
+
+            if(getValue("PINCODEAUTH") == "false") {
+
+                hideDivs("PinCodeAuth_id");
+
+                lsForm.CARDREQPINCODE.checked = false;
+
+                lsForm.CARDREQPINCODE.disabled = true;
+
+            }
+
+            else if(getValue("PINCODEAUTH") == "true") {
+
+                lsForm.CARDREQPINCODE.disabled = false;
+
+                showDivs("PinCodeAuth_id");
+                fixColumnWidth('pinAuthTableHeader', 'pinAuthTable');
+
+            }
+
+            showDivs("WindowsDomainAuthentication_id");
+            fixColumnWidth('WinDomainAuthTableHeader', 'WinDomainAuthTable');
+
+            hideDivs("LDAPAuthentication_id");
+
+            showDivs("RBASETTINGS");
+
+            lsForm.EMAILDESTRESTRICT.disabled = false;
+
+            showDivs("AUTOCREATEUSER_ID");
+
+            hideDivs("AUTODELUSERS_ID"); //RCR_1766
+
+            lsForm.AUTOCREATEUSER.disabled = false;
+
+            lsForm.USECACHEINFO.disabled = false;
+
+            lsForm.VALIDITYCACHE.disabled = false;
+
+            lsForm.REGGUESTLOCALUSER.disabled = false;
+
+            lsForm.VALIDITYGUESTUSER.disabled = false;
+
+            if(getValue("CARDAUTHENABLED") !="NotInstalled") {
+
+                showDivs("cardAuthSettingButtonsDiv");
+                fixColumnWidth('cardAuthTableHeader', 'cardAuthTable');
+
+                document.getElementById("CARDAUTH_LOCAL").style.display = 'none';
+
+                document.getElementById("CARDAUTH_SPLSRN").style.display = '';
+
+                document.getElementById("CARDAUTH_REQPINCODE").style.display = '';             
+            }
+			document.getElementById("TABLESHAREDUSER").style.display = 'none';
+			
+            var SELFROMADDRESSSETTING_value = document.forms[0].SELFROMADDRESSSETTING.value;
+            if(SELFROMADDRESSSETTING_value == "LocalUserEmail"){
+                SELFROMADDRESSSETTING_value = "MachineDefault"
+            } 
+			var fromAddressOption = document.forms[0].SELFROMADDRESSSETTING;
+            for(var i=0;i<fromAddressOption.length;i++) {
+               if(fromAddressOption.options[i].value == "LocalUserEmail") {
+                   fromAddressOption.remove(i);
+				   fromAddressOption.selectedIndex=0;
+				   break;
+               }
+            }
+            document.forms[0].SELFROMADDRESSSETTING.value = SELFROMADDRESSSETTING_value;
+            
+			
+            var EMAILADDRSETFRMNAME_value = document.forms[0].EMAILADDRSETFRMNAME.value;
+            if(EMAILADDRSETFRMNAME_value == "LoginUser"){
+                EMAILADDRSETFRMNAME_value =  "NonEdit"
+            }
+            var fromNameOption = document.forms[0].EMAILADDRSETFRMNAME;
+            for(var i=0;i<fromNameOption.length;i++) {
+               if(fromNameOption.options[i].value == "LoginUser") {
+                   fromNameOption.remove(i);
+                   fromNameOption.selectedIndex=1;
+                   document.getElementById("RegLocalUserId").style.display="none";
+                   if(document.forms[0].AUTH_SERVER_TYPE[0].checked == true){
+                        document.forms[0].AUTH_SERVER_TYPE[1].checked=true;
+                    }
+                }
+            }
+           
+            document.forms[0].EMAILADDRSETFRMNAME.value = EMAILADDRSETFRMNAME_value;
+            
+        }
+
+
+        fnFromAddressOnChange();
+        fnHomeDirOnChange();
+        fnuserInfoChkHandle();
+    }
+
+
+
+    function fnnDisableOrEnableUserName()
+
+    {
+
+        var lobjfrmName = document.frmAuth;
+
+        if((!lobjfrmName.SERVERKIND[0].checked)&&(!lobjfrmName.SERVERKIND[1].checked))
+
+        {
+
+            lobjfrmName.ATTRUSERNAME.disabled=true;
+
+        }
+
+        if(lobjfrmName.SERVERKIND[0].checked)
+
+        {
+
+            lobjfrmName.ATTRUSERNAME.disabled=true;
+
+        }
+
+        else
+
+            if(lobjfrmName.SERVERKIND[1].checked)
+
+            {
+
+                lobjfrmName.ATTRUSERNAME.disabled=false;
+
+            }
+
+    }
+
+
+// -------RCR_1766 START ------------
+
+// AUTO DELETE USER CHECKBOX HANDLER
+
+function fnOnClickAutodeleteChk (){
+    if(document.frmAuth.AUTODELETEUSER.checked) {
+        document.frmAuth.VALIDITYLOCALUSER.disabled= false;
+    } else {
+        document.frmAuth.VALIDITYLOCALUSER.disabled=true;
+    }
+}
+
+//-------- RCR_1766 END ---------
+
+    function fnEmailAuthOnChange(authName) {
+
+        var lsForm=document.frmAuth;
+
+        if(authName == "None") {
+
+            hideDivs("AUTHFAX_ID");
+
+            hideDivs("AUTHMETHOD_SMTP");
+
+            hideDivs("AUTHMETHOD_LDAP");
+
+        } else if(authName == "SMTP") {
+
+            showDivs("AUTHFAX_ID");
+
+            showDivs("AUTHMETHOD_SMTP");
+
+            hideDivs("AUTHMETHOD_LDAP");
+
+        } else if(authName == "LDAP") {
+
+            showDivs("AUTHFAX_ID");
+
+            showDivs("AUTHMETHOD_LDAP");
+
+            hideDivs("AUTHMETHOD_SMTP");
+
+        }
+
+        if(getValue('SELUSERAUTH') != "1" && getValue("AUTHMETH")=="None") {
+
+            fnFromAddressOnChange();
+
+            lsForm.SELFROMADDRESSSETTING.disabled = true;
+
+            lsForm.STRFROMADR.disabled = true;
+
+            lsForm.EMAILDESTRESTRICT.disabled = true;
+
+            fnFromNameDisable(true);
+
+            lsForm.EDITFORBIT.disabled =  true;
+
+        } else {
+
+            lsForm.SELFROMADDRESSSETTING.disabled = false;
+
+            lsForm.STRFROMADR.disabled = false;
+
+            if(getValue('SELUSERAUTH') == "0" && getValue("AUTHMETH") == "None") {
+
+                lsForm.EMAILDESTRESTRICT.disabled = false;
+            }
+
+            else if(getValue('SELUSERAUTH') == "0" && getValue("AUTHMETH") != "None") {
+
+                lsForm.EMAILDESTRESTRICT.disabled = false;
+
+            }
+
+            if(getValue('SELUSERAUTH') == "1" && getValue("AUTHMETH") == "None") {
+
+                if(getValue("USERAUTHTYPE") == "Local") {
+
+                    lsForm.EMAILDESTRESTRICT.disabled = false;
+                }
+
+                else if(getValue("USERAUTHTYPE") == "WindowsDomain" || getValue("USERAUTHTYPE") == "Ldap") {                  
+
+                    lsForm.EMAILDESTRESTRICT.disabled = false;
+
+                }
+
+            }
+
+
+            if(lsForm.EMAILADDRSETFRMNAME.value != "SearchLDAP")
+                fnFromNameDisable(false);
+
+            lsForm.EDITFORBIT.disabled =  false;
+
+            fnFromAddressOnChange()
+
+        }
+
+    }
+
+
+
+    function fnPinCodeAuthOnChange() {
+
+        var lsForm = document.frmAuth;
+
+        if(getValue("USERAUTHTYPE") == "Local")
+
+            hideDivs("PinCodeAuth_id");
+
+        else
+
+            showDivs("PinCodeAuth_id");
+
+
+
+        if(getValue("PINCODEAUTH") == "false") {
+
+
+
+            hideDivs("PinCodeAuth_id");
+
+            lsForm.CARDREQPINCODE.checked = false;
+
+            lsForm.CARDREQPINCODE.disabled = true;
+
+        }
+
+        else if(getValue("PINCODEAUTH") == "true") {
+
+            lsForm.CARDREQPINCODE.disabled = false;
+
+            if(getValue("USERAUTHTYPE") == "Local")
+
+                hideDivs("PinCodeAuth_id");
+
+            else
+
+                showDivs("PinCodeAuth_id");
+
+        }
+
+    }
+
+
+    function fnFromAddressOnChange() {
+
+        var lsForm = document.frmAuth;
+        var obj = lsForm.SELFROMADDRESSSETTING;
+        var currentValue = obj.value;
+        if(currentValue == "LDAPUserName")
+         prevVal = "LDAPUserName";
+        else
+        {
+            if((prevVal == "LDAPUserName" || prevVal == undefined) && currentValue == "MachineDefault"){
+                 setValue("EMAILADDRSETFRMNAME","NonEdit");
+            }
+            else if((prevVal == "LDAPUserName" || prevVal == undefined) && currentValue == "UserName"){
+                setValue("EMAILADDRSETFRMNAME","FromAddress");
+            }
+            else if((prevVal == "LDAPUserName" || prevVal == undefined) && currentValue == "LocalUserEmail"){
+                setValue("EMAILADDRSETFRMNAME","LoginUser");
+            }
+			if(getValue('SELUSERAUTH') != "0" || lsForm.AUTHMETH.selectedIndex != 0)
+				document.frmAuth.EMAILADDRSETFRMNAME.disabled = false;
+            prevVal = "";
+        }
+
+        var frmNameDropDown = lsForm.EMAILADDRSETFRMNAME;
+        if(obj.value != "LDAPUserName") {
+            for (var i=0;i<frmNameDropDown.length;  i++) {
+                if (frmNameDropDown.options[i].value=="SearchLDAP") {
+                    frmNameDropDown.remove(i);
+                }
+            }
+        }
+        else{
+             for (var i=0;i<frmNameDropDown.length;  i++) {                 
+                 if (frmNameDropDown.options[i].value !="SearchLDAP" && i<= frmNameDropDown.length-2)
+                     continue;
+                 try {
+                     if (frmNameDropDown.options[i].value !="SearchLDAP") {
+                         var optionName = new Option(fnGetLocaleString("103363","'User Name' of LDAP"), 'SearchLDAP');
+                         var targetlength = frmNameDropDown.length;
+                         frmNameDropDown.options[targetlength] = optionName;
+                         frmNameDropDown.selectedIndex = frmNameDropDown.length-1;
+                     }else{
+                         frmNameDropDown.selectedIndex = i;
+                         break;
+                     }
+                     frmNameDropDown.disabled=true;
+                 }catch(ex) {
+                         alert('internal error : invalid data');
+                         return;
+                 }
+             }
+        } 
+
+        if(obj.value == "MachineDefault") {
+
+            showDivs("FRMADDRSETTING_FROMADDR");
+
+            hideDivs("FRMADDRSETTING_USERNAME");
+
+            hideDivs("FRMADDRSETTING_LDAPDOMAINNAME");
+
+            hideDivs("EmailLDAPAuthentication_Buttons");
+
+            hideDivs("EmailLDAPAuthentication_Table");
+
+            hideDivs("EmailLDAPAuthentication_PriorityMsg");
+
+        } else if(obj.value == "UserName") {
+
+            hideDivs("FRMADDRSETTING_FROMADDR");
+
+            showDivs("FRMADDRSETTING_USERNAME");
+
+            hideDivs("FRMADDRSETTING_LDAPDOMAINNAME");
+
+            hideDivs("EmailLDAPAuthentication_Buttons");
+
+            hideDivs("EmailLDAPAuthentication_Table");
+
+            hideDivs("EmailLDAPAuthentication_PriorityMsg");
+
+            if(getValue('SELUSERAUTH') == "0" && getValue("AUTHMETH")=="None")
+
+                lsForm.DOMAINNAME.disabled = true;
+
+             else
+
+                lsForm.DOMAINNAME.disabled = false;
+
+        } else if(obj.value == "LDAPUserName") {
+
+            hideDivs("FRMADDRSETTING_FROMADDR");
+
+            hideDivs("FRMADDRSETTING_USERNAME");
+
+            showDivs("FRMADDRSETTING_LDAPDOMAINNAME");
+
+            if( getValue("SELUSERAUTH") == 1 || getValue("AUTHMETH") != "None" ) {
+
+                showDivs("EmailLDAPAuthentication_Buttons");
+
+                showDivs("EmailLDAPAuthentication_Table");
+                fixColumnWidth('EmailldapAuthTableHeader', 'EmailldapAuthTable');
+
+                showDivs("EmailLDAPAuthentication_PriorityMsg");
+            }
+            else {
+
+                hideDivs("EmailLDAPAuthentication_Buttons");
+
+                hideDivs("EmailLDAPAuthentication_Table");
+
+                hideDivs("EmailLDAPAuthentication_PriorityMsg");
+
+            }
+
+            if(getValue('SELUSERAUTH') == "0" && getValue("AUTHMETH")=="None") {
+
+                lsForm.LDAPDOMAINNAME.disabled = true;
+
+            } else {
+
+                lsForm.LDAPDOMAINNAME.disabled = false;
+
+            }
+
+        } else if(obj.value == "LocalUserEmail") {
+
+               // showDivs("FRMADDRSETTING_FROMADDR");
+               //EBX_STFR_19315
+                hideDivs("FRMADDRSETTING_FROMADDR");
+
+                hideDivs("FRMADDRSETTING_USERNAME");
+
+                hideDivs("FRMADDRSETTING_LDAPDOMAINNAME");
+
+                hideDivs("EmailLDAPAuthentication_Buttons");
+
+                hideDivs("EmailLDAPAuthentication_Table");
+
+                hideDivs("EmailLDAPAuthentication_PriorityMsg");
+        }
+
+    }
+
+
+    function fnnNext() {
+
+        if(!parent.fraList.fnRipTxtAsciiValidate()) {
+
+            return;
+
+        }
+
+        var lObjFrm = document.frmAuth;
+
+        if(getValue('SELUSERAUTH') == "1" && getValue('USERAUTHTYPE') == "WindowsDomain") {
+		
+		     if(windowsAuthListArray.length <= 0){
+			    //Atleast one Windows Domain must present
+				alert(strErrString+"("+strDomain1+")");
+                return false;
+			 }
+
+            //var sDomainNameVal = fnsTrim(getValue("DOMAINNAME1"));
+			//var sDomainNameVal = fnsTrim($( "#WinDomainAuthTable tr:first td:nth-child(0)"));
+			var sDomainNameVal = fnsTrim(windowsAuthListArray[0][0]); //Domain Name
+
+            /*if(sDomainNameVal == "") *//* Null and validation to accept only ASCII characters from 0x0020 to 0x007F *//*
+            {
+                alert(strErrString+"("+strDomain1+")");
+                return false;
+            }*/
+
+            for(i=0;i<sDomainNameVal.length;i++)
+
+            {
+
+                var sFieldValCode = sDomainNameVal.charCodeAt(i);
+
+                if(sFieldValCode < 0x20 || sFieldValCode> 0x7F) {
+
+                    alert(strErrString+"("+strDomain1+")");
+
+                    return false;
+
+                }
+
+            }
+
+            if(document.frmAuth.NTServer.checked == true) { 
+			   var errorStatus = false;
+				for(var i=0;i<windowsAuthListArray.length;i++){
+                    var domainName = fnsTrim(windowsAuthListArray[i][0]);
+                    if(domainName==''){
+                        //consider it as blank row - So no validation
+                        continue;
+                    }
+					var sPDCVal = fnsTrim(windowsAuthListArray[i][1]); // PDC
+                    if(sPDCVal == ""){
+                        errorStatus = true;
+						break;
+                    }
+                    for(var j=0;j<sPDCVal.length;j++)
+					{	// validation to accept only ASCII characters from 0x0020 to 0x007F 
+                        var sFieldValCode = sPDCVal.charCodeAt(j);
+                        if(sFieldValCode < 0x20 || sFieldValCode> 0x7F) {
+                          errorStatus = true;
+						  break;
+                        }
+                    }
+			    }
+				if(errorStatus == true){
+						alert(strErrString+"("+strPDC+")");
+                        return false;
+				}
+				//Validate BDC
+				/*for(var i=0;i<windowsAuthListArray.length;i++){
+                    //var sBDCVal = fnsTrim(getValue("STRBDC1"));
+					var sBDCVal = fnsTrim(windowsAuthListArray[i][2]); // BDC
+					if(sBDCVal == ""){
+                        errorStatus = true;
+						break;
+                    }
+					// validation to accept only ASCII characters from 0x0020 to 0x007F 
+                    for(var j=0;j<sBDCVal.length;j++)
+                    {
+                        var sFieldValCode = sBDCVal.charCodeAt(j);
+                        if(sFieldValCode < 0x20 || sFieldValCode> 0x7F) {
+                            errorStatus = true;
+							break;
+                        }
+                    }
+				}
+				if(errorStatus == true){
+						alert(strErrString+"("+strBDC+")");
+                        return false;
+				}*/
+            }
+
+            var sTimeOut = lObjFrm.TIMEOUTSEC;
+
+            if(sTimeOut.value <1 || sTimeOut.value >180 || sTimeOut.value == "") {
+
+                alert(fnGetLocaleString("101392","Please enter a valid value.")+"("+fnGetLocaleString("100364","Connection Timeout")+")");
+
+                sTimeOut.select();
+
+                sTimeOut.focus();
+
+                return false;
+
+            }
+
+            for(var i=0;i<sTimeOut.value.length;i++)
+
+            {
+
+                sTimeOutVal = sTimeOut.value.charCodeAt(i);
+
+                if(sTimeOutVal < 0x30 || sTimeOutVal > 0x39)
+
+                {
+
+                    alert(fnGetLocaleString("101392","Please enter a valid value.")+"("+fnGetLocaleString("100364","Connection Timeout")+")");
+
+                    sTimeOut.select();
+
+                    sTimeOut.focus();
+
+                    return false;
+
+                }
+
+            }
+            sTimeOut.value = parseInt(sTimeOut.value,'10');
+
+        }
+        //RCR_1766 START CARD AUTH WINDOWS DOMAIN TABLE VALIDATION
+        if(document.frmAuth.USERINFOCREATE.checked == true && document.frmAuth.USERAUTHAUTOREG.checked == true && getValue('CARDUSERAUTHTYPE') == "CardAuthWindowsDomain" && getValue('USERAUTHTYPE') == "Local") {
+            
+            if(cardWindowsAuthListArray.length <= 0){
+            //Atleast one Windows Domain must present
+            alert(strErrString+"("+strDomain1+")");
+            return false;
+            }
+
+         var sDomainNameVal = fnsTrim(cardWindowsAuthListArray[0][0]); //Domain Name
+
+          for(i=0;i<sDomainNameVal.length;i++)
+
+         {
+
+            var sFieldValCode = sDomainNameVal.charCodeAt(i);
+
+            if(sFieldValCode < 0x20 || sFieldValCode> 0x7F) {
+
+                alert(strErrString+"("+strDomain1+")");
+
+                return false;
+
+            }
+
+         }
+         if(document.frmAuth.CardAuthNTServer.checked == true){ 
+                var errorStatus = false;
+                for(var i=0;i<cardWindowsAuthListArray.length;i++){
+                    var domainName = fnsTrim(cardWindowsAuthListArray[i][0]);
+                    if(domainName==''){
+                        //consider it as blank row - So no validation
+                        continue;
+                    }
+                    var sPDCVal = fnsTrim(cardWindowsAuthListArray[i][1]); // PDC
+                    if(sPDCVal == ""){
+                        errorStatus = true;
+                        break;
+                    }
+                    for(var j=0;j<sPDCVal.length;j++)
+                    {	// validation to accept only ASCII characters from 0x0020 to 0x007F 
+                        var sFieldValCode = sPDCVal.charCodeAt(j);
+                        if(sFieldValCode < 0x20 || sFieldValCode> 0x7F) {
+                            errorStatus = true;
+                            break;
+                        }
+                    }
+                }
+                if(errorStatus == true){
+                        alert(strErrString+"("+strPDC+")");
+                        return false;
+                }
+
+            }
+      
+        }
+       //RCR_1766 end
+        if(getValue('SELUSERAUTH') == "0" && getValue("AUTHMETH") == "None") {
+
+        } else {
+
+            if(lObjFrm.SELFROMADDRESSSETTING.value == "UserName") {
+
+                var sMailDomain = lObjFrm.DOMAINNAME;
+
+                if(fnbValidateSMTPLDAP(sMailDomain))
+
+                {
+
+                    alert(strErrString+"("+fnGetLocaleString("101115","Mail Domain Name")+")");
+
+                    sMailDomain.select();
+
+                    sMailDomain.focus();
+
+                    return false;
+
+                }
+
+            } else if(lObjFrm.SELFROMADDRESSSETTING.value == "LDAPUserName") {
+
+                var sLdapMailDomain = lObjFrm.LDAPDOMAINNAME;
+
+
+
+                if(fnbValidateSMTPLDAP(sLdapMailDomain))
+
+                {
+
+                    alert(strErrString+"("+fnGetLocaleString("101115","Mail Domain Name")+")");
+
+                    sLdapMailDomain.select();
+
+                    sLdapMailDomain.focus();
+
+                    return false;
+
+                }
+            }
+
+        }
+
+        if(getValue('SELUSERAUTH') != "1" && getValue('AUTHMETH') == "LDAP") {
+
+                var sLdapUserName = lObjFrm.SERVERUSERNAME;
+				$('#cmbLdapAuth').trigger('change');
+				var isWindowsServer = getText("EMAILAUTH_LdapServerType");
+				if(isWindowsServer=="false" && $.trim($(sLdapUserName).val()) ===""){
+				var lblErrorMsg= fnGetLocaleString("104616","Required attribute type has not been set.")+"\n"+fnGetLocaleString("104959","Check the properties for this directory service.");
+				var lblErrorSpec= fnGetLocaleString("101992","User Name");
+				alert(lblErrorMsg + "\n(" + lblErrorSpec + ")");
+				return false;
+				}
+
+				if(!(isWindowsServer=="true" && $.trim($(sLdapUserName).val()) ==="")){
+                if(!fnbValidateLDAPUmlaut(sLdapUserName))/*Praveen 19.06.2008 umlaut character support*/
+                {
+                    alert(strErrString);
+                    sLdapUserName.select();
+                    sLdapUserName.focus();
+                    return false;
+					}
+                }          
+
+        }
+
+        if(getValue('SELUSERAUTH') != "1" && getValue("AUTHMETH") == "SMTP") {
+
+                    if(fnbValidateForAscii(lObjFrm.SERVADDRESS)==false || fnRestrictSplChrInNtwProt(lObjFrm.SERVADDRESS) == false)
+
+                    return false;
+
+        }
+
+
+
+        if(getValue('SELUSERAUTH') == "1") {
+
+            var sPinCodeLen = lObjFrm.PINCODELEN;
+
+            var svalCache = lObjFrm.VALIDITYCACHE;
+
+            var sValidLocUser = lObjFrm.VALIDITYGUESTUSER;
+
+            if(sPinCodeLen.value <1 || sPinCodeLen.value >32 || sPinCodeLen.value == "") {
+
+                alert(fnGetLocaleString("101392","Please enter a valid value.")+"("+fnGetLocaleString("104273","Minimum PIN Code Length")+")");
+
+                sPinCodeLen.select();
+
+                sPinCodeLen.focus();
+
+                return false;
+
+            }
+
+            for(var i=0;i<sPinCodeLen.value.length;i++)
+
+            {
+
+                sPinCodeLenVal = sPinCodeLen.value.charCodeAt(i);
+
+                if(sPinCodeLenVal < 0x30 || sPinCodeLenVal > 0x39)
+
+                {
+
+                    alert(fnGetLocaleString("101392","Please enter a valid value.")+"("+fnGetLocaleString("104268","PIN Code")+")");
+
+                    sPinCodeLen.select();
+
+                    sPinCodeLen.focus();
+
+                    return false;
+
+                }
+
+            }
+
+			if(getValue("USERAUTHTYPE") == "WindowsDomain" || getValue("USERAUTHTYPE") == "Ldap") {
+
+				if(svalCache.value <1 || svalCache.value >14 || svalCache.value == "") {
+
+					alert(fnGetLocaleString("101392","Please enter a valid value.")+"("+fnGetLocaleString("104406","Validity Period of Cache")+")");
+
+					svalCache.select();
+
+					svalCache.focus();
+
+					return false;
+
+				}
+
+				for(var i=0;i<svalCache.value.length;i++)
+
+				{
+
+					sCacheVal = svalCache.value.charCodeAt(i);
+
+					if(sCacheVal < 0x30 || sCacheVal > 0x39)
+
+					{
+
+						alert(fnGetLocaleString("101392","Please enter a valid value.")+"("+fnGetLocaleString("104406","Validity Period of Cache")+")");
+
+						svalCache.select();
+
+						svalCache.focus();
+
+						return false;
+
+					}
+
+				}
+                svalCache.value = parseInt(svalCache.value,'10');
+
+				if(sValidLocUser.value <0 || sValidLocUser.value >180 || sValidLocUser.value == "") {
+
+					alert(fnGetLocaleString("101392","Please enter a valid value.")+"("+fnGetLocaleString("104409","Validity Period of Guest Local User")+")");
+
+					sValidLocUser.select();
+
+					sValidLocUser.focus();
+
+					return false;
+
+				}
+
+				for(var i=0;i<sValidLocUser.value.length;i++)
+
+				{
+
+					sValidLocUserVal = sValidLocUser.value.charCodeAt(i);
+
+					if(sValidLocUserVal < 0x30 || sValidLocUserVal > 0x39)
+
+					{
+
+						alert(fnGetLocaleString("101392","Please enter a valid value.")+"("+fnGetLocaleString("104409","Validity Period of Guest Local User")+")");
+
+						sValidLocUser.select();
+
+						sValidLocUser.focus();
+
+						return false;
+
+					}
+
+				}
+                sValidLocUser.value = parseInt(sValidLocUser.value,'10');
+
+			}
+        }
+       
+        // RCR_1766 START
+        var localUserValidity = lObjFrm.VALIDITYLOCALUSER;
+        if(lObjFrm.AUTODELETEUSER.checked == true) {
+
+                if(localUserValidity.value <1 || localUserValidity.value >180 || localUserValidity.value == "") {
+
+                    alert(fnGetLocaleString("101392","Please enter a valid value.")+"("+fnGetLocaleString("106155","Validity Period of Local User")+")");
+
+                    localUserValidity.select();
+
+                    localUserValidity.focus();
+
+                    return false;
+
+                    }
+
+                    for(var i=0;i<localUserValidity.value.length;i++)
+                    {
+
+                    localUserVal = localUserValidity.value.charCodeAt(i);
+
+                    if(localUserVal < 0x30 || localUserVal > 0x39)
+
+                    {
+
+                        alert(fnGetLocaleString("101392","Please enter a valid value.")+"("+fnGetLocaleString("106155","Validity Period of Local User")+")");
+
+                        localUserValidity.select();
+
+                        localUserValidity.focus();
+
+                        return false;
+
+                    }
+
+            }
+            localUserValidity.value = parseInt(localUserValidity.value,'10');
+
+        }
+        
+        //RCR_1766 END    
+
+
+        return true;
+    }
+   function onBlurConTimeOut()
+   {
+        var sTimeOut =  document.frmAuth.CON_TIMEOUTSEC;
+                var otherthanNumeric = false;
+                for(var i=0;i<sTimeOut.value.length;i++)
+
+                {
+
+                    var sTimeOutVal = sTimeOut.value.charCodeAt(i);
+
+                    if(sTimeOutVal < 0x30 || sTimeOutVal > 0x39)
+
+                    {
+                        otherthanNumeric = true;
+
+                    }
+
+                }
+                if(otherthanNumeric == true || (sTimeOut.value < 1 || sTimeOut.value > 180 )){
+                   sTimeOut.value = "30";
+                }
+   }
+
+    /* this function has been added for validating ascii chars*/
+
+    function fnbValidateForAscii(field) {
+
+        frmObject = document.frmNetwork;
+
+        str = field.value;
+
+        var lsErrMsg1113 =fnGetLocaleString("101393","Please Enter Ascii characters only"); // Please Enter Ascii characters only
+
+        var gsErrMsg10085 = fnGetLocaleString("101392","Please enter a valid value."); // Please enter a valid value
+
+        for (i=0; i < str.length; i++)
+
+        {
+
+            if ((str.charCodeAt(i) < 0x0 ) || (str.charCodeAt(i) >0x7F) )
+
+            {
+
+                alert(gsErrMsg10085 + "( " + lsErrMsg1113 + " )");
+
+                field.select();
+
+                field.focus();
+
+                return false;
+
+            }
+
+        }
+
+    }
+
+
+
+    function fnOnLoad() {
+
+        document.frmAuth.SELDEPTCODE.options[0]=new Option(strDisable,"false");
+
+        fnUserAuthChange();
+
+        fnCardAuthTypeOnchange();
+
+        fnOnClickAutodeleteChk(); //RCR_1766
+
+        fnGetAuthenticationSettings();
+		
+		fnuserInfoChkHandle(); //RCR_1766
+    }
+
+    function fnUserAuthAccToFunctChange()
+    {
+         if($('[name=SELUSERAUTHACCTOFUNCT]').val() == "false"){
+            $('[name=SELAUTHCOPY]').attr('disabled', true);
+            $('[name=SELAUTHFAX]').attr('disabled', true);
+            $('[name=SELAUTHPRINT]').attr('disabled', true);
+            $('[name=SELAUTHSCAN]').attr('disabled', true);
+            $('[name=SELAUTHLIST]').attr('disabled', true);
+            $('[name=SELAUTHUSERFN]').attr('disabled', true);
+            $('[name=SELAUTHEWB]').attr('disabled', true);
+         }
+         else if($('[name=SELUSERAUTHACCTOFUNCT]').val() == "true"){
+            $('[name=SELAUTHCOPY]').removeAttr('disabled');
+            $('[name=SELAUTHFAX]').removeAttr('disabled');
+            $('[name=SELAUTHPRINT]').removeAttr('disabled');
+            $('[name=SELAUTHSCAN]').removeAttr('disabled');
+            $('[name=SELAUTHLIST]').removeAttr('disabled');
+            $('[name=SELAUTHUSERFN]').removeAttr('disabled');
+
+            if (top.fnGetCookie("SECURITYLEVEL") == "HIGH") {
+                $('[name=SELAUTHEWB]').attr('disabled', true);
+            }else{
+                var isEWBElectronicKey = fnTrackCookie("LICENSE_SETTINGS","GET","EWB");
+                if(isEWBElectronicKey == "YES")
+                    $('[name=SELAUTHEWB]').removeAttr('disabled');
+            }
+        }
+    }
+
+   
+	function fnnCloseChildWindows(){
+		if((popUpWindowDomain != null) && (popUpWindowDomain.closed == false) )
+            popUpWindowDomain.close();
+			
+		if((popUpWindow != null) && (popUpWindow.closed == false) )
+            popUpWindow.close();
+	}
+	
+	</script>
+
+</HEAD>
+
+<BODY BGCOLOR="white" CLASS="clsMargin" onload="fnOnLoad();" onunload="fnnCloseChildWindows();">
+
+<FORM NAME="frmAuth">
+
+<BR>
+
+<input type="hidden" id="CARDAUTH_LDAPCHECKED" value="">
+
+<input type="hidden" id="LDAPCHECKED" value="">
+
+<input type="hidden" id="DOMAINCHECKED" value="">
+
+<input type="hidden" id="CARDAUTHENABLED" value="">
+
+    <input type="hidden" id="NFCCARDREAD" value="">
+    <input type="hidden" id="NFCFUNCTION" value="">
+<input type="hidden" id="Save" onclick="fnSaveAuthenticationSettings();">
+
+<TABLE class="clsMarker" cellSpacing=0 cellPadding=1 width="1870px" border=0>
+
+    <TBODY>
+
+    <TR>
+
+        <TD class=clsTableHeader colSpan=2 nowrap>&nbsp;<script type="text/javascript">document.write(fnGetLocaleString("103309","Department Setting"));</script></TD>
+
+    </TR>
+
+
+
+    <TR>
+
+        <TD class='clsTableElement' width="30%" nowrap><script type="text/javascript">document.write(fnGetLocaleString("100481","Department Code"));</script></TD>
+
+        <TD class='clsTableElement' width="70%" nowrap>
+
+            <SELECT NAME="SELDEPTCODE" SIZE="1" ONCHANGE="fnDeptCodeChange()">
+
+                </SELECT>
+
+        </TD>
+
+    </TR>
+
+    <TR>
+
+        <TD class='clsTableElement' width="30%" nowrap>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<script type="text/javascript">document.write(fnGetLocaleString("100383","Copy"));</script></TD>
+
+        <TD class='clsTableElement' width="70%" nowrap>
+
+            <SELECT NAME="SELDEPTMGMTCOPY" SIZE="1" onchange="">
+
+                <option value="false"><script type="text/javascript">document.write(strDisable)</script>
+
+                <option value="true" SELECTED><script type="text/javascript">document.write(strEnable)</script>
+
+                <!-- Enable/Disable. Will be disabled if there is no or invalid dept code entered -->
+
+            </SELECT>
+
+        </TD>
+
+    </TR>
+
+    <TR>
+
+        <TD class='clsTableElement' width="30%" nowrap>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<script type="text/javascript">document.write(fnGetLocaleString("100704","FAX"));</script></TD>
+
+        <TD class='clsTableElement' width="70%" nowrap>
+
+            <SELECT NAME="SELDEPTMGMTFAX" SIZE="1" onchange="">
+
+                <option value="false"><script type="text/javascript">document.write(strDisable)</script>
+
+                <option value="true" SELECTED><script type="text/javascript">document.write(strEnable)</script>
+
+                <!-- Enable/Disable. Will be disabled if there is no or invalid dept code entered -->
+
+            </SELECT>
+
+        </TD>
+
+    </TR>
+
+    <TR>
+
+        <TD class='clsTableElement' width="30%" nowrap>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<script type="text/javascript">document.write(fnGetLocaleString("103692","Print"));</script></TD>
+
+        <TD class='clsTableElement' width="70%" nowrap>
+
+            <SELECT NAME="SELDEPTMGMTPRINT" SIZE="1" onchange="">
+
+                <option value="false"><script type="text/javascript">document.write(strDisable)</script>
+
+                <option value="true" SELECTED><script type="text/javascript">document.write(strEnable)</script>
+
+                <!-- Enable/Disable. Will be disabled if there is no or invalid dept code entered -->
+
+            </SELECT>
+
+        </TD>
+
+    </TR>
+
+    <TR>
+
+        <TD class='clsTableElement' width="30%" nowrap>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<script type="text/javascript">document.write(fnGetLocaleString("101620","Scan"));</script></TD>
+
+        <TD class='clsTableElement' width="70%" nowrap>
+
+            <SELECT NAME="SELDEPTMGMTSCAN" SIZE="1" onchange="">
+
+                <option value="false"><script type="text/javascript">document.write(strDisable)</script>
+
+                <option value="true" SELECTED><script type="text/javascript">document.write(strEnable)</script>
+
+                <!-- Enable/Disable. Will be disabled if there is no or invalid dept code entered -->
+
+            </SELECT>
+
+        </TD>
+
+    </TR>
+
+    <TR>
+
+        <TD class='clsTableElement' width="30%" nowrap>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<script type="text/javascript">document.write(fnGetLocaleString("101069","List"));</script></TD>
+
+        <TD class='clsTableElement' width="70%" nowrap>
+
+            <SELECT NAME="SELDEPTMGMTLIST" SIZE="1" onchange="">
+
+                <option value="false"><script type="text/javascript">document.write(strDisable);</script>
+
+                <option value="true" SELECTED><script type="text/javascript">document.write(strEnable);</script>
+
+                <!-- Enable/Disable. Will be disabled if there is no or invalid dept code entered -->
+
+            </SELECT>
+
+        </TD>
+
+    </TR>
+
+    <TR>
+
+        <TD class='clsTableElement' width="30%" nowrap>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<script type="text/javascript">document.write(fnGetLocaleString("104534","User Functions"));</script></TD>
+
+        <TD class='clsTableElement' width="70%" nowrap>
+
+            <SELECT NAME="SELDEPTMGMTUSERFN" SIZE="1" onchange="">
+
+                <option value="false"><script type="text/javascript">document.write(strDisable);</script>
+
+                <option value="true" SELECTED><script type="text/javascript">document.write(strEnable);</script>
+
+                <!-- Enable/Disable. Will be disabled if there is no or invalid dept code entered -->
+
+            </SELECT>
+
+        </TD>
+
+    </TR>
+    <!--Edited on 19-April-2017-->
+    <!--DTFR: EBX_DCR_53407-->
+    <!--Requirement: Disable department code for EWB//EWB-->
+    <TR>
+
+        <TD class='clsTableElement' width="30%" nowrap>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<script type="text/javascript">document.write(fnGetLocaleString("103455","EWB"));</script></TD>
+
+        <TD class='clsTableElement' width="70%" nowrap>
+
+            <SELECT NAME="SELDEPTMGMTEWB" SIZE="1" onchange="" id="EWBID">
+
+                <option value="false"><script type="text/javascript">document.write(strDisable);</script>
+
+                <option value="true" SELECTED><script type="text/javascript">document.write(strEnable);</script>
+
+
+            </SELECT>
+
+        </TD>
+
+    </TR>
+
+    <TR>
+
+        <TD class='clsTableElement' width="30%" nowrap><script type="text/javascript">document.write(fnGetLocaleString("104218","Require Department Code in User Registration"));</script></TD>
+
+        <TD class='clsTableElement' width="70%" nowrap>
+
+            <SELECT NAME="SELDEPTNUMREQ" SIZE="1">
+
+                <option value="false"><script type="text/javascript">document.write(strDisable)</script>
+
+                <option value="true"><script type="text/javascript">document.write(strEnable)</script>
+
+                </SELECT>
+
+        </TD>
+
+    </TR>
+
+    <TR>
+
+            <TD colspan="2" class='clsTableElement' width="100%" nowrap><script type="text/javascript">document.write("*&nbsp;"+fnGetLocaleString("104260","Please set the Department Number to existing user which Department Number is not set."));</script></TD>
+
+    </TR>
+
+    <TR>
+
+        <TD>&nbsp;</TD>
+
+    </TR>
+
+    <TR>
+
+        <TD class='clsTableElement' width="30%" nowrap><script type="text/javascript">document.write(fnGetLocaleString("100950","Invalid department code print job"));</script></TD>
+
+        <TD class='clsTableElement' width="70%" nowrap>
+
+            <SELECT NAME="SELDEPTENFORCE" SIZE="1" onchange="">
+
+                <script type="text/javascript">
+
+                    if((top.gblDeviceModelId != "MASH" && top.gblDeviceModelId != "BP" && top.gblDeviceModelId != "LOIRE" && top.gblDeviceModelId != "ALABAMA") && top.gblHDDInstallation=="Installed") { // Checking for HDD installation.
+
+                        if(top.fnGetCookie("EFICtrlInstalled") != 1)
+
+                            document.write('<option value="INVALID">'+fnGetLocaleString("103451","Store to invalid job list"));
+
+                    }else if((top.gblDeviceModelId == "MASH" || top.gblDeviceModelId == "BP" || top.gblDeviceModelId == "LOIRE" || top.gblDeviceModelId == "ALABAMA") && top.fnGetCookie("EFICtrlInstalled") != 1)
+
+                            document.write('<option value="INVALID">'+fnGetLocaleString("103451","Store to invalid job list"));
+
+                    </script>
+
+                <option value="PRINT"><script type="text/javascript">document.write(fnGetLocaleString("101462","Print"));</script>
+
+                <option value="DELETE"><script type="text/javascript">document.write(fnGetLocaleString("100466","Delete"));</script>
+
+            </SELECT>
+
+        </TD>
+
+    </TR>
+
+    </TBODY>
+
+</TABLE>
+
+<BR>
+
+<TABLE class="clsMarker" cellSpacing=0 cellPadding=1 width="1870px" border=0>
+
+    <TBODY>
+
+        <TR>
+
+            <TD class=clsTableHeader colSpan=2 nowrap>&nbsp;<script type="text/javascript">document.write(fnGetLocaleString("103310","User Authentication Setting"));</script></TD>
+
+        </TR>
+
+
+
+        <TR>
+
+            <TD class='clsTableElement' width="30%" nowrap><script type="text/javascript">document.write(fnGetLocaleString("101986","User Authentication"));</script></TD>
+
+            <TD class='clsTableElement' width="70%" nowrap>
+
+                <SELECT size=1 name=SELUSERAUTH onchange="fnUserAuthChange();">
+
+                    <OPTION value=0 selected><script type="text/javascript">document.write(strDisable);</script>
+
+                    <OPTION value=1 ><script type="text/javascript">document.write(strEnable);</script>
+
+                    </OPTION>
+
+                </SELECT>
+
+            </TD>
+
+        </TR>
+        <TR>
+            <TD class='clsTableElement' width="30%" nowrap><script type="text/javascript">document.write(fnGetLocaleString("104774","User Authentication According to Function"));</script></TD>
+            <TD class='clsTableElement' width="70%" nowrap>
+                <SELECT size=1 name=SELUSERAUTHACCTOFUNCT onchange="fnUserAuthAccToFunctChange();" disabled>
+                    <OPTION value="false" ><script type="text/javascript">document.write(strDisable);</script>
+                    <OPTION value="true"  selected><script type="text/javascript">document.write(strEnable);</script>
+                    </OPTION>
+                </SELECT>
+            </TD>
+        </TR>
+        <TR>
+
+            <TD class='clsTableElement' width="30%" nowrap>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<script type="text/javascript">document.write(fnGetLocaleString("100383","Copy"));</script></TD>
+
+            <TD class='clsTableElement' width="70%" nowrap>
+
+                <SELECT NAME="SELAUTHCOPY" SIZE="1" onchange="">
+
+                    <option value="false"><script type="text/javascript">document.write(strDisable)</script>
+
+                    <option value="true" SELECTED><script type="text/javascript">document.write(strEnable)</script>
+
+                    <!-- Enable/Disable. Will be disabled if there is no or invalid dept code entered -->
+
+                </SELECT>
+
+            </TD>
+
+        </TR>
+
+        <TR>
+
+            <TD class='clsTableElement' width="30%" nowrap>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<script type="text/javascript">document.write(fnGetLocaleString("100704","FAX"));</script></TD>
+
+            <TD class='clsTableElement' width="70%" nowrap>
+
+                <SELECT NAME="SELAUTHFAX" SIZE="1" onchange="">
+
+                    <option value="false"><script type="text/javascript">document.write(strDisable)</script>
+
+                    <option value="true" SELECTED><script type="text/javascript">document.write(strEnable)</script>
+
+                    <!-- Enable/Disable. Will be disabled if there is no or invalid dept code entered -->
+
+                </SELECT>
+
+            </TD>
+
+        </TR>
+
+        <TR>
+
+            <TD class='clsTableElement' width="30%" nowrap>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<script type="text/javascript">document.write(fnGetLocaleString("103692","Print"));</script></TD>
+
+            <TD class='clsTableElement' width="70%" nowrap>
+
+                <SELECT NAME="SELAUTHPRINT" SIZE="1" onchange="">
+
+                    <option value="false"><script type="text/javascript">document.write(strDisable)</script>
+
+                    <option value="true" SELECTED><script type="text/javascript">document.write(strEnable)</script>
+
+                    <!-- Enable/Disable. Will be disabled if there is no or invalid dept code entered -->
+
+                </SELECT>
+
+            </TD>
+
+        </TR>
+
+        <TR>
+
+            <TD class='clsTableElement' width="30%" nowrap>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<script type="text/javascript">document.write(fnGetLocaleString("101620","Scan"));</script></TD>
+
+            <TD class='clsTableElement' width="70%" nowrap>
+
+                <SELECT NAME="SELAUTHSCAN" SIZE="1" onchange="">
+
+                    <option value="false"><script type="text/javascript">document.write(strDisable)</script>
+
+                    <option value="true" SELECTED><script type="text/javascript">document.write(strEnable)</script>
+
+                    <!-- Enable/Disable. Will be disabled if there is no or invalid dept code entered -->
+
+                </SELECT>
+
+            </TD>
+
+        </TR>
+
+        <TR>
+
+            <TD class='clsTableElement' width="30%" nowrap>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<script type="text/javascript">document.write(fnGetLocaleString("101069","List"));</script></TD>
+
+            <TD class='clsTableElement' width="70%" nowrap>
+
+                <SELECT NAME="SELAUTHLIST" SIZE="1" onchange="">
+
+                    <option value="false"><script type="text/javascript">document.write(strDisable);</script>
+
+                    <option value="true" SELECTED><script type="text/javascript">document.write(strEnable);</script>
+
+                    <!-- Enable/Disable. Will be disabled if there is no or invalid dept code entered -->
+
+                </SELECT>
+
+            </TD>
+
+        </TR>
+
+        <TR>
+
+            <TD class='clsTableElement' width="30%" nowrap>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<script type="text/javascript">document.write(fnGetLocaleString("104534","User Functions"));</script></TD>
+
+            <TD class='clsTableElement' width="70%" nowrap>
+
+                <SELECT NAME="SELAUTHUSERFN" SIZE="1" onchange="">
+
+                    <option value="false"><script type="text/javascript">document.write(strDisable);</script>
+
+                    <option value="true" SELECTED><script type="text/javascript">document.write(strEnable);</script>
+
+                    <!-- Enable/Disable. Will be disabled if there is no or invalid dept code entered -->
+
+                </SELECT>
+
+            </TD>
+
+        </TR>
+        <TR>
+            <TD class='clsTableElement' width="30%" nowrap>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<script type="text/javascript">document.write(fnGetLocaleString("103455","EWB"));</script></TD>
+            <TD class='clsTableElement' width="70%" nowrap>
+                <SELECT NAME="SELAUTHEWB" SIZE="1" onchange="" disabled>
+                    <option value="false"><script type="text/javascript">document.write(strDisable);</script>
+                    <option value="true" SELECTED><script type="text/javascript">document.write(strEnable);</script>
+                        <!-- Enable/Disable. Will be disabled if there is no or invalid dept code entered -->
+                </SELECT>
+            </TD>
+        </TR>
+        <TR>
+
+            <TD class='clsTableElement' width="30%" nowrap><script type="text/javascript">document.write(fnGetLocaleString("104490","Authentication Method for Admin"));</script></TD>
+
+            <TD class='clsTableElement' width="70%" nowrap>
+
+                <SELECT NAME="SELAUTHADMIN" SIZE="1" onchange="">
+
+                    <option value="PASS"><script type="text/javascript">document.write(fnGetLocaleString("104491","Only Password"));</script>
+
+                    <option value="NAME_PASS"><script type="text/javascript">document.write(fnGetLocaleString("104492","User Name and Password"));</script>
+
+                </SELECT>
+
+            </TD>
+
+        </TR>
+
+        <TR>
+
+            <TD class='clsTableElement' width="30%" nowrap><script type="text/javascript">document.write(fnGetLocaleString("103311","Authentication failed print job/Raw Print Job"));</script></TD>
+
+            <TD class='clsTableElement' width="70%" nowrap>
+
+                <SELECT NAME="SELUSERAUTHENFORCE" SIZE="1" onchange="">
+
+                    <script type="text/javascript">
+
+                        if((top.gblDeviceModelId != "MASH" && top.gblDeviceModelId != "BP" && top.gblDeviceModelId != "LOIRE" && top.gblDeviceModelId != "ALABAMA") && top.gblHDDInstallation=="Installed") { // Checking for HDD installation.
+
+                            if(top.fnGetCookie("EFICtrlInstalled") != 1)
+
+                                document.write('<option value="Hold">'+fnGetLocaleString("103212","Hold"));
+
+                        }else if((top.gblDeviceModelId == "MASH" || top.gblDeviceModelId == "BP" || top.gblDeviceModelId == "LOIRE" || top.gblDeviceModelId == "ALABAMA") && top.fnGetCookie("EFICtrlInstalled") != 1)
+
+                            document.write('<option value="Hold">'+fnGetLocaleString("103212","Hold"));
+
+                    </script>
+
+                    <option value="Print"><script type="text/javascript">document.write(fnGetLocaleString("101462","Print"));</script>
+
+                    <option value="Delete"><script type="text/javascript">document.write(fnGetLocaleString("100466","Delete"));</script>
+
+                </SELECT>
+
+            </TD>
+
+        </TR>
+
+        <script type="text/javascript">
+
+            if(top.fnGetCookie("EFICtrlInstalled") == 1)
+
+                document.write('<TR style="display:none;">');
+
+            else
+
+                document.write('<TR>');
+
+        </script>
+
+            <TD class='clsTableElement' width="30%" nowrap><script type="text/javascript">document.write(fnGetLocaleString("102300","Auto Release on Login"));</script></TD>
+
+            <TD class='clsTableElement' width="70%" nowrap>
+
+                <SELECT NAME="SELAUTORELONLOGIN" SIZE="1" onchange="">
+
+                    <OPTION value=false selected><script type="text/javascript">document.write(strDisable)</script>
+
+                    <OPTION value=true ><script type="text/javascript">document.write(strEnable)</script>
+
+                </SELECT>
+
+            </TD>
+
+        </TR>
+		
+		<!--Project Code -->
+		<TR>
+			<TD class='clsTableElement' width="30%" nowrap><script type="text/javascript">document.write(fnGetLocaleString("104780","Project Management"));</script></TD>
+
+            <TD class='clsTableElement' width="70%" nowrap>
+
+                <SELECT NAME="SELPROJECTMGMT" SIZE="1" onchange="" disabled>
+
+                    <OPTION value=false ><script type="text/javascript">document.write(strDisable)</script>
+
+                    <OPTION value=true ><script type="text/javascript">document.write(strEnable)</script>
+
+                </SELECT>
+
+            </TD>
+
+        </TR>
+		
+		<TR>
+			<TD class='clsTableElement' width="30%" nowrap><script type="text/javascript">document.write(fnGetLocaleString("104791","Print Job(Without Project Code)"));</script></TD>
+
+            <TD class='clsTableElement' width="70%" nowrap>
+
+                <SELECT NAME="SELPROJECTJOB" SIZE="1" onchange="" disabled>
+
+                    <OPTION value=INVALID ><script type="text/javascript">document.write(fnGetLocaleString("102494","Hold"))</script>
+                    <OPTION value=PRINT ><script type="text/javascript">document.write(fnGetLocaleString("101462","Print"))</script>
+                    <OPTION value=DELETE selected><script type="text/javascript">document.write(fnGetLocaleString("100466","Delete"))</script>
+
+                </SELECT>
+
+            </TD>
+
+        </TR>
+		<!--Project Code -->
+		
+		<TR>
+
+            <TD colspan="2" Class="clsTableElement" nowrap>
+
+                <INPUT TYPE='checkbox' NAME='PWDAUTHPRINTJOB' value="true">&nbsp;<nobr><script type="text/javascript">document.write(fnGetLocaleString("104264","Use Password Authentication for Print Job"));</script></nobr>
+
+                <!--<INPUT TYPE='checkbox' NAME='USERFAXUSER' value="true">&nbsp;<nobr>Enable Fax Operator User</nobr>-->
+
+            </TD>
+
+        </TR>
+
+        <TR>
+
+            <TD colspan="2" Class = "clsTableElement" nowrap>
+
+                <nobr><script type="text/javascript">document.write("*"+fnGetLocaleString("104328","It is not able to print from other than Windows Client when this function is enabled."));</script></nobr>
+
+            </TD>
+
+        </TR>
+
+        <TR>
+
+            <TD>&nbsp;</TD>
+
+        </TR>
+
+        <!-- NFC  -->
+       <TR id="MOBAUTH" STYLE="DISPLAY:NONE;">
+
+           <TD class='clsTableElement' width="30%" nowrap><script type="text/javascript">document.write(fnGetLocaleString("105230","Mobile Authentication"));</script></TD>
+
+           <TD class='clsTableElement' width="70%" nowrap>
+
+               <SELECT NAME="SELMOBAUTH">
+
+                   <option value="true" ><script type="text/javascript">document.write(strEnable);</script>
+
+                   <option value="false" SELECTED><script type="text/javascript">document.write(strDisable);</script>
+
+               </SELECT>
+
+            </TD>
+
+        </TR>
+
+        <TR id="MOBUSERAUTH" STYLE="DISPLAY:NONE;">
+
+            <TD class='clsTableElement' width="30%" nowrap>&nbsp;&nbsp;<script type="text/javascript">document.write(fnGetLocaleString("104126","Auto Change Login User"));</script></TD>
+
+            <TD class='clsTableElement' width="70%" nowrap>
+
+                <SELECT NAME="SELAUTOCHNG" >
+
+                    <option value="true" ><script type="text/javascript">document.write(strEnable);</script>
+
+                    <option value="false" SELECTED><script type="text/javascript">document.write(strDisable);</script>
+
+                </SELECT>
+
+            </TD>
+
+        </TR>
+
+        <TR id="CARDAUTH_SPLSRN" STYLE="DISPLAY:NONE;">
+
+            <TD class='clsTableElement' width="30%" nowrap><script type="text/javascript">document.write(fnGetLocaleString("105231","Enable Guidance Screen"));</script></TD>
+
+            <TD class='clsTableElement' width="70%" nowrap>
+
+                <SELECT NAME="CARDIDSPLSRN">
+
+
+                    <option value="false" SELECTED><script type="text/javascript">document.write(strDisable);</script>
+
+                    <option value="true" ><script type="text/javascript">document.write(fnGetLocaleString("103973","Card Authentication"));</script>
+
+                    <option value="mobile" ><script type="text/javascript">document.write(fnGetLocaleString("105230","Mobile Authentication"));</script>
+
+                    <option value="mobilecard" ><script type="text/javascript">document.write(fnGetLocaleString("105236","Card & Mobile Authentication"));</script>
+
+                 </SELECT>
+
+            </TD>
+
+        </TR>
+        <TR>
+
+            <TD Class="clsTableElement"  width="30%" nowrap>
+
+                <INPUT TYPE='checkbox' NAME='USERGUEST' value="true">&nbsp;<nobr><script type="text/javascript">document.write(fnGetLocaleString("103313","Enable Guest User"));</script></nobr>
+
+            </TD>
+
+        </TR>
+
+        <TR>
+
+            <TD Class="clsTableElement"  width="30%" nowrap>
+
+                <script type="text/javascript">document.write(fnGetLocaleString("100230","Authentication Type"));</script>
+
+            </TD>
+
+            <TD CLASS="clsTableElement" width="70%" nowrap>
+
+                <SELECT NAME="USERAUTHTYPE" SIZE=1 onChange="fnAuthTypeOnchage();">
+
+                    <option value=Local ><script type="text/javascript">document.write(fnGetLocaleString("101174","MFP Local Authentication"));</script>
+
+                    <option value=WindowsDomain ><script type="text/javascript">document.write(fnGetLocaleString("102027","Windows Domain Authentication"));</script>
+
+                    <option value=Ldap ><script type="text/javascript">document.write(fnGetLocaleString("101045","LDAP Authentication"));</script>
+
+                </SELECT>
+
+            </TD>
+
+        </TR>
+    </TBODY>
+
+</TABLE>
+    <!-- RCR_1766 START-->
+<SPAN ID ="AUTODELUSERS_ID" style="display:none;">
+    <TABLE class="clsMarker" cellSpacing=0 cellPadding=1 width="1870px" border=0>
+        <TBODY>
+    <TR>
+
+        <td colspan="2" Class="clsTableElement" nowrap><INPUT TYPE='checkbox' onclick="fnOnClickAutodeleteChk();" NAME='AUTODELETEUSER' value="true">&nbsp;<nobr><script type="text/javascript">document.write(fnGetLocaleString("106154","Automatic deletion of unlogged-in user"));</script></nobr></td>
+
+    </TR>
+
+    <TR>
+
+        <TD CLASS="clsTableElement" width="30%" NOWRAP>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+
+            <script type="text/javascript">document.write(fnGetLocaleString("106155","Validity Period of Local User"));</script>
+
+        </TD>
+
+        <TD CLASS="clsTableElement" width="70%" nowrap>
+
+            <INPUT TYPE="TEXT" MAXLENGTH="3" NAME="VALIDITYLOCALUSER" size="3" value="30"><script type="text/javascript">document.write(fnGetLocaleString("100443","Days"));document.write("(1-180)");</script>
+
+        </TD>
+
+    </TR>
+</TBODY>
+
+</TABLE>
+</SPAN>
+    <!-- RCR_1766 END -->
+ 
+
+    <SPAN ID ="AUTOCREATEUSER_ID" style="display:none;">
+
+<TABLE class="clsMarker" cellSpacing=0 cellPadding=1 width="1870px" border=0>
+
+    <TBODY>
+
+    <TR>
+
+        <TD Class="clsTableElement" width="30%" nowrap>
+
+            <table class="clsMarker" BORDER="0" CELLSPACING="0" CELLPADDING="1" >
+
+                <tr><td Class = "clsTableElement"><INPUT TYPE='checkbox' NAME='AUTOCREATEUSER' value="true">&nbsp;<nobr><script type="text/javascript">document.write(fnGetLocaleString("103312","Create User Information Automatically"));</script></nobr></td></tr>
+
+            </table>
+
+        </TD>
+
+    </TR>
+
+    <TR>
+
+        <td colspan="2" Class="clsTableElement" nowrap><INPUT TYPE='checkbox' NAME='USECACHEINFO' value="false">&nbsp;<nobr><script type="text/javascript">document.write(fnGetLocaleString("104405","Use cache information when user authentication failed"));</script></nobr></td>
+
+    </TR>
+
+    <TR>
+
+        <TD CLASS="clsTableElement" width="30%" NOWRAP>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+
+            <script type="text/javascript">document.write(fnGetLocaleString("104406","Validity Period of Cache"));</script>
+
+        </TD>
+
+        <TD CLASS="clsTableElement" width="70%" nowrap>
+
+            <INPUT TYPE="TEXT" MAXLENGTH="2" NAME="VALIDITYCACHE" size="3" value="7"><script type="text/javascript">document.write(fnGetLocaleString("100443","Days"));document.write(fnGetLocaleString("104407","(1-14)"));</script>
+
+        </TD>
+
+    </TR>
+
+
+
+    <TR>
+
+        <td colspan="2" Class = "clsTableElement" nowrap><INPUT TYPE='checkbox' NAME='REGGUESTLOCALUSER' value="false">&nbsp;<nobr><script type="text/javascript">document.write(fnGetLocaleString("104408","Register Guest Local User"));</script></nobr></td>
+
+    </TR>
+
+    <TR>
+
+        <TD CLASS="clsTableElement" width="30%" NOWRAP>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+
+            <script type="text/javascript">document.write(fnGetLocaleString("104409","Validity Period of Local User"));</script>
+
+        </TD>
+
+        <TD CLASS="clsTableElement" width="70%" NOWRAP>
+
+            <INPUT TYPE="TEXT"MAXLENGTH="3" NAME="VALIDITYGUESTUSER" size="3" value="30"><script type="text/javascript">document.write(fnGetLocaleString("100443","Days"));document.write(fnGetLocaleString("104410","(0-180, Unlimited:0)"));</script>
+
+        </TD>
+
+    </TR>
+
+    </TBODY>
+
+</TABLE>
+
+</SPAN>
+
+
+
+<SPAN ID ="WindowsDomainAuthentication_id" style="display:none;">
+
+<TABLE class="clsMarker" WIDTH="1870px">
+
+    <TR>
+
+        <TD CLASS="clsTableElement" ALIGN="TOP" width="300" nowrap>
+
+            <script type="text/javascript">document.write(fnGetLocaleString("102027","Windows Domain Authentication"));</script>
+
+        </TD>
+
+    </TR>
+
+    <TR>
+
+        <TD CLASS="clsTableElement" ALIGN="TOP" width="300" nowrap>
+
+            <INPUT TYPE = "CheckBox" NAME = "NTServer" ONCLICK = '' value="true"><script type="text/javascript">document.write(fnGetLocaleString("103315","Use NT Domain Server"));</script>
+
+        </TD>
+
+    </TR>
+
+</TABLE>
+
+
+ <div style="width:850px;">
+ <input type="button" id="btnWinDomainAdd" style="display:inline;"/>
+ <input type="button" id="btnWinDomainEdit" style="display:inline;" disabled/>
+ <input type="button" id="btnWinDomainDelete" style="display:inline;" disabled/>
+ <input type="button" id="btnWinDomainMoveDown" style="display:inline;" disabled/>
+ <input type="button" id="btnWinDomainMoveUp" style="display:inline;" disabled/>
+ </div>  
+<div style="margin-top: 5px;" id="idWinDomainAuthTable"></div>
+<span style="display:block; FONT-SIZE: 9pt;FONT-STYLE: normal; FONT-FAMILY: Arial, sans-serif; clear:both;"><script type="text/javascript">document.write(fnGetLocaleString("104683","The priority is from the top."));</script></span>
+
+    <BR>
+    <TABLE class="clsMarker" BORDER="0" CELLSPACING="0" CELLPADDING="1" WIDTH="1870px">
+
+        <TR>
+
+            <TD CLASS="clsBoldTableHeader" width="30%" NOWRAP>
+
+                <nobr><script type="text/javascript">document.write(fnGetLocaleString("100364","Connection Timeout"));</script></nobr>
+
+            </TD>
+
+        </TR>
+
+        <TR>
+
+            <TD CLASS="clsTableElement" width="30%" NOWRAP> <!-- Domain Name3-->
+
+                <script type="text/javascript">document.write(fnGetLocaleString("103316","PDC"));</script>(1-180)
+
+            </TD>
+
+            <TD CLASS="clsTableElement" width="70%" NOWRAP>
+
+                <INPUT TYPE="TEXT" NAME="TIMEOUTSEC" size="8" maxlength="3"><script type="text/javascript">document.write(fnGetLocaleString("101657","Seconds"));</script>
+
+            </TD>
+
+        </TR>
+
+        <TR>
+
+            <TD CLASS="clsTableElement" colspan="2">
+
+                <script type="text/javascript">document.write(fnGetLocaleString("103319","*Reboot is necessary to reflect Connection Timeout."));</script>
+
+            </TD>
+
+        </TR>
+
+    </TABLE>
+
+    <BR>
+
+</SPAN>
+
+<SPAN ID ="LDAPAuthentication_id" style="display:none;">
+    <div style="display: block; width:850px;">
+     <input type="button" id="btnLDAPServerAssignment" name="LDAP" style="display:inline;"/>
+     <input type="button" id="btnLDAPMoveDown" style="display:inline;" disabled/>
+     <input type="button" id="btnLDAPMoveUp" style="display:inline;" disabled />
+    </div>
+
+    <div style="margin-top:5px;" id="idLDAPAuthTable"></div>
+    <span style="display:block; FONT-SIZE: 9pt;FONT-STYLE: normal; FONT-FAMILY: Arial, sans-serif; clear:both;"> <script type="text/javascript">document.write(fnGetLocaleString("104683","The priority is from the top."));</script></span>
+
+</SPAN>
+
+<TR><TD>&nbsp;</TD></TR>
+
+<SPAN ID="RBASETTINGS" STYLE="DISPLAY:NONE;">
+
+<TABLE class="clsMarker" BORDER="0" CELLSPACING="0" CELLPADDING="1" WIDTH="1870px">
+
+    <TR>
+
+        <TD CLASS="clsBoldTableHeader" COLSPAN=2><script type="text/javascript">document.write(fnGetLocaleString("103320","Role Based Access Setting"));</script></TD><!-- Rolbased based Access Setting string  -->
+
+    </TR>
+
+    <TR>
+
+        <TD width="30%" ALIGN=left CLASS="clsTableElement" nowrap>
+
+            <script type="text/javascript">document.write(fnGetLocaleString("103321","Role Based Access using LDAP server"));</script><!-- Rolbased based Access string  -->
+
+        </TD>
+
+        <TD ALIGN=left  width="70%" NOWRAP>
+
+            <SELECT NAME="ROLEAUTH" SIZE=1>
+
+                <option value=false ><script type="text/javascript">document.write(strDisable)</script>
+
+                <option value=true ><script type="text/javascript">document.write(strEnable)</script>
+
+                    <!-- Combo Box with enable/disable option -->
+
+            </SELECT>
+
+        </TD>
+
+    </TR>
+
+    <TR>
+
+        <TD ALIGN=left CLASS="clsTableElement" nowrap width="30%">
+
+            <script type="text/javascript">document.write(fnGetLocaleString("101048","LDAP Server"));</script>  <!--LDAP server string  -->
+
+        </TD>
+
+        <TD ALIGN=left width="70%" NOWRAP>
+
+            <SELECT NAME="RBA_SELENALDAPAUTH" SIZE="1">
+
+                <!-- Populate the Combo box with LDAP servers -->
+
+            </SELECT>
+
+        </TD>
+
+    </TR>
+
+</TABLE>
+
+</SPAN>
+
+<TABLE class="clsMarker" BORDER="0" CELLSPACING="0" CELLPADDING="1" WIDTH="1870px">
+
+    <BR>
+
+    <TBODY>
+
+    <TR>
+
+        <TD CLASS="clsBoldTableHeader" COLSPAN=2 id="PINCODEAUTHTITLE" nowrap><script type="text/javascript">document.write(fnGetLocaleString("104291","PIN Code Authentication Setting"));</script></TD>
+
+    </TR>
+
+    <TR>
+
+        <TD Class = "clsTableElement"  width="30%" nowrap>
+
+            <script type="text/javascript">document.write(fnGetLocaleString("104271","PIN Code Authentication"));</script>
+
+        </TD>
+
+        <TD CLASS="clsTableElement" nowrap width="70%">
+
+            <SELECT NAME="PINCODEAUTH" SIZE=1 onChange="fnPinCodeAuthOnChange();">
+
+                <OPTION value="false" selected><script type="text/javascript">document.write(strDisable)</script>
+
+                <OPTION value="true" ><script type="text/javascript">document.write(strEnable)</script>
+
+            </SELECT>
+
+        </TD>
+
+    </TR>
+
+    <TR>
+
+        <TD CLASS="clsTableElement" width="30%" nowrap>
+
+            <script type="text/javascript">document.write(fnGetLocaleString("104273","Minimum PIN Code Length"));</script>
+
+        </TD>
+
+        <TD CLASS="clsTableElement" id="PINCODE_ID" nowrapwidth="70%" >
+
+            <INPUT TYPE="TEXT" NAME="PINCODELEN" size="10" maxlength="2">(1-32)
+
+        </TD>
+
+    </TR>
+
+    </TBODY>
+
+</TABLE>
+
+<SPAN ID ="PinCodeAuth_id" style="display:none;">
+    <div style="display: block; width:980px;">
+        <input type="button" id="btnPinServerAssignment" name="PIN" style="display:inline;"/>
+        <input type="button" id="btnPinMoveDown" style="display:inline; " disabled/>
+        <input type="button" id="btnPinMoveUp" style="display:inline;" disabled />
+    </div>
+
+    <div style="margin-top: 5px;" id="idPinAuthTable"></div>
+    <span style="display:block; FONT-SIZE: 9pt;FONT-STYLE: normal; FONT-FAMILY: Arial, sans-serif; clear:both;"> <script type="text/javascript">document.write(fnGetLocaleString("104683","The priority is from the top."));</script></span>
+
+</SPAN>
+
+<br>
+
+<SPAN ID="CARDAUTH" STYLE="DISPLAY:NONE;">
+
+<TABLE class="clsMarker" BORDER="0" CELLSPACING="0" CELLPADDING="1" WIDTH="1870px">
+
+    <TR>
+
+        <TD CLASS="clsBoldTableHeader" COLSPAN=2 id="CARDAUTHTITLE" nowrap><script type="text/javascript">document.write(fnGetLocaleString("103487","Card Authentication Settings"));</script></TD><!-- Rolbased based Access Setting string  -->
+
+    </TR>
+
+    <TR>
+
+        <TD Class = "clsTableElement" width="30%" nowrap><script type="text/javascript">document.write(fnGetLocaleString("103973","Card Authentication"))</script></TD>
+
+        <TD Class = "clsTableElement" width="70%" nowrap>
+
+            <SELECT NAME="SELCARDAUTH" SIZE=1>
+
+                <option value="false"><script type="text/javascript">document.write(strDisable)</script>
+
+                <option value="true" SELECTED><script type="text/javascript">document.write(strEnable)</script>
+
+            </SELECT>
+
+        </TD>
+
+    </TR>
+    <TR id="CARDAUTH_FOR_ALL">
+
+        <TD Class = "clsTableElement" width="30%" nowrap>&nbsp;<script type="text/javascript">document.write(fnGetLocaleString("104126","Auto Change Login User"))</script></TD>
+
+        <TD Class = "clsTableElement" width="70%" nowrap>
+
+            <SELECT NAME="SELAUTOCHNGLGN" SIZE=1>
+
+                <option value=0 ><script type="text/javascript">document.write(strDisable)</script>
+
+                <option value=1 ><script type="text/javascript">document.write(strEnable)</script>
+
+            </SELECT>
+
+        </TD>
+
+    </TR>
+
+    <TR id="CARDAUTH_LOCAL">
+
+        <TD Class = "clsTableElement" width="30%" nowrap>
+
+            <table class="clsMarker" BORDER="0" CELLSPACING="0" CELLPADDING="1" >
+
+                <tr><td Class = "clsTableElement"><INPUT TYPE='checkbox' checked NAME='CARDIDUSERNAME' value="true">&nbsp;<nobr><script type="text/javascript">document.write(fnGetLocaleString("103488","Card ID is used as User Name"));</script></nobr></td></tr>
+
+                <tr><td Class = "clsTableElement"><INPUT TYPE='checkbox' ID="USERINFOCREATE" OnChange="fnuserInfoChkHandle();" NAME='USERINFOCREATE' value="true">&nbsp;<nobr><script type="text/javascript">document.write(fnGetLocaleString("103312","Create User Information Automatically"));</script></nobr></td></tr>
+            </table>
+        </TD>    
+    </TR>
+</TABLE>
+<!-- RCR_1766 START --> 
+<TABLE >
+    <TR id="cardAuthAutoReg_div" style="display: none;">
+        <TD> 
+        <TABLE>  
+            <TR ID="UserInfoDiv_Id">   
+                <TD Class = "clsTableElement" width="30%" nowrap>
+                        <table class="clsMarker" BORDER="0" CELLSPACING="0" CELLPADDING="1">
+                            <tr><td Class = "clsTableElement">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<INPUT TYPE='checkbox' ID="USERAUTHAUTOREG" NAME='USERAUTHAUTOREG' onChange="fnAuthAutoRegChkHandle();" value="true">&nbsp;<nobr><script type="text/javascript">document.write(fnGetLocaleString("106156","User authentication is performed during automatic registration"));</script></nobr></td></tr>  
+                        </table>   
+                    
+                    </TD>
+                </TR>    
+        </TABLE> 
+    
+
+        <SPAN ID="CardAuthTypeSelDiv" style="display: none;" >
+            <table class="clsMarker" BORDER="0" CELLSPACING="0" CELLPADDING="1">
+                <TR>
+
+                <TD Class="clsTableElement" width="30%" nowrap>
+
+                    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<script type="text/javascript">document.write(fnGetLocaleString("100230","Authentication Type"));</script> &nbsp;&nbsp;&nbsp;&nbsp;
+
+                    <SELECT NAME="CARDUSERAUTHTYPE" SIZE=1 onChange="fnCardAuthTypeOnchange();">
+
+                        <option value=CardAuthWindowsDomain ><script type="text/javascript">document.write(fnGetLocaleString("102027","Windows Domain Authentication"));</script>
+
+                        <option value=CardAuthLdap ><script type="text/javascript">document.write(fnGetLocaleString("101045","LDAP Authentication"));</script>
+
+                    </SELECT>
+
+                </TD>
+
+                </TR>
+            </table>
+        
+            <!-- CARD AUTH WINDOWS DOMAIN TABLE DIV -->   
+            <SPAN ID ="CardWindowsDomainAuthentication_id" style="display:none;">
+
+                <TABLE class="clsMarker">
+                
+                    <TR>
+                
+                        <TD CLASS="clsTableElement" ALIGN="TOP" width="300" nowrap>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+                
+                            <INPUT TYPE = "CheckBox" ID ="CardAuthNTServer" NAME ="CardAuthNTServer" ONCLICK = '' value="true"><script type="text/javascript">document.write(fnGetLocaleString("103315","Use NT Domain Server"));</script>
+                
+                        </TD>
+                
+                    </TR>
+                
+                </TABLE>
+                
+                <div style="width:850px;">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+                    <input type="button" id="btnCardAuthWinDomainAdd" style="display:inline;"/>
+                    <input type="button" id="btnCardAuthWinDomainEdit" style="display:inline;" disabled/>
+                    <input type="button" id="btnCardAuthWinDomainDelete" style="display:inline;" disabled/>
+                    <input type="button" id="btnCardAuthWinDomainMoveDown" style="display:inline;" disabled/>
+                    <input type="button" id="btnCardAuthWinDomainMoveUp" style="display:inline;" disabled/>
+                </div> 
+                <div style="margin-top: 5px; margin-left:31px;" id="idCardAuthWinDomainAuthTable"></div>
+                <span style="display:block; FONT-SIZE: 9pt;FONT-STYLE: normal; FONT-FAMILY: Arial, sans-serif; clear:both;">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<script type="text/javascript">document.write(fnGetLocaleString("104683","The priority is from the top."));</script></span>
+
+            </SPAN> <br> 
+            <!-- CARD AUTH LDAP SERVER TABLE DIV -->   
+            <SPAN ID ="CardLDAPAuthentication_id" style="display:none;">
+                <div style="width:850px;">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+                    <input type="button" id="btnCardAuthLDAPServerAssignment" name="cardAuthLDAP" style="display:inline;"/>
+                    <input type="button" id="btnCardAuthLDAPMoveDown" style="display:inline;" disabled/>
+                    <input type="button" id="btnCardAuthLDAPMoveUp" style="display:inline;" disabled />
+                </div>     
+            <div style="margin-top:5px; margin-left:31px;" id="idCardAuthLDAPAuthTable"></div>
+            <span style="display:block; FONT-SIZE: 9pt;FONT-STYLE: normal; FONT-FAMILY: Arial, sans-serif; clear:both;">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<script type="text/javascript">document.write(fnGetLocaleString("104683","The priority is from the top."));</script></span>
+                   
+            </SPAN> 
+        </SPAN> 
+    </TD>
+    </TR>
+</TABLE>
+        <!--
+            <TR id="CARDAUTH_SPLSRN">
+
+        <TD Class = "clsTableElement" width="30%" nowrap>
+
+        <table class="clsMarker" BORDER="0" CELLSPACING="0" CELLPADDING="1" >
+
+            <tr><td Class = "clsTableElement"><INPUT TYPE='checkbox' checked NAME='CARDIDSPLSRN' value="true">&nbsp;<nobr><script type="text/javascript">document.write(fnGetLocaleString("104039","Enable Guidance Screen"));</script></nobr></td></tr>
+
+        </table></TD>
+
+    </TR>
+    -->
+<TABLE>    
+    <TR id="CARDAUTH_REQPINCODE">
+
+        <TD Class = "clsTableElement" width="30%" nowrap>
+
+        <table class="clsMarker" BORDER="0" CELLSPACING="0" CELLPADDING="1" >
+
+            <tr><td Class = "clsTableElement"><INPUT TYPE='checkbox' checked NAME='CARDREQPINCODE' value="true">&nbsp;<nobr><script type="text/javascript">document.write(fnGetLocaleString("104272","Require PIN Code"));</script></nobr></td></tr>
+
+        </table></TD>
+
+    </TR>
+  
+</TABLE>
+
+
+<div id="cardAuthSettingButtonsDiv" style="margin-top: 5px; display: block;">
+    <input type="button" id="btnCardServerAssignment" name="CARDAUTHBTN" style="display:inline;"/>
+    <input type="button" id="btnCardMoveDown" style="display:inline;" disabled/>
+    <input type="button" id="btnCardMoveUp" style="display:inline;" disabled />
+    <div style="margin-top: 5px;" id="idCardAuthTable"></div>
+    <span style="display:block;FONT-SIZE: 9pt;FONT-STYLE: normal; FONT-FAMILY: Arial, sans-serif; clear:both;padding-bottom:20px;"> <script type="text/javascript">document.write(fnGetLocaleString("104683","The priority is from the top."));</script></span>
+ </div>
+
+</SPAN>
+
+    <!----- Shared user ---->
+
+
+<TABLE class="clsMarker" BORDER="0" CELLSPACING="0" CELLPADDING="1" WIDTH="1870px" ID="TABLESHAREDUSER">
+
+    <TR>
+
+        <TD CLASS="clsBoldTableHeader" COLSPAN=2 nowrap><script type="text/javascript">document.write(fnGetLocaleString("104937","Shared Setting"));</script></TD>
+
+    </TR>
+
+    <TR>
+
+        <TD width="30%" CLASS="clsTableElement" nowrap>
+
+            <script type="text/javascript">document.write(fnGetLocaleString("104948","Shared User Management"));</script>
+
+        </TD>
+
+        <TD class="clsTableElement" nowrap width="70%" >
+		<SELECT NAME="SHAREDUSERSETTING" SIZE=1 onchange="fnDisplayConTimeOut(this.value)">
+
+                <option value=Disable selected><script type="text/javascript">document.write(strDisable)</script>
+
+                <option value=Master ><script type="text/javascript">document.write(fnGetLocaleString("104939","Enable(Master)"))</script>
+                <option value=Slave ><script type="text/javascript">document.write(fnGetLocaleString("104940","Enable(Slave)"))</script>
+
+
+            </SELECT>
+
+        </TD>
+
+    </TR>
+
+    <TR id="CON_TIMEOUT_ID" style="display:none">
+
+        <TD ALIGN=left CLASS="clsTableElement" nowrap width="30%">
+
+            <script type="text/javascript">document.write(fnGetLocaleString("104941","Connection Timeout (Master MFP - Slave MFP)(1-180)"));</script>  <!--LDAP server string  -->
+
+        </TD>
+
+        <TD CLASS="clsTableElement" width="70%" nowrap>
+
+             <INPUT TYPE="TEXT" NAME="CON_TIMEOUTSEC" MAXLENGTH="3" size="8" onblur="onBlurConTimeOut()"><script type="text/javascript">document.write(fnGetLocaleString("101657","Seconds"));</script>
+
+        </TD>
+
+    </TR>
+
+</TABLE>
+
+<br>
+
+    <!--------- shared user ends--->
+
+<TABLE class="clsMarker" cellSpacing=0 cellPadding=1 width="1870px" border=0>
+
+    <TBODY>
+
+        <TR>
+
+            <TD class=clsTableHeader colSpan=2 nowrap>&nbsp;<script type="text/javascript">document.write(fnGetLocaleString("100602","Email Authentication"));</script></TD>
+
+        </TR>
+
+        <TR><TD></TD></TR>
+
+        <TR>
+
+            <TD class=clsTableElement width="30%" vAlign=top nowrap><script type="text/javascript">document.write(fnGetLocaleString("100602","Email Authentication"));</script></TD>
+
+            <TD Class = "clsTableElement" width="70%" nowrap>
+
+                <SELECT NAME="AUTHMETH" SIZE=1 onchange="fnEmailAuthOnChange(this.value);">
+
+                    <option value="None" ><script type="text/javascript">document.write(strDisable)</script>
+
+                    <option value="SMTP" ><script type="text/javascript">document.write(fnGetLocaleString("101736","SMTP"));</script>
+
+                    <option value="LDAP" ><script type="text/javascript">document.write(fnGetLocaleString("101044","LDAP"));</script>
+
+                        <!-- Populate the Combo box with options -->
+
+                </SELECT>
+
+                &nbsp;&nbsp;&nbsp;
+
+                <SPAN id="AUTHFAX_ID" Class = "clsTableElement" style="display:none;" >
+
+                    <INPUT TYPE="checkbox" NAME="AUTHFAX" value="true"><script type="text/javascript">document.write(fnGetLocaleString("100942","Internet Fax Not Allowed"));</script>
+
+                </SPAN>
+
+            </TD>
+
+        </TR>
+
+        </TBODY>
+
+    </TABLE>
+
+
+
+<SPAN ID="AUTHMETHOD_SMTP" STYLE="DISPLAY:NONE;" >
+
+    <TABLE class="clsMarker" cellSpacing=0 cellPadding=1 width="1870px" border=0>
+
+        <TBODY>
+
+        <TR Class = "clsTableElement">
+
+            <!-- SMTP Server Address -->
+
+            <TD Class = clsTableElement width="30%" nowrap>
+
+                <script type="text/javascript">document.write(fnGetLocaleString("101741","SMTP Server Address"));</script>
+
+            </TD>
+
+            <TD width="70%" nowrap>
+
+                <INPUT TYPE=TEXT NAME="SERVADDRESS" MAXLENGTH=30 SIZE=40 value=''>
+
+            </TD>
+
+        </TR>
+
+        <TR Class = "clsTableElement">
+
+            <TD Class = "clsTableElement" width="30%" nowrap>
+
+                <script type="text/javascript">document.write(fnGetLocaleString("100224","Authentication"));</script>
+
+            </TD>
+
+            <TD width="70%" nowrap>
+
+                <select NAME="AUTH" SIZE=1>// these resource id plz dont change, these are MSM requirement.(Siddu)
+
+                    <option value="Plain" ><script type="text/javascript">document.write(fnGetLocaleString("103384","Plain"));</script>
+
+                    <option value="Login" ><script type="text/javascript">document.write(fnGetLocaleString("103385","Login"));</script>
+
+                    <option value="CramMD5" ><script type="text/javascript">document.write(fnGetLocaleString("100391","CRAM-MD5"));</script>
+
+                    <option value="DigestMD5" ><script type="text/javascript">document.write(fnGetLocaleString("100515","Digest-MD5"));</script>
+
+                    <option value="Kerberos" ><script type="text/javascript">document.write(fnGetLocaleString("101026","Kerberos"));</script>
+
+                    <option value="NTLM" ><script type="text/javascript">document.write(fnGetLocaleString("101266","NTLM(IWA)"));</script>
+
+                    <option value="Auto" ><script type="text/javascript">document.write(fnGetLocaleString("100233","Auto"));</script>
+
+                </select>
+
+            </TD>
+
+        </TR>
+
+        </TBODY>
+
+    </TABLE>
+
+</SPAN>
+
+
+
+<SPAN ID="AUTHMETHOD_LDAP" STYLE="DISPLAY:NONE;" >
+
+<TABLE class="clsMarker" CELLSPACING=0 CELLPADDING=1 WIDTH="1870px" BORDER=0>
+
+    <TBODY>
+
+    <TR Class = "clsTableElement">
+
+        <TD CLASS = "clsTableElement" width="30%" nowrap>
+
+            <script type="text/javascript">document.write(fnGetLocaleString("101048","LDAP Server"));</script>
+
+        </TD>
+
+        <TD CLASS = "clsTableElement" width="70%" nowrap>
+
+            <SELECT NAME="EMAILAUTH_SELENALDAPAUTH"  id="cmbLdapAuth" SIZE="1">
+
+            </SELECT>
+			
+			<SELECT NAME="EMAILAUTH_LdapServerType" SIZE="1" id="cmbLdapAuthServerType" style="display:none;">
+
+            </SELECT>
+			
+			<SELECT NAME="EMAILAUTH_LdapAttrName" SIZE="1" id="cmbLdapAuthAttrName" style="display:none;">
+
+            </SELECT>
+
+        </TD>
+
+    </TR>
+
+    <!--Added to select the Server Kind(Windows server or Not) and register the Attribute of "User Name"--(SP, 070706)-->
+
+    <BR>
+
+	<TR Class = "clsTableElement">
+
+        <TD CLASS = "clsTableElement" width="30%" nowrap>
+
+            <script type="text/javascript">document.write(fnGetLocaleString("100220","Attribute type of \"User Name\""));</script>
+
+        </TD>
+
+        <TD CLASS = "clsTableElement" width="70%" NOWRAP>
+
+            <INPUT TYPE ='TEXT' NAME='SERVERUSERNAME' VALUE='' MAXLENGTH='32' SIZE='80'  readonly="readonly" style="border-width:0px;border:none;"/>
+			
+        </TD>
+
+    </TR>
+
+
+
+    </TBODY>
+
+</TABLE>
+
+</SPAN>
+
+<BR>
+
+<TABLE class="clsMarker" cellSpacing=0 cellPadding=1 width="1870px" border=0>
+
+    <TBODY>
+
+    <TR>
+
+        <TD class=clsTableHeader colSpan=2 nowrap>&nbsp;<script type="text/javascript">document.write(fnGetLocaleString("103324","Email Address Setting"));</script></TD>
+
+    </TR>
+
+    <TR>
+
+        <TD class=clsTableElement width="30%" nowrap><script type="text/javascript">document.write(fnGetLocaleString("100771","From Address"));</script></TD>
+
+        <TD class=clsTableElement width="70%" nowrap>
+
+            <SELECT NAME = "SELFROMADDRESSSETTING" onchange="fnFromAddressOnChange();">
+
+                <option value=MachineDefault><script type="text/javascript">document.write(fnGetLocaleString("100111","\"From Address\" of Email Setting"));</script>
+
+                <option value=UserName><script type="text/javascript">document.write(fnGetLocaleString("103928","User Name + @ + Mail Domain Name"));</script>
+
+                <option value=LDAPUserName><script type="text/javascript">document.write(fnGetLocaleString("103363","User Name' of LDAP"));</script>
+
+            </SELECT>
+
+        </TD>
+
+    </TR>
+
+    <TR id="FRMADDRSETTING_FROMADDR" Class = "clsTableElement">
+
+        <TD CLASS="clsTableElement"  width="30%" nowrap vAlign=top>&nbsp;</TD>
+
+        <TD CLASS="clsTableElement" width="70%" NOWRAP>
+
+            <script type="text/javascript">document.write(fnGetLocaleString("100771","From Address"));</script> : <input type="text" name="STRFROMADR" size="80" style="border:none" readonly>
+
+        </TD>
+
+    </TR>
+
+    <TR id="FRMADDRSETTING_USERNAME" Class = "clsTableElement" style="display:none;" >
+
+        <TD CLASS="clsTableElement" width="30%" nowrap vAlign=top>&nbsp;</TD>
+
+        <TD CLASS="clsTableElement" width="70%" NOWRAP>
+
+           <script type="text/javascript">document.write(fnGetLocaleString("100560","Domain Name"));</script>  : <INPUT TYPE="TEXT" SIZE="50" NAME="DOMAINNAME" VALUE="" maxLength=96>
+
+        </TD>
+
+    </TR>
+</TBODY></TABLE>
+
+<TABLE cellSpacing=0 cellPadding=1 width="1870px">
+    <TBODY>
+ <TR ID ="EmailLDAPAuthentication_Buttons" style="display:none;">
+     <TD CLASS="clsTableElement" width="30%" nowrap vAlign=top style="padding-left: 550px">&nbsp;</TD>
+
+       <TD CLASS="clsTableElement" width="70%" style="min-width:917px" nowrap>&nbsp;
+           <div style="display: block; width:850px;">
+               <input type="button" id="btnEmailLDAPServerAssignment" name="EmailLDAP" >
+               <input type="button" id="btnEmailLDAPMoveDown" name="EmailLDAPMoveDown" style="display:inline;" disabled/>
+               <input type="button" id="btnEmailLDAPMoveUp" name="EmailLDAPMoveUp" style="display:inline;" disabled />
+           </div>
+       </TD>
+
+   </TR>
+
+   <TR ID ="EmailLDAPAuthentication_Table" style="display:none;">
+       <TD CLASS="clsTableElement" width="30%" nowrap vAlign=top style="min-width: 560px">&nbsp;</TD>
+
+       <TD CLASS="clsTableElement" width="70%" NOWRAP>
+           <div style="margin-top:5px; margin-left:5px;" id="idEmailLDAPAuthTable" name="EmailLDAPAuthTable"></div>
+       </TD>
+
+   </TR>
+
+   <TR ID ="EmailLDAPAuthentication_PriorityMsg" style="display:none;">
+       <TD CLASS="clsTableElement" width="30%" vAlign=top nowrap>&nbsp;&nbsp;</TD>
+
+       <TD CLASS="clsTableElement" width="70%" NOWRAP>
+           <span style="display:block; margin-bottom:5px; FONT-SIZE: 9pt;FONT-STYLE: normal; FONT-FAMILY: Arial, sans-serif; clear:both;"> <script type="text/javascript">document.write(fnGetLocaleString("104683","The priority is from the top."));</script></span>
+       </TD>
+
+   </TR>
+</TBODY></TABLE>
+
+<TABLE class="clsMarker" cellSpacing=0 cellPadding=1 width="1870px" border=0 ><TBODY>
+        <TR id="FRMADDRSETTING_LDAPDOMAINNAME" Class = "clsTableElement" style="display:none;" >
+
+            <TD CLASS="clsTableElement" width="30%" vAlign=top nowrap></TD>
+
+            <TD CLASS="clsTableElement" width="70%" NOWRAP>
+
+               <script type="text/javascript">document.write(fnGetLocaleString("100560","Domain Name"));</script>  : <INPUT TYPE="TEXT" SIZE="50" NAME="LDAPDOMAINNAME" VALUE="" maxLength="96">
+
+            </TD>
+
+        </TR>
+
+
+
+    <TR>
+
+        <TD CLASS="clsTableElement" width="30%" vAlign=top nowrap>&nbsp;</TD>
+
+        <TD CLASS="clsTableElement" width="70%" NOWRAP>
+
+            <INPUT TYPE='checkbox' NAME='EDITFORBIT' onClick = "" ><script type="text/javascript">document.write(fnGetLocaleString("100536","From Adrdess cannot be edited in Scan to Email."));</script>
+
+        </TD>
+
+    </TR>
+
+    <TR id="FRMADDRSETTING_FROMNAME" nowrap>
+
+        <TD class=clsTableElement vAlign=top width="30%" nowrap><script type="text/javascript">document.write(fnGetLocaleString("100774","From Name"));</script></TD>
+
+        <TD class=clsTableElement width="70%" nowrap>
+
+            <SELECT size=1 name=EMAILADDRSETFRMNAME>
+
+                <OPTION value=FromAddress ><script type="text/javascript">document.write(fnGetLocaleString("103915","Account Name of From Address + From Name of Email Setting"))</script>
+
+                <OPTION value=NonEdit ><script type="text/javascript">document.write(fnGetLocaleString("103916","'From Name' of Email setting"))</script>
+
+                <OPTION value=SearchLDAP ><script type="text/javascript">document.write(fnGetLocaleString("103363","'User Name' of LDAP"))</script>
+
+                </OPTION>
+
+            </SELECT>
+
+        </TD>
+    </TR>
+
+     <TR id="FRMADDRSETTING_FRMNAME_LDAPSERVER" Class = "clsTableElement" style="display:none;" nowrap>
+
+            <TD CLASS="clsTableElement" width="30%" vAlign=top></TD>
+
+            <TD CLASS="clsTableElement" width="70%" NOWRAP>
+
+        <script type="text/javascript">document.write(fnGetLocaleString("101048","LDAP Server"));</script>
+
+            <SELECT NAME="FRMADDRSETTING_SELLDAP" SIZE="1" >
+
+                <!-- Populate the Combo box with LDAP servers -->
+
+            </SELECT>
+
+        </TD>
+
+    </TR>
+
+    <TR id="FRMADDRSETTING_FRMNAME_ATTRUSRNAME" Class = "clsTableElement" style="display:none;">
+
+            <TD CLASS="clsTableElement" width="30%" vAlign=top></TD>
+
+            <TD CLASS="clsTableElement"  width="70%" NOWRAP>
+
+                <script type="text/javascript">document.write(fnGetLocaleString("100220","Attribute type of 'User Name'"));</script>:&nbsp;
+
+                <INPUT TYPE="TEXT" NAME="FRMNAME_ATTRUSERNAME" MAXLENGTH="32" VALUE="" SIZE="20">
+
+            </TD>
+
+        </TR>
+
+    <TR id="FRMADDRSETTING_FRMNAME_ATTRIFRMNAME" Class = "clsTableElement" style="display:none;">
+
+            <TD CLASS="clsTableElement" width="30%" vAlign=top></TD>
+
+            <TD CLASS="clsTableElement"  width="70%" NOWRAP>
+
+                <script type="text/javascript">document.write(fnGetLocaleString("103917","Attribute type of 'From Name'"));</script>:&nbsp;
+
+                <INPUT TYPE="TEXT" NAME="FRMNAME_ATTRFROMNAME" MAXLENGTH="32" VALUE="" SIZE="20">
+
+            </TD>
+
+        </TR>
+
+    <TR>
+
+        <TD class=clsTableElement width="30%" vAlign=top nowrap><script type="text/javascript">document.write(fnGetLocaleString("103357","Restriction setting for Email Destination"));</script></TD>
+
+        <TD class=clsTableElement width="70%" nowrap>
+
+            <SELECT size=1 name=EMAILDESTRESTRICT>
+
+                <OPTION value=None ><script type="text/javascript">document.write(fnGetLocaleString("104020","None"))</script>
+
+                <OPTION value=FixedTo ><script type="text/javascript">document.write(fnGetLocaleString("104021","Fixed To"))</script>
+
+                <OPTION value=To ><script type="text/javascript">document.write(fnGetLocaleString("104022","To"))</script>
+
+                <OPTION value=Cc ><script type="text/javascript">document.write(fnGetLocaleString("104023","Cc"))</script>
+
+                <OPTION value=Bcc ><script type="text/javascript">document.write(fnGetLocaleString("104024","Bcc"))</script>
+
+                </OPTION>
+
+            </SELECT>
+
+        </TD>
+
+    </TR>
+
+    </TBODY>
+
+</TABLE>
+
+<BR>
+
+
+
+<TABLE class="clsMarker" cellSpacing=0 cellPadding=1 width="1870px" border=0>
+
+    <TBODY>
+
+        <TR>
+
+            <TD class=clsTableHeader colSpan=2 nowrap>&nbsp;<script type="text/javascript">document.write(fnGetLocaleString("103365","Single Sign On Setting"));</script></TD>
+
+        </TR>
+
+        <TR>
+
+            <TD class=clsTableElement width="30%" nowrap><script type="text/javascript">document.write(fnGetLocaleString("103364","Single Sign On"));</script></TD>
+
+            <TD class=clsTableElement width="70%" nowrap>
+
+                <SELECT size=1 name=SELSINGLESIGNON>
+
+                    <OPTION value=false ><script type="text/javascript">document.write(strDisable)</script>
+
+                    <OPTION value=true ><script type="text/javascript">document.write(strEnable)</script>
+
+                     </OPTION>
+
+                </SELECT>
+
+            </TD>
+
+        </TR>
+
+    </TBODY>
+
+</TABLE>
+
+<BR>
+
+<TABLE class="clsMarker" cellSpacing=0 cellPadding=1 width="1870px" border=0>
+
+    <TBODY>
+
+    <TR>
+
+        <TD class=clsTableHeader colSpan=2 nowrap>&nbsp;<script type="text/javascript">document.write(fnGetLocaleString("103757","Home Directory Setting"));</script></TD>
+
+    </TR>
+
+    <TR>
+
+        <TD class=clsTableElement width="30%" nowrap><script type="text/javascript">document.write(fnGetLocaleString("103758","Home Directory"));</script></TD>
+
+        <TD class=clsTableElement width="70%" nowrap>
+
+            <SELECT size=1 name=HOMEDIR onchange="fnHomeDirOnChange();">
+
+                <OPTION value=false ><script type="text/javascript">document.write(strDisable)</script>
+
+                <OPTION value=true ><script type="text/javascript">document.write(strEnable)</script>
+
+                </OPTION>
+
+            </SELECT>
+
+        </TD>
+
+    </TR>
+
+    <TR><TD></TD></TR>
+
+    <TR><TD></TD></TR>
+
+    <TR>
+
+        <TD class=clsTableElement width="30%" nowrap><script type="text/javascript">document.write(fnGetLocaleString("103759","Home Directory Server"));</script></TD>
+        
+
+    </TR>
+
+    <TR><TD></TD></TR>
+
+    <TR><TD></TD></TR>
+
+    <TR>
+
+        <TD ID="RegLocalUserId" nowrap class=clsTableElement colSpan=2 style="display:none">
+
+            <INPUT TYPE ='RADIO' NAME='AUTH_SERVER_TYPE' VALUE='true' onClick = 'fnHomeDirOnChange();'><script type="text/javascript">document.write(fnGetLocaleString("104841","Use Home Directory which was registered Local User"));</script>
+
+        </TD>
+
+    </TR>
+
+    <TR><TD></TD></TR>
+
+    <TR><TD></TD></TR>
+
+    <TR>
+        <TD class=clsTableElement colSpan=2 nowrap>
+
+            <INPUT TYPE ='RADIO' NAME='AUTH_SERVER_TYPE' VALUE='true' onClick = 'fnHomeDirOnChange();'><script type="text/javascript">document.write(fnGetLocaleString("103760","Use User Authentication Server"));</script>
+
+        </TD>
+
+    </TR>
+
+    <TR><TD></TD></TR>
+
+    <TR><TD></TD></TR>
+
+    <TR>
+
+        <TD class=clsTableElement colSpan=2 nowrap>
+
+            <INPUT TYPE ='RADIO' NAME='AUTH_SERVER_TYPE' VALUE='true' onClick = 'fnHomeDirOnChange();'><script type="text/javascript">document.write(fnGetLocaleString("103761","Use User Authentication Server (Use specific server for Card Authentication)"));</script>
+
+        </TD>
+
+    </TR>
+
+    <TR><TD></TD></TR>
+
+    <TR><TD></TD></TR>
+
+    <TR>
+
+        <TD class=clsTableElement colSpan=2 nowrap>
+
+            <INPUT TYPE ='RADIO' NAME='AUTH_SERVER_TYPE' VALUE='true' onClick = 'fnHomeDirOnChange();'><script type="text/javascript">document.write(fnGetLocaleString("103762","Use Specific Server"));</script>
+
+        </TD>
+
+    </TR>
+
+    </TBODY>
+
+</TABLE>
+
+<SPAN ID ="HomeDirectory_id" style="display:none;">
+
+    <BR>
+     <div style="margin-top: 5px; display: block; width:386px;">
+         <input type="button" id="btnHomeDirServerAssignment" name="HOMEDIRBTN" style="display:inline;"/>
+         <input type="button" id="btnHomeDirMoveDown" style="display:inline;" disabled/>
+         <input type="button" id="btnHomeDirMoveUp" style="display:inline;" disabled />
+     </div>
+
+
+    <div style="margin-top: 5px;"id="idHomeDirAuthTable"></div>
+    <span style="display:block;FONT-SIZE: 9pt;FONT-STYLE: normal; FONT-FAMILY: Arial, sans-serif; clear:both;"> <script type="text/javascript">document.write(fnGetLocaleString("104683","The priority is from the top."));</script></span>
+</SPAN>
+<input type="text" id="spnButtonSource" style="display:none;" />
+<input type="text" id="spnAvailableServerList" style="display:none" />
+<input type="text" id="spnAssignedServerList" style="display:none" />
+<input type="text" id="spnWindowsDomainServerList" style="display:none" />
+<input type="text" id="spnCardAuthWindowsDomainServerList" style="display:none" />
+
+</FORM>
+</BODY>
+<BR>
+</HTML>

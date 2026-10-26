@@ -457,11 +457,8 @@
        SCREEN 1: AUTHENTICATION (PaperCut MF Executive Touchscreen)
        ============================================================ -->
   <div id="screenAuth" class="pc-screen pc-auth-screen pc-active">
-    <!-- Invisible Card Catcher Input (Forces Qt WebKit to route USB reader keystrokes) -->
-    <input type="text" id="pcCardCatcher" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" style="position:fixed; bottom:0; right:0; width:1px; height:1px; opacity:0.01; border:none; padding:0; margin:0; outline:none;">
-    
     <!-- Real-time Hardware I/O Debug Status Bar for Toshiba Terminal -->
-    <div id="rawKeyDebug" style="position:fixed; bottom:4px; left:12px; font-size:11px; color:#64748B; font-weight:700; z-index:999999; background:rgba(255,255,255,0.92); padding:3px 10px; border:1px solid #CBD5E1; border-radius:4px; box-shadow:0 1px 4px rgba(0,0,0,0.08);">READER I/O: [Standby - Waiting for tap / key]</div>
+    <div id="rawKeyDebug" style="position:fixed; bottom:4px; left:12px; font-size:11px; color:#1E40AF; font-weight:700; z-index:999999; background:rgba(255,255,255,0.95); padding:3px 10px; border:1.5px solid #3B82F6; border-radius:4px; box-shadow:0 1px 4px rgba(0,0,0,0.08);">READER I/O: [Standby - Waiting for tap / key]</div>
 
     <div class="pc-auth-wrapper">
 
@@ -483,10 +480,13 @@
           <tr>
             <td class="pc-col-left" valign="top">
               <!-- RFID / NFC Contactless Tap Hero -->
-              <div class="pc-rfid-hero-wrap">
+              <div class="pc-rfid-hero-wrap" onclick="window.focusCardCatcher && window.focusCardCatcher()">
                 <img src="/img/icon-card-tap.jpg" class="pc-rfid-hero-img" alt="Tap RFID / NFC Card">
                 <div class="pc-rfid-title">TAP CARD</div>
                 <div class="pc-rfid-sub">RFID / NFC Contactless</div>
+                <input type="text" id="pcCardCatcher" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+                       placeholder="[ Tap Card or Type Badge ]"
+                       style="width:85%; height:28px; margin-top:8px; border:1.5px solid #3B82F6; background:#FFFFFF; border-radius:4px; text-align:center; font-size:12px; font-weight:700; color:#1E40AF; outline:none; display:block; margin-left:auto; margin-right:auto; box-shadow:0 1px 3px rgba(37,99,235,0.15);">
               </div>
 
               <!-- Unregistered Card Alert Prompt -->
@@ -948,6 +948,6 @@
     </div>
   </div>
 
-  <script src="/js/ewb-app.js?v=77"></script>
+  <script src="/js/ewb-app.js?v=20261026_09"></script>
 </body>
 </html>

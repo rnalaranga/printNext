@@ -91,6 +91,15 @@ public class UserService {
                 authSource
         );
 
+        if (request.externalAttribute1() != null) {
+            user.setExternalAttribute1(request.externalAttribute1().trim());
+        }
+        if (request.externalAttribute2() != null) {
+            user.setExternalAttribute2(request.externalAttribute2().trim());
+        }
+        if (request.externalAttribute3() != null) {
+            user.setExternalAttribute3(request.externalAttribute3().trim());
+        }
         if (request.isActive() != null) {
             user.setActive(request.isActive());
         }
@@ -158,6 +167,15 @@ public class UserService {
         }
         if (request.authSource() != null && !request.authSource().isBlank()) {
             user.setAuthSource(request.authSource().trim());
+        }
+        if (request.externalAttribute1() != null) {
+            user.setExternalAttribute1(request.externalAttribute1().trim());
+        }
+        if (request.externalAttribute2() != null) {
+            user.setExternalAttribute2(request.externalAttribute2().trim());
+        }
+        if (request.externalAttribute3() != null) {
+            user.setExternalAttribute3(request.externalAttribute3().trim());
         }
         if (request.isActive() != null) {
             user.setActive(request.isActive());

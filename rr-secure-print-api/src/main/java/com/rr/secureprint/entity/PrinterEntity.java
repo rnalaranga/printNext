@@ -65,16 +65,23 @@ public class PrinterEntity {
     @Column(name = "functions_locked")
     private boolean functionsLocked = false;
 
+    @Column(name = "department", length = 64)
+    private String department = "Operations";
+
     @Column(name = "created_at")
     private Instant createdAt = Instant.now();
 
     public PrinterEntity() {}
 
     public PrinterEntity(String printerCode, String name, String ipAddress, int rawPort, String location, String model, boolean colorSupported, boolean duplexSupported) {
-        this(printerCode, name, ipAddress, rawPort, location, model, colorSupported, duplexSupported, "TOSHIBA_NEW");
+        this(printerCode, name, ipAddress, rawPort, location, model, colorSupported, duplexSupported, "TOSHIBA_NEW", "Operations");
     }
 
     public PrinterEntity(String printerCode, String name, String ipAddress, int rawPort, String location, String model, boolean colorSupported, boolean duplexSupported, String deviceGeneration) {
+        this(printerCode, name, ipAddress, rawPort, location, model, colorSupported, duplexSupported, deviceGeneration, "Operations");
+    }
+
+    public PrinterEntity(String printerCode, String name, String ipAddress, int rawPort, String location, String model, boolean colorSupported, boolean duplexSupported, String deviceGeneration, String department) {
         this.printerCode = printerCode;
         this.name = name;
         this.ipAddress = ipAddress;
@@ -84,6 +91,7 @@ public class PrinterEntity {
         this.colorSupported = colorSupported;
         this.duplexSupported = duplexSupported;
         this.deviceGeneration = (deviceGeneration != null && !deviceGeneration.isBlank()) ? deviceGeneration.toUpperCase() : "TOSHIBA_NEW";
+        this.department = (department != null && !department.isBlank()) ? department.trim() : "Operations";
         this.isActive = true;
         this.status = "ONLINE";
         this.adminUsername = "admin";
@@ -154,6 +162,14 @@ public class PrinterEntity {
 
     public boolean isFunctionsLocked() { return functionsLocked; }
     public void setFunctionsLocked(boolean functionsLocked) { this.functionsLocked = functionsLocked; }
+
+    public String getDepartment() {
+        return department != null && !department.isBlank() ? department : "Operations";
+    }
+
+    public void setDepartment(String department) {
+        this.department = (department != null && !department.isBlank()) ? department.trim() : "Operations";
+    }
 
     public Instant getCreatedAt() { return createdAt; }
     public void setCreatedAt(Instant createdAt) { this.createdAt = createdAt; }

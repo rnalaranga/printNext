@@ -589,7 +589,7 @@ public class ToshibaEwbService {
                         "<userName>" + escapeXml(bindUser) + "</userName>" +
                         (bindPass.isEmpty() ? "" : "<password>" + escapeXml(bindPass) + "</password>") +
                         "<timeOut>5</timeOut>" +
-                        "<selectedForAuthentication>0</selectedForAuthentication>" +
+                        "<selectedForAuthentication>1</selectedForAuthentication>" +
                         (adExists ? "" : "<selected>0</selected>") +
                         "<SSLEnabled>Disable</SSLEnabled>" +
                         "<SSLPortNo>636</SSLPortNo>" +
@@ -632,12 +632,20 @@ public class ToshibaEwbService {
                 try {
                     HttpResponse<String> qResp2 = session.client().send(queryDsReq, HttpResponse.BodyHandlers.ofString());
                     String b2 = qResp2.body() != null ? qResp2.body() : "";
-                    Pattern p = Pattern.compile("<DirectoryService\\s+id=\"(\\d+)\"[^>]*>.*?ActiveDirectory.*?</DirectoryService>", Pattern.DOTALL);
+                    log.info("[TOSHIBA CWS] Directory Services query on {}: {}", cleanIp, b2);
+                    Pattern p = Pattern.compile("<DirectoryService[^>]*?id=[\"\'](\\d+)[\"\'][^>]*>([\\s\\S]*?)</DirectoryService>", Pattern.CASE_INSENSITIVE);
                     Matcher m = p.matcher(b2);
-                    if (m.find()) {
-                        adId = m.group(1);
+                    while (m.find()) {
+                        String id = m.group(1);
+                        String content = m.group(2);
+                        if (content.contains("ActiveDirectory")) {
+                            adId = id;
+                            break;
+                        }
                     }
                 } catch (Exception ignored) {}
+                if (adId == null || adId.isBlank() || "0".equals(adId)) { adId = "1"; }
+                log.info("[TOSHIBA CWS] ActiveDirectory assigned ID on {}: {}", cleanIp, adId);
 
                 if (adId != null && !adId.isBlank()) {
                     String searchServerXml = "<DeviceInformationModel>" +
@@ -686,14 +694,21 @@ public class ToshibaEwbService {
                         "<Payload><path>Authentication/AuthenticationSettings/AuthenticationType/Ldap[@ID='1']/ldapServerID</path><value>" + chosenAdId + "</value></Payload>" +
                         "<Payload><path>Authentication/AuthenticationSettings/AuthenticationType/Ldap[@ID='1']/isWindowsServer</path><value>true</value></Payload>" +
                         "<Payload><path>Authentication/AuthenticationSettings/AuthenticationType/Ldap[@ID='1']/attrNameForUser</path><value>sAMAccountName</value></Payload>" +
-                        "<Payload><path>Authentication/AuthenticationSettings/CardAuthentication/allowCardAuthAlways</path><value>true</value></Payload>" +
+                        "<Payload><path>Authentication/AuthenticationSettings/AuthenticationType/Ldap[@ID=1]/ldapServerID</path><value>" + chosenAdId + "</value></Payload>" +
+                        "<Payload><path>Authentication/AuthenticationSettings/AuthenticationType/Ldap[@ID=1]/isWindowsServer</path><value>true</value></Payload>" +
+                        "<Payload><path>Authentication/AuthenticationSettings/AuthenticationType/Ldap[@ID=1]/attrNameForUser</path><value>sAMAccountName</value></Payload>" +
+                        "<Payload><path>Authentication/AuthenticationSettings/CardAuthentication/allowCardAuthAlways</path><value>false</value></Payload>" +
                         "<Payload><path>Authentication/AuthenticationSettings/CardAuthentication/autoRegistrationForCardAuth</path><value>true</value></Payload>" +
                         "<Payload><path>Authentication/AuthenticationSettings/CardAuthentication/screenForCardAuthentication</path><value>false</value></Payload>" +
                         "<Payload><path>Authentication/AuthenticationSettings/CardAuthentication/primaryCardServerID</path><value>1</value></Payload>" +
                         "<Payload><path>Authentication/AuthenticationSettings/CardAuthentication/cardServerID[@ID='1']</path><value>" + chosenAdId + "</value></Payload>" +
+                        "<Payload><path>Authentication/AuthenticationSettings/CardAuthentication/cardServerID[@ID=1]</path><value>" + chosenAdId + "</value></Payload>" +
                         "<Payload><path>Authentication/AuthenticationSettings/CardAuthentication/isWindowsServer[@ID='1']</path><value>true</value></Payload>" +
+                        "<Payload><path>Authentication/AuthenticationSettings/CardAuthentication/isWindowsServer[@ID=1]</path><value>true</value></Payload>" +
                         "<Payload><path>Authentication/AuthenticationSettings/CardAuthentication/attrNameForUser[@ID='1']</path><value>sAMAccountName</value></Payload>" +
+                        "<Payload><path>Authentication/AuthenticationSettings/CardAuthentication/attrNameForUser[@ID=1]</path><value>sAMAccountName</value></Payload>" +
                         "<Payload><path>Authentication/AuthenticationSettings/CardAuthentication/atrNameForCardID[@ID='1']</path><value>" + escapeXml(cardAttr) + "</value></Payload>" +
+                        "<Payload><path>Authentication/AuthenticationSettings/CardAuthentication/atrNameForCardID[@ID=1]</path><value>" + escapeXml(cardAttr) + "</value></Payload>" +
                         "</SetValue>" +
                         "<Command>" +
                         "<AuthSettings><commandNode>Authentication/AuthenticationSettings</commandNode></AuthSettings>" +
@@ -712,6 +727,22 @@ public class ToshibaEwbService {
                 HttpResponse<String> authLockResp = session.client().send(authLockReq, HttpResponse.BodyHandlers.ofString());
                 String authBody = authLockResp.body() != null ? authLockResp.body() : "";
                 boolean authLockOk = authBody.contains("STATUS_OK");
+
+                // Enable CardAuthentication on the Controller AdminSystemSettings so firmware activates the card reader
+                String ctrlCardAuthXml = "<DeviceInformationModel><Command><Set><commandNode>Controller</commandNode><SetValue>" +
+                        "<Controller><Settings><AdminSystemSettings><Authentication><CardAuthentication>false</CardAuthentication></Authentication></AdminSystemSettings></Settings></Controller>" +
+                        "</SetValue></Set></Command></DeviceInformationModel>";
+                try {
+                    HttpRequest ctrlCardReq = HttpRequest.newBuilder()
+                            .uri(URI.create("http://" + cleanIp + "/contentwebserver"))
+                            .timeout(ldapTimeout)
+                            .header("Content-Type", "text/xml; charset=UTF-8")
+                            .header("csrfpId", session.sessionCookie() != null ? session.sessionCookie() : "")
+                            .header("Referer", "http://" + cleanIp + "/Administration/Security/Authentication.html")
+                            .POST(HttpRequest.BodyPublishers.ofString(ctrlCardAuthXml))
+                            .build();
+                    session.client().send(ctrlCardReq, HttpResponse.BodyHandlers.ofString());
+                } catch (Exception ignored) {}
                 log.info("[TOSHIBA CWS] Auth Settings with Native LDAP & Card Auth on {} -> ok={}", cleanIp, authLockOk);
 
                 if (!authLockOk) {

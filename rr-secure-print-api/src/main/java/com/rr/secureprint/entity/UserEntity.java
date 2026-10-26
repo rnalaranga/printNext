@@ -138,6 +138,14 @@ public class UserEntity {
     public String getExternalAttribute3() { return externalAttribute3; }
     public void setExternalAttribute3(String externalAttribute3) { this.externalAttribute3 = externalAttribute3; }
 
+    public String getCostCenter() {
+        return externalAttribute3 != null && !externalAttribute3.isBlank() ? externalAttribute3 : "Unassigned";
+    }
+
+    public void setCostCenter(String costCenter) {
+        this.externalAttribute3 = costCenter;
+    }
+
     public boolean isActive() { return isActive; }
     public void setActive(boolean active) { isActive = active; }
 

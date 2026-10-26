@@ -230,7 +230,7 @@ public class ActiveDirectoryService {
             if (email == null || email.isBlank()) email = cleanUsername + "@" + domain;
 
             String department = u.get("department");
-            if (department == null || department.isBlank()) department = "Active Directory";
+            if (department == null || department.isBlank()) department = "Corporate";
 
             String sid = u.get("sid");
             if (sid == null || sid.isBlank()) {
@@ -687,7 +687,8 @@ public class ActiveDirectoryService {
             try {
                 SearchControls controls = new SearchControls();
                 controls.setSearchScope(SearchControls.SUBTREE_SCOPE);
-                controls.setReturningAttributes(new String[]{"sAMAccountName", "displayName", "mail", "department", "objectSid"});
+                String deptAttr = (config.getDepartmentAttribute() != null && !config.getDepartmentAttribute().isBlank()) ? config.getDepartmentAttribute().trim() : "department";
+                controls.setReturningAttributes(new String[]{"sAMAccountName", "displayName", "mail", deptAttr, "objectSid"});
 
                 String searchFilter = "(&(objectClass=user)(sAMAccountName=" + sanitizeLdapInput(cleanUsername) + "))";
                 NamingEnumeration<SearchResult> answer = ctx.search(config.getBaseDn(), searchFilter, controls);
@@ -699,7 +700,8 @@ public class ActiveDirectoryService {
                     String sAMAccountName = getAttr(attrs, "sAMAccountName");
                     String displayName = getAttr(attrs, "displayName");
                     String mail = getAttr(attrs, "mail");
-                    String dept = getAttr(attrs, "department");
+                    String dept = getAttr(attrs, deptAttr);
+                    if (dept == null || dept.isBlank()) dept = "Corporate";
                     byte[] sidBytes = attrs.get("objectSid") != null ? (byte[]) attrs.get("objectSid").get() : null;
                     String stringSid = sidBytes != null ? convertBinarySidToString(sidBytes) : null;
 
@@ -743,6 +745,7 @@ public class ActiveDirectoryService {
         String cleanUser = username.trim().toLowerCase();
         DirectoryConfigEntity cfg = getOrCreateConfig();
         String baseDn = cfg.getBaseDn();
+        String deptAttr = (cfg.getDepartmentAttribute() != null && !cfg.getDepartmentAttribute().isBlank()) ? cfg.getDepartmentAttribute().trim() : "department";
         String cardAttr = cfg.getCardIdAttribute();
         String ext1Attr = cfg.getExternalAttr1Name();
         String ext2Attr = cfg.getExternalAttr2Name();
@@ -757,7 +760,7 @@ public class ActiveDirectoryService {
                     "$dict = [ordered]@{ found = $true; username = '" + cleanUser + "'; " +
                     "displayName = if ($p.Contains('displayname')) { [string]$p.Item('displayname')[0] } else { '' }; " +
                     "mail = if ($p.Contains('mail')) { [string]$p.Item('mail')[0] } else { '' }; " +
-                    "department = if ($p.Contains('department')) { [string]$p.Item('department')[0] } else { '' }; " +
+                    "department = if ($p.Contains('" + deptAttr.toLowerCase() + "')) { [string]$p.Item('" + deptAttr.toLowerCase() + "')[0] } else { '' }; " +
                     "cardAttributeValue = if ($p.Contains('" + cardAttr.toLowerCase() + "')) { [string]$p.Item('" + cardAttr.toLowerCase() + "')[0] } else { '' }; " +
                     "externalAttr1Value = if ($p.Contains('" + ext1Attr.toLowerCase() + "')) { [string]$p.Item('" + ext1Attr.toLowerCase() + "')[0] } else { '' }; " +
                     "externalAttr2Value = if ($p.Contains('" + ext2Attr.toLowerCase() + "')) { [string]$p.Item('" + ext2Attr.toLowerCase() + "')[0] } else { '' }; " +
@@ -782,6 +785,7 @@ public class ActiveDirectoryService {
                     res.put("username", cleanUser);
                     res.put("displayName", n.has("displayName") ? n.get("displayName").asText() : "");
                     res.put("mail", n.has("mail") ? n.get("mail").asText() : "");
+                    res.put("departmentAttribute", deptAttr);
                     res.put("department", n.has("department") ? n.get("department").asText() : "");
                     res.put("cardIdAttribute", cardAttr);
                     res.put("cardIdValue", n.has("cardAttributeValue") ? n.get("cardAttributeValue").asText() : "");
@@ -802,6 +806,7 @@ public class ActiveDirectoryService {
 
     private List<Map<String, String>> queryActiveDirectoryViaBridge(DirectoryConfigEntity config, int maxLimit) throws Exception {
         String baseDn = config.getBaseDn() != null ? config.getBaseDn() : "DC=qoa,DC=local";
+        String deptAttr = (config.getDepartmentAttribute() != null && !config.getDepartmentAttribute().isBlank()) ? config.getDepartmentAttribute().trim() : "department";
         String cardAttr = config.getCardIdAttribute() != null ? config.getCardIdAttribute() : "employeeNumber";
         String ext1Attr = config.getExternalAttr1Name() != null ? config.getExternalAttr1Name() : "extensionAttribute1";
         String ext2Attr = config.getExternalAttr2Name() != null ? config.getExternalAttr2Name() : "extensionAttribute2";
@@ -816,7 +821,7 @@ public class ActiveDirectoryService {
                 "  if (-not $sam -or $sam.EndsWith('$')) { continue; } " +
                 "  $disp = if ($p.Contains('displayname')) { [string]$p.Item('displayname')[0] } else { $sam }; " +
                 "  $mail = if ($p.Contains('mail')) { [string]$p.Item('mail')[0] } else { '' }; " +
-                "  $dept = if ($p.Contains('department')) { [string]$p.Item('department')[0] } else { 'Corporate' }; " +
+                "  $dept = if ($p.Contains('" + deptAttr.toLowerCase() + "')) { [string]$p.Item('" + deptAttr.toLowerCase() + "')[0] } else { 'Corporate' }; " +
                 "  $sid = if ($p.Contains('objectsid')) { (New-Object System.Security.Principal.SecurityIdentifier($p.Item('objectsid')[0], 0)).Value } else { '' }; " +
                 "  $card = if ($p.Contains('" + cardAttr.toLowerCase() + "')) { [string]$p.Item('" + cardAttr.toLowerCase() + "')[0] } else { '' }; " +
                 "  $e1 = if ($p.Contains('" + ext1Attr.toLowerCase() + "')) { [string]$p.Item('" + ext1Attr.toLowerCase() + "')[0] } else { '' }; " +

@@ -1,1 +1,0 @@
-﻿<DeviceInformationModel><Command><RetrieveLog><commandNode>Log</commandNode><Params><Order>DESC</Order><SortCategory>DateTime</SortCategory><Locale>en-US</Locale><LogKind>PrintLog</LogKind></Params><Response><statusOfOperation>STATUS_OK</statusOfOperation></Response></RetrieveLog></Command></DeviceInformationModel>

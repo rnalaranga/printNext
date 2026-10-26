@@ -1,0 +1,176 @@
+<!--
+
+*-------------------------------------------------------------------------------
+* File: ServerAssignment.html
+*-------------------------------------------------------------------------------
+* DESCRIPTION: Used in Security.html?v=1717026199ta -> Assign Ldap server, Home Directory, PAN Auth, Card Auth
+*
+* AUTHOR:        Shiva Krishnan
+* PROJECT:		[TOPACCESS]
+*
+* Date Of Creation	: 25-Mar-2015
+*-------------------------------------------------------------------------------
+  -->
+
+<!DOCTYPE html>
+<html>
+<meta http-equiv="X-UA-Compatible" content="IE=edge">
+<head>
+    <title>Title Goes Here</title>
+
+    <link rel="stylesheet" type="text/css" href="/styles/style.css?v=1717026199ta"/>
+    <script language="javascript" type="text/javascript" src="/js/jquery.min.js?v=1717026199ta"></script>
+    <script language="javascript" type="text/javascript" src="/js/handlebars.js?v=1717026199ta"></script>
+	<script language="javascript" type="text/javascript" src="/js/handlebarsHelper.js?v=1717026199ta"></script>
+    <script language="javascript" type="text/javascript" src="/js/TopAccessUtil.js?v=1717026199ta"></script>
+    <script language="javascript" type="text/javascript" src="/js/AjaxReqRespHandler.js?v=1717026199ta"></script>
+    <script language="javascript" type="text/javascript" src="/js/Security.js?v=1717026199ta"></script>
+
+    <script>
+        var lblDirectoryServiceName = fnGetLocaleString("100524","Directory Service Name");
+        var lblServerIPAddress = fnGetLocaleString("101693","Server IP Address");
+        var lblAddButton = fnGetLocaleString("102349","Add ->");
+        var lblDelButton = fnGetLocaleString("102350","<- Delete");
+        var lblAvailableServer= fnGetLocaleString("104602","Available Server");
+        var lblAssignedServer= fnGetLocaleString("104603","Assigned Server");
+        var lblErrorMsg= fnGetLocaleString("104616","Required attribute type has not been set.")+"\n"+fnGetLocaleString("104959","Check the properties for this directory service.");
+        var lblErrorSpec= fnGetLocaleString("101992","User Name");
+        var lblErrorSpec1= fnGetLocaleString("104620","PIN");
+    </script>
+    <script language="javascript" type="text/javascript" src="/js/ServerAssignment.js?v=1717026199ta"></script>
+
+    <style type="text/css">
+        .selected {background-color: #FCFC6D; color:black;}
+        #buttondiv{float:left;margin-left:10px;margin-top:70px;padding:3px;}
+        div#LTableHolder{float:left;margin-left:20px;margin-top:0px;padding:3px;position: relative;}
+        div#RTableHolder{float:left;margin-left:10px;margin-top:0px;padding:3px;position: relative;}
+		body, html{
+            min-width: 786px;
+		}
+    </style>
+
+    <script>
+    //jQuery.fn.reverse = [].reverse;
+    var availableServerList2DArray,availableServerList2DArray_org;
+    var assignedServerList2DArray,assignedServerList2DArray_org;
+
+    $(document).ready(function(){
+        var id = window.opener.document.getElementById('spnButtonSource').value;
+        var availableList = window.opener.document.getElementById('spnAvailableServerList').value;
+        var assignedList = window.opener.document.getElementById('spnAssignedServerList').value;
+        availableServerList2DArray_org = availableServerList2DArray = construct2DArray(availableList);
+        assignedServerList2DArray_org = assignedServerList2DArray = construct2DArray(assignedList);
+
+        $("#btnAdd").val(lblAddButton);
+        $("#btnDelete").val(lblDelButton);
+
+        if(id=="LDAP"){
+            var pageTitle= fnGetLocaleString("101045","LDAP Authentication");
+            $("#pageTitle").text(pageTitle);
+            document.title = pageTitle;
+            loadServerAssignment(availableServerList2DArray,assignedServerList2DArray);
+        }else if(id=="PIN"){
+            var pageTitle= fnGetLocaleString("104271","Pin Code Authentication");
+            $("#pageTitle").text(pageTitle);
+            document.title = pageTitle;
+            loadServerAssignment(availableServerList2DArray,assignedServerList2DArray);
+        }else if(id=="HOMEDIRBTN"){
+            var pageTitle= fnGetLocaleString("104281","Home Directory Server Setting");
+            $("#pageTitle").text(pageTitle);
+            document.title = pageTitle;
+            loadServerAssignment(availableServerList2DArray,assignedServerList2DArray);
+        }else if(id=="CARDAUTHBTN"){
+            var pageTitle= fnGetLocaleString("103973","Card Authentication");
+            $("#pageTitle").text(pageTitle);
+            document.title = pageTitle;
+            loadServerAssignment(availableServerList2DArray,assignedServerList2DArray);
+        }else if(id=="EmailLDAP"){
+            var pageTitle= fnGetLocaleString("101048","LDAP Server");
+            $("#pageTitle").text(pageTitle);
+            document.title = pageTitle;
+            loadServerAssignment(availableServerList2DArray,assignedServerList2DArray);
+        }else if(id =="cardAuthLDAP"){ //RCR_1766
+            var pageTitle= fnGetLocaleString("101045","LDAP Authentication");
+            $("#pageTitle").text(pageTitle);
+            document.title = pageTitle;
+            loadServerAssignment(availableServerList2DArray,assignedServerList2DArray);
+        }
+
+
+
+        $("#LTableHolder,#RTableHolder").on("click", "#leftTable tr,#rightTable tr ", function(){
+            var selectedTable=$(this).parent().parent().attr('id');
+            $(this).addClass('selected').siblings().removeClass('selected');
+            if(selectedTable == "leftTable"){
+                $("#rightTable tr.selected ").removeClass('selected');
+                $("#btnDelete").attr("disabled", true);
+                $("#btnAdd").removeAttr("disabled")
+                //can add only 3 rows in case of PIN or Home DIR                                          //RCR_1766
+                if(id=="PIN" || id=="HOMEDIRBTN" || id=="LDAP" || id=="CARDAUTHBTN" || id=="EmailLDAP" || id =="cardAuthLDAP" ){
+				    var allowedRows = 3;
+					if(id=="LDAP" || id=="CARDAUTHBTN" || id =="cardAuthLDAP"){
+						allowedRows = 16; //can add only 16 rows in case of LDAP or CARD
+					}else if(id == "EmailLDAP") {
+					    allowedRows = 4;
+					}
+                    var totalAddedRows=$('#rightTable tr').length;
+                    if(totalAddedRows>=allowedRows){
+                        $("#btnAdd").attr("disabled", true);
+                    }
+                }
+            }else if(selectedTable == "rightTable"){
+                $("#leftTable tr.selected ").removeClass('selected');
+                $("#btnDelete").removeAttr("disabled")
+                $("#btnAdd").attr("disabled", true);
+            }
+
+        });
+
+        $("#btnAdd,#btnDelete").click(function(){
+            var btnAction=$(this).attr('id');
+            $(this).attr("disabled", true);
+            if(btnAction=="btnAdd") {
+                moveRow("leftTable", "rightTable",id,"add");
+            }else if(btnAction=="btnDelete") {
+                moveRow("rightTable", "leftTable",id,"delete");
+            }
+        });
+
+        $("#btnSave").click(function(){
+            fnSaveAuthChanges();
+        });
+
+        $(window).resize(function() {
+            // for zoom out/ zoom in chrome issue
+            fixColumnWidth("leftTableHeader", "leftTable");
+            fixColumnWidth("rightTableHeader", "rightTable");
+            //for scroll bar
+            var bodyMinWidth = $("#buttondiv").width() + $("#LTableHolder").width() + $("#RTableHolder").width() + 68;
+            $("body").css('min-width',bodyMinWidth+'px');
+        });
+
+    });
+    </script>
+</head>
+
+<body BGCOLOR="white" CLASS="clsMargin" style="overflow: auto">
+<span class="clsTitle1" id="pageTitle">This page loads the template</span>
+
+<p>
+<script type="text/javascript">document.write("<INPUT class='clsBody' id='btnSave' type='button' value='"+fnGetLocaleString("101290","OK")+"' />");</script>
+<script type="text/javascript">document.write("<INPUT class='clsBody' onClick='window.close()' type='button' value='"+fnGetLocaleString("100289","Cancel")+"' />");</script>
+</p>
+
+<div id="LTableHolder"></div>
+
+<div id="buttondiv">
+    <input type="button" id="btnAdd" value="" style="display:block; width:90px; height:25px;  margin-top:1px;" disabled/>
+    <input type="button" id="btnDelete" value="" style="display:block; width:90px; height:25px;  margin-top:10px;" disabled/>
+</div>
+
+
+<div id="RTableHolder"></div>
+
+
+</body>
+</html>

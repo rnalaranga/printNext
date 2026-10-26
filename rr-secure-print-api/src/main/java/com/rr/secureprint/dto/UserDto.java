@@ -27,6 +27,10 @@ public record UserDto(
         String externalAttribute2,
         String externalAttribute3
 ) {
+    public String getCostCenter() {
+        return externalAttribute3 != null && !externalAttribute3.isBlank() ? externalAttribute3 : "Unassigned";
+    }
+
     public static UserDto fromEntity(UserEntity user) {
         return fromEntity(user, 0);
     }

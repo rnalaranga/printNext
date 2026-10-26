@@ -50,7 +50,7 @@
 
       // Determine page from URL hash (e.g. #printers, #users, #virtual-queue)
       var hash = (window.location.hash || '').replace('#', '').toLowerCase();
-      var validPages = ['dashboard', 'virtual-queue', 'printers', 'users', 'directory', 'queue', 'copy-logs', 'audit', 'settings'];
+      var validPages = ['dashboard', 'virtual-queue', 'printers', 'users', 'directory', 'queue', 'copy-logs', 'reports', 'audit', 'settings'];
       var targetPage = validPages.indexOf(hash) !== -1 ? hash : 'dashboard';
       window.navigatePage(targetPage);
 
@@ -97,6 +97,11 @@
       activeView.style.display = 'block';
     }
 
+    var adminBody = document.querySelector('.admin-body');
+    if (adminBody) {
+      adminBody.scrollTop = 0;
+    }
+
     // Update Topbar Title & Subtitle
     var topbarTitle = document.getElementById('topbarTitle');
     var topbarSub   = document.getElementById('topbarSub');
@@ -131,6 +136,10 @@
       topbarTitle.textContent = 'Walk-Up Photocopy Logs';
       topbarSub.textContent   = 'MFP Hardware Copy Tracking & User Accounting';
       loadCopyJobs();
+    } else if (pageId === 'reports') {
+      topbarTitle.textContent = 'Enterprise Reports & Analytics';
+      topbarSub.textContent   = 'Department & Cost Center (extensionAttribute3) Print/Copy Accounting';
+      window.loadReports();
     } else if (pageId === 'audit') {
       topbarTitle.textContent = 'Security Audit Trail';
       topbarSub.textContent   = 'Tamper-Evident Security Log & Device Release Events';
@@ -235,90 +244,252 @@
     inp.type = inp.type === 'password' ? 'text' : 'password';
   };
 
+    /* =========================================================================
+     DEPARTMENT CATEGORIZATION & PRINTER VIEW CONTROLLERS
+     ========================================================================= */
+  state.printerViewMode = 'grouped';
+  state.selectedPrinterDept = 'ALL';
+
+  window.setPrinterViewMode = function (mode) {
+    state.printerViewMode = mode;
+    var btnGrp = document.getElementById('btnPrnViewGroup');
+    var btnFlt = document.getElementById('btnPrnViewFlat');
+    if (btnGrp && btnFlt) {
+      if (mode === 'grouped') {
+        btnGrp.classList.add('active');
+        btnFlt.classList.remove('active');
+      } else {
+        btnFlt.classList.add('active');
+        btnGrp.classList.remove('active');
+      }
+    }
+    renderPrinters();
+  };
+
+  window.selectPrinterDeptPill = function (dept) {
+    state.selectedPrinterDept = dept;
+    renderPrinters();
+  };
+
+  function buildSinglePrinterRow(p, showDeptCol) {
+    var isOld = (p.deviceGeneration === 'TOSHIBA_OLD' || (!p.deviceGeneration && p.model && (p.model.indexOf('306') !== -1 || p.model.indexOf('256') !== -1 || p.model.indexOf('356') !== -1 || p.model.indexOf('456') !== -1)));
+
+    var genBadge = isOld
+      ? '<span class="badge" style="background:#FEF3C7; color:#92400E; border:1px solid #FDE68A; font-weight:600;"><span style="color:#D97706;"></span> Toshiba Old (Legacy)</span>'
+      : '<span class="badge" style="background:#E0F2FE; color:#0369A1; border:1px solid #BAE6FD; font-weight:600;"><span style="color:#0284C7;"></span> e-BRIDGE Next</span>';
+
+    var statusBadge = p.status === 'ONLINE'
+      ? '<span class="badge badge-online">ONLINE</span>'
+      : '<span class="badge badge-offline">' + esc(p.status || 'OFFLINE') + '</span>';
+
+    var ewbBadge;
+    if (isOld) {
+      ewbBadge =
+        '<div class="ewb-status-lights">' +
+          '<span class="status-pill pill-dim" title="Legacy device releases prints via RAW Port 9100 / Web Station">' +
+            '<span class="light-dot light-dim"></span> Port 9100' +
+          '</span>' +
+        '</div>';
+    } else {
+      var ewbLight = p.ewbConfigured
+        ? '<span class="status-pill pill-green" title="EWB Terminal: Configured & Ready (' + esc(p.ewbUrl || '') + ')"><span class="light-dot light-green"></span> EWB</span>'
+        : '<span class="status-pill pill-dim" title="EWB Terminal: Not pushed to device yet"><span class="light-dot light-dim"></span> No EWB</span>';
+
+      var lockLight = p.functionsLocked
+        ? '<span class="status-pill pill-green" title="HOME Screen Icons: LOCKED (Photo Copy & Native Functions Restricted)"><span class="light-dot light-green"></span> Lock</span>'
+        : '<span class="status-pill pill-amber" title="HOME Screen Icons: UNLOCKED (Walk-Up Copy Open)"><span class="light-dot light-amber"></span> Open</span>';
+
+      ewbBadge =
+        '<div class="ewb-status-lights">' +
+          ewbLight +
+          lockLight +
+        '</div>';
+    }
+
+    var roleBadge = '<span class="badge" style="background:#EFF6FF; color:#1D4ED8; font-weight:600; border:1px solid #BFDBFE;">Follow-Me Station</span>';
+
+    var actionsDropdown =
+      '<div class="action-dropdown-wrap" id="action-wrap-' + p.id + '">' +
+        '<button type="button" class="btn-action-dropdown" onclick="window.togglePrinterDropdown(event, ' + p.id + ')" id="dropdown-btn-' + p.id + '">' +
+          'Actions ' +
+        '</button>' +
+        '<div class="action-dropdown-menu" id="dropdown-menu-' + p.id + '">' +
+          (!isOld ? '<button type="button" class="action-dropdown-item item-primary" onclick="openQuickEwbModal(' + p.id + ')"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg> Push EWB Settings</button>' : '') +
+          (!isOld ? '<button type="button" class="action-dropdown-item" style="color:#2563EB; font-weight:700;" onclick="window.pushLdapAndLockSinglePrinter(' + p.id + ')"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg> Push LDAP &amp; Card Lock</button>' : '') +
+          (!isOld ? '<button type="button" class="action-dropdown-item item-warning" onclick="window.lockSinglePrinter(' + p.id + ', true)"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg> Lock HOME Icons</button>' : '') +
+          (!isOld ? '<button type="button" class="action-dropdown-item" onclick="window.lockSinglePrinter(' + p.id + ', false)"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/></svg> Unlock Walk-Up Copy</button>' : '') +
+          (!isOld ? '<div class="action-dropdown-divider"></div>' : '') +
+          '<button type="button" class="action-dropdown-item" onclick="testPrinter(' + p.id + ')"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg> Test Connection</button>' +
+          '<button type="button" class="action-dropdown-item" onclick="window.open(\'http://' + esc(p.ipAddress) + '/\', \'_blank\')"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg> Open TopAccess</button>' +
+          (!isOld ? '<button type="button" class="action-dropdown-item" onclick="window.rebootSinglePrinter(' + p.id + ')"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg> Remote Restart MFP</button>' : '') +
+          '<div class="action-dropdown-divider"></div>' +
+          '<button type="button" class="action-dropdown-item" onclick="openEditPrinterModal(' + p.id + ')"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg> Edit Printer</button>' +
+          '<button type="button" class="action-dropdown-item item-danger" onclick="deletePrinter(' + p.id + ', \'' + esc(p.name) + '\')"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg> Delete Printer</button>' +
+        '</div>' +
+      '</div>';
+
+    var deptCell = showDeptCol ? '<td><span class="badge bg-primary-subtle text-primary border border-primary-subtle fw-bold">' + esc(p.department || 'Operations') + '</span></td>' : '';
+
+    return '<tr>' +
+      '<td><strong>' + esc(p.name) + '</strong></td>' +
+      '<td><code>' + esc(p.printerCode) + '</code></td>' +
+      deptCell +
+      '<td>' + genBadge + '</td>' +
+      '<td>' + esc(p.ipAddress) + ':' + p.rawPort + '</td>' +
+      '<td>' + esc(p.location || 'Office') + '</td>' +
+      '<td>' + esc(p.model || (isOld ? 'Toshiba e-STUDIO 306SE' : 'Toshiba MFP')) + '</td>' +
+      '<td>' + roleBadge + '</td>' +
+      '<td>' + ewbBadge + '</td>' +
+      '<td id="printer-status-' + p.id + '">' + statusBadge + '</td>' +
+      '<td style="text-align:right; white-space:nowrap; position:relative;">' + actionsDropdown + '</td>' +
+    '</tr>';
+  }
+
   function renderPrinters() {
-    var tbody = document.getElementById('printersTableBody');
-    if (!tbody) return;
-    tbody.innerHTML = '';
+    var container = document.getElementById('printersListContainer');
+    var fallbackTbody = document.getElementById('printersTableBody');
+    if (!container && !fallbackTbody) return;
 
     if (state.printers.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;padding:30px;color:#6B7299;">No physical printers registered in the Follow-Me pool yet. Click "+ Register New Printer" to add one.</td></tr>';
+      if (container) {
+        container.innerHTML = '<div class="card p-4 text-center text-muted">No physical printers registered in the Follow-Me pool yet. Click "+ Register New Printer" to add one.</div>';
+      } else if (fallbackTbody) {
+        fallbackTbody.innerHTML = '<tr><td colspan="11" style="text-align:center;padding:30px;color:#6B7299;">No physical printers registered yet.</td></tr>';
+      }
       return;
     }
 
+    // 1. Build Department Pills Strip
+    var deptCounts = {};
     for (var i = 0; i < state.printers.length; i++) {
-      var p = state.printers[i];
-      var tr = document.createElement('tr');
+      var d = state.printers[i].department || 'Operations';
+      deptCounts[d] = (deptCounts[d] || 0) + 1;
+    }
 
-      var isOld = (p.deviceGeneration === 'TOSHIBA_OLD' || (!p.deviceGeneration && p.model && (p.model.indexOf('306') !== -1 || p.model.indexOf('256') !== -1 || p.model.indexOf('356') !== -1 || p.model.indexOf('456') !== -1)));
-
-      var genBadge = isOld
-        ? '<span class="badge" style="background:#FEF3C7; color:#92400E; border:1px solid #FDE68A; font-weight:600;"><span style="color:#D97706;">●</span> Toshiba Old (Legacy)</span>'
-        : '<span class="badge" style="background:#E0F2FE; color:#0369A1; border:1px solid #BAE6FD; font-weight:600;"><span style="color:#0284C7;">●</span> e-BRIDGE Next</span>';
-
-      var statusBadge = p.status === 'ONLINE'
-        ? '<span class="badge badge-online">ONLINE</span>'
-        : '<span class="badge badge-offline">' + esc(p.status || 'OFFLINE') + '</span>';
-
-      var ewbBadge;
-      if (isOld) {
-        ewbBadge =
-          '<div class="ewb-status-lights">' +
-            '<span class="status-pill pill-dim" title="Legacy device releases prints via RAW Port 9100 / Web Station">' +
-              '<span class="light-dot light-dim"></span> Port 9100' +
-            '</span>' +
-          '</div>';
-      } else {
-        var ewbLight = p.ewbConfigured
-          ? '<span class="status-pill pill-green" title="EWB Terminal: Configured & Ready (' + esc(p.ewbUrl || '') + ')"><span class="light-dot light-green"></span> EWB</span>'
-          : '<span class="status-pill pill-dim" title="EWB Terminal: Not pushed to device yet"><span class="light-dot light-dim"></span> No EWB</span>';
-
-        var lockLight = p.functionsLocked
-          ? '<span class="status-pill pill-green" title="HOME Screen Icons: LOCKED (Photo Copy & Native Functions Restricted)"><span class="light-dot light-green"></span> Lock</span>'
-          : '<span class="status-pill pill-amber" title="HOME Screen Icons: UNLOCKED (Walk-Up Copy Open)"><span class="light-dot light-amber"></span> Open</span>';
-
-        ewbBadge =
-          '<div class="ewb-status-lights">' +
-            ewbLight +
-            lockLight +
-          '</div>';
+    var pillsContainer = document.getElementById('printerDeptPillsContainer');
+    if (pillsContainer) {
+      var pillsHtml = '<button type="button" class="dept-pill-btn' + (state.selectedPrinterDept === 'ALL' ? ' active' : '') + '" onclick="window.selectPrinterDeptPill(\'ALL\')">All Departments <span class="pill-count">' + state.printers.length + '</span></button>';
+      var depts = Object.keys(deptCounts).sort();
+      for (var k = 0; k < depts.length; k++) {
+        var dName = depts[k];
+        var count = deptCounts[dName];
+        pillsHtml += '<button type="button" class="dept-pill-btn' + (state.selectedPrinterDept === dName ? ' active' : '') + '" onclick="window.selectPrinterDeptPill(\'' + esc(dName) + '\')">' + esc(dName) + ' <span class="pill-count">' + count + '</span></button>';
       }
+      pillsContainer.innerHTML = pillsHtml;
+    }
 
-      var roleBadge = '<span class="badge" style="background:#EFF6FF; color:#1D4ED8; font-weight:600; border:1px solid #BFDBFE;">Follow-Me Station</span>';
+    // 2. Filter printers by search and selected department
+    var searchInput = document.getElementById('printerSearchInput');
+    var searchVal = (searchInput ? searchInput.value : '').toLowerCase().trim();
 
-      var actionsDropdown =
-        '<div class="action-dropdown-wrap" id="action-wrap-' + p.id + '">' +
-          '<button type="button" class="btn-action-dropdown" onclick="window.togglePrinterDropdown(event, ' + p.id + ')" id="dropdown-btn-' + p.id + '">' +
-            'Actions ▾' +
-          '</button>' +
-          '<div class="action-dropdown-menu" id="dropdown-menu-' + p.id + '">' +
-            (!isOld ? '<button type="button" class="action-dropdown-item item-primary" onclick="openQuickEwbModal(' + p.id + ')"><span>⚡</span> Push EWB Settings</button>' : '') +
-            (!isOld ? '<button type="button" class="action-dropdown-item" style="color:#2563EB; font-weight:700;" onclick="window.pushLdapAndLockSinglePrinter(' + p.id + ')"><span>🏢</span> Push LDAP &amp; Card Lock</button>' : '') +
-            (!isOld ? '<button type="button" class="action-dropdown-item item-warning" onclick="window.lockSinglePrinter(' + p.id + ', true)"><span>🔒</span> Lock HOME Icons (Photo Copy)</button>' : '') +
-            (!isOld ? '<button type="button" class="action-dropdown-item" onclick="window.lockSinglePrinter(' + p.id + ', false)"><span>🔓</span> Unlock Walk-Up Copy</button>' : '') +
-            (!isOld ? '<div class="action-dropdown-divider"></div>' : '') +
-            '<button type="button" class="action-dropdown-item" onclick="testPrinter(' + p.id + ')"><span>🔍</span> Test Connection</button>' +
-            '<button type="button" class="action-dropdown-item" onclick="window.open(\'http://' + esc(p.ipAddress) + '/\', \'_blank\')"><span>🌐</span> Open TopAccess</button>' +
-            (!isOld ? '<button type="button" class="action-dropdown-item" onclick="window.rebootSinglePrinter(' + p.id + ')"><span>🔄</span> Remote Restart MFP</button>' : '') +
-            '<div class="action-dropdown-divider"></div>' +
-            '<button type="button" class="action-dropdown-item" onclick="openEditPrinterModal(' + p.id + ')"><span>✏️</span> Edit Printer</button>' +
-            '<button type="button" class="action-dropdown-item item-danger" onclick="deletePrinter(' + p.id + ', \'' + esc(p.name) + '\')"><span>🗑️</span> Delete Printer</button>' +
+    var filtered = state.printers.filter(function (p) {
+      var pDept = p.department || 'Operations';
+      if (state.selectedPrinterDept !== 'ALL' && pDept !== state.selectedPrinterDept) return false;
+      if (!searchVal) return true;
+      return (p.name || '').toLowerCase().indexOf(searchVal) !== -1 ||
+             (p.printerCode || '').toLowerCase().indexOf(searchVal) !== -1 ||
+             (p.ipAddress || '').toLowerCase().indexOf(searchVal) !== -1 ||
+             (p.model || '').toLowerCase().indexOf(searchVal) !== -1 ||
+             pDept.toLowerCase().indexOf(searchVal) !== -1 ||
+             (p.location || '').toLowerCase().indexOf(searchVal) !== -1;
+    });
+
+    if (filtered.length === 0) {
+      if (container) {
+        container.innerHTML = '<div class="card p-4 text-center text-muted">No printers matching "' + esc(searchVal || state.selectedPrinterDept) + '".</div>';
+      }
+      return;
+    }
+
+    // 3. Render Grouped vs Flat
+    if (!container || state.printerViewMode === 'flat') {
+      var tableHtml =
+        '<div class="card">' +
+          '<div class="table-wrap">' +
+            '<table>' +
+              '<thead>' +
+                '<tr>' +
+                  '<th>MFP Device Name</th>' +
+                  '<th>Device Code</th>' +
+                  '<th>Assigned Department</th>' +
+                  '<th>Architecture</th>' +
+                  '<th>Network IP : Port</th>' +
+                  '<th>Location</th>' +
+                  '<th>Hardware Model</th>' +
+                  '<th>Release Role</th>' +
+                  '<th>EWB Terminal</th>' +
+                  '<th>Status</th>' +
+                  '<th style="text-align:right;">Actions</th>' +
+                '</tr>' +
+              '</thead>' +
+              '<tbody>' +
+                filtered.map(function (p) { return buildSinglePrinterRow(p, true); }).join('') +
+              '</tbody>' +
+            '</table>' +
           '</div>' +
         '</div>';
-
-      tr.innerHTML =
-        '<td><strong>' + esc(p.name) + '</strong></td>' +
-        '<td><code>' + esc(p.printerCode) + '</code></td>' +
-        '<td>' + genBadge + '</td>' +
-        '<td>' + esc(p.ipAddress) + ':' + p.rawPort + '</td>' +
-        '<td>' + esc(p.location || 'Office') + '</td>' +
-        '<td>' + esc(p.model || (isOld ? 'Toshiba e-STUDIO 306SE' : 'Toshiba MFP')) + '</td>' +
-        '<td>' + roleBadge + '</td>' +
-        '<td>' + ewbBadge + '</td>' +
-        '<td id="printer-status-' + p.id + '">' + statusBadge + '</td>' +
-        '<td style="text-align:right; white-space:nowrap; position:relative;">' + actionsDropdown + '</td>';
-
-      tbody.appendChild(tr);
+      if (container) container.innerHTML = tableHtml;
+      return;
     }
+
+    // Grouped by Department Mode
+    var grouped = {};
+    for (var j = 0; j < filtered.length; j++) {
+      var prn = filtered[j];
+      var prnDept = prn.department || 'Operations';
+      if (!grouped[prnDept]) grouped[prnDept] = [];
+      grouped[prnDept].push(prn);
+    }
+
+    var groupKeys = Object.keys(grouped).sort();
+    var outHtml = '';
+
+    for (var g = 0; g < groupKeys.length; g++) {
+      var grpDept = groupKeys[g];
+      var list = grouped[grpDept];
+      var ips = list.map(function (x) { return esc(x.ipAddress); }).join(', ');
+
+      var isPrnCollapsed = (state.collapsedDepts && state.collapsedDepts['prn_' + grpDept]) ? ' is-collapsed' : '';
+
+      outHtml +=
+        '<div class="card dept-group-card shadow-sm' + isPrnCollapsed + '" id="prn-dept-card-' + esc(grpDept).replace(/[^a-zA-Z0-9]/g, '_') + '">' +
+          '<div class="dept-group-head" onclick="window.toggleDeptGroupCollapse(this)" data-dept-key="prn_' + esc(grpDept) + '" title="Click to collapse / expand ' + esc(grpDept) + ' department printers">' +
+            '<div class="d-flex align-items-center gap-2">' +
+              '<span class="dept-collapse-toggle"><svg class="dept-collapse-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg></span>' +
+              '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--primary); flex-shrink:0;"><rect x="2" y="2" width="20" height="8" rx="2" ry="2"/><rect x="2" y="14" width="20" height="8" rx="2" ry="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/></svg>' +
+              '<strong style="font-size:13.5px; color:var(--text-dark);">' + esc(grpDept) + ' Department</strong>' +
+              '<span class="badge bg-primary-subtle text-primary border border-primary-subtle ms-2">' + list.length + ' ' + (list.length === 1 ? 'Printer' : 'Printers') + '</span>' +
+            '</div>' +
+            '<div class="d-flex align-items-center gap-3">' +
+              '<div class="text-secondary small">Network IPs: <code>' + ips + '</code></div>' +
+              '<span class="text-muted small" style="font-size:11px; user-select:none;">(click to collapse)</span>' +
+            '</div>' +
+          '</div>' +
+          '<div class="table-wrap" style="max-height:360px;">' +
+            '<table>' +
+              '<thead>' +
+                '<tr>' +
+                  '<th>MFP Device Name</th>' +
+                  '<th>Device Code</th>' +
+                  '<th>Architecture</th>' +
+                  '<th>Network IP : Port</th>' +
+                  '<th>Location</th>' +
+                  '<th>Hardware Model</th>' +
+                  '<th>Release Role</th>' +
+                  '<th>EWB Terminal</th>' +
+                  '<th>Status</th>' +
+                  '<th style="text-align:right;">Actions</th>' +
+                '</tr>' +
+              '</thead>' +
+              '<tbody>' +
+                list.map(function (p) { return buildSinglePrinterRow(p, false); }).join('') +
+              '</tbody>' +
+            '</table>' +
+          '</div>' +
+        '</div>';
+    }
+
+    container.innerHTML = outHtml;
   }
 
   window.handleDeviceGenerationChange = function () {
@@ -372,6 +543,7 @@
     document.getElementById('printerIp').value = '';
     document.getElementById('printerPort').value = '9100';
     document.getElementById('printerLocation').value = '';
+    if (document.getElementById('printerDepartment')) document.getElementById('printerDepartment').value = 'Operations';
     document.getElementById('printerModel').value = 'Toshiba e-STUDIO 3518A';
     document.getElementById('printerDeviceGeneration').value = 'TOSHIBA_NEW';
     document.getElementById('printerDuplex').checked = true;
@@ -517,11 +689,11 @@
     var badge = document.getElementById('quickEwbLockBadge');
     if (badge) {
       if (p.functionsLocked) {
-        badge.textContent = 'Status: LOCKED 🔒';
+        badge.textContent = 'Status: LOCKED ';
         badge.style.background = '#DCFCE7';
         badge.style.color = '#15803D';
       } else {
-        badge.textContent = 'Status: UNLOCKED 🔓';
+        badge.textContent = 'Status: UNLOCKED ';
         badge.style.background = '#FEF3C7';
         badge.style.color = '#92400E';
       }
@@ -547,8 +719,8 @@
     if (btn) btn.disabled = true;
     if (logBox) {
       logBox.textContent = (lock
-        ? '🔒 [1/2] Connecting to Toshiba TopAccess CWS to LOCK HOME screen icons (Photo Copy)...\n'
-        : '🔓 [1/2] Connecting to Toshiba TopAccess CWS to UNLOCK HOME screen functions...\n');
+        ? ' [1/2] Connecting to Toshiba TopAccess CWS to LOCK HOME screen icons (Photo Copy)...\n'
+        : ' [1/2] Connecting to Toshiba TopAccess CWS to UNLOCK HOME screen functions...\n');
     }
 
     fetch('/api/admin/printers/' + id + '/lock-functions?lock=' + lock, {
@@ -567,11 +739,11 @@
           }
           if (badge) {
             if (lock) {
-              badge.textContent = 'Status: LOCKED 🔒';
+              badge.textContent = 'Status: LOCKED ';
               badge.style.background = '#DCFCE7';
               badge.style.color = '#15803D';
             } else {
-              badge.textContent = 'Status: UNLOCKED 🔓';
+              badge.textContent = 'Status: UNLOCKED ';
               badge.style.background = '#FEF3C7';
               badge.style.color = '#92400E';
             }
@@ -626,7 +798,7 @@
                                 'SUCCESS: ' + res.message + '\n' +
                                 'Verified Model: ' + (res.printerModel || 'Toshiba MFP');
           if (badge && autoLock) {
-            badge.textContent = 'Status: LOCKED 🔒';
+            badge.textContent = 'Status: LOCKED ';
             badge.style.background = '#DCFCE7';
             badge.style.color = '#15803D';
           }
@@ -719,14 +891,17 @@
     });
   };
 
-  /* Actions Dropdown Handlers */
-  window.togglePrinterDropdown = function (event, printerId) {
+    /* =========================================================================
+     UNIVERSAL ACTION DROPDOWN CONTROLLER
+     Breaks out of internal scrollable containers (overflow-y: auto)
+     ========================================================================= */
+  window.toggleGenericDropdown = function (event, menuId, btnId, customWidth, customHeight) {
     if (event) {
       event.stopPropagation();
       event.preventDefault();
     }
-    var menu = document.getElementById('dropdown-menu-' + printerId);
-    var btn = document.getElementById('dropdown-btn-' + printerId);
+    var menu = document.getElementById(menuId);
+    var btn = document.getElementById(btnId);
     if (!menu || !btn) return;
 
     var isOpen = menu.classList.contains('show');
@@ -742,15 +917,13 @@
     }
 
     if (!isOpen) {
-      // Calculate coordinates in viewport coordinates to break out of all overflow boundaries
       var rect = btn.getBoundingClientRect();
-      var menuWidth = 210;
-      var menuEstimatedHeight = 280;
+      var menuWidth = customWidth || 210;
+      var menuEstimatedHeight = customHeight || 180;
 
       var spaceBelow = window.innerHeight - rect.bottom;
       var spaceAbove = rect.top;
 
-      // If near bottom of table or viewport, open UPWARDS
       if (spaceBelow < menuEstimatedHeight && spaceAbove > spaceBelow) {
         menu.style.top = Math.max(10, rect.top - menuEstimatedHeight) + 'px';
         menu.classList.add('dropup');
@@ -759,7 +932,6 @@
         menu.classList.remove('dropup');
       }
 
-      // Align right edge with button
       var leftPos = rect.right - menuWidth;
       if (leftPos < 10) leftPos = 10;
       menu.style.left = leftPos + 'px';
@@ -767,7 +939,6 @@
       menu.classList.add('show');
       btn.classList.add('active');
 
-      // Fine-tune top position with exact menu height
       setTimeout(function () {
         if (menu.classList.contains('dropup')) {
           var realH = menu.offsetHeight || menuEstimatedHeight;
@@ -775,6 +946,18 @@
         }
       }, 0);
     }
+  };
+
+  window.togglePrinterDropdown = function (event, printerId) {
+    window.toggleGenericDropdown(event, 'dropdown-menu-' + printerId, 'dropdown-btn-' + printerId, 230, 280);
+  };
+
+  window.toggleUserDropdown = function (event, userId) {
+    window.toggleGenericDropdown(event, 'user-dropdown-menu-' + userId, 'user-dropdown-btn-' + userId, 210, 150);
+  };
+
+  window.toggleJobDropdown = function (event, jobId) {
+    window.toggleGenericDropdown(event, 'job-dropdown-menu-' + jobId, 'job-dropdown-btn-' + jobId, 190, 120);
   };
 
   window.lockSinglePrinter = function (printerId, lock) {
@@ -981,70 +1164,296 @@
       });
   };
 
+    /* =========================================================================
+     DEPARTMENT CATEGORIZATION & USER VIEW CONTROLLERS
+     ========================================================================= */
+  state.userViewMode = 'grouped';
+  state.selectedUserDept = 'ALL';
+
+  window.setUserViewMode = function (mode) {
+    state.userViewMode = mode;
+    var btnGrp = document.getElementById('btnUserViewGroup');
+    var btnFlt = document.getElementById('btnUserViewFlat');
+    if (btnGrp && btnFlt) {
+      if (mode === 'grouped') {
+        btnGrp.classList.add('active');
+        btnFlt.classList.remove('active');
+      } else {
+        btnFlt.classList.add('active');
+        btnGrp.classList.remove('active');
+      }
+    }
+    renderUsers();
+  };
+
+  window.selectUserDeptPill = function (dept) {
+    state.selectedUserDept = dept;
+    renderUsers();
+  };
+
+  state.collapsedDepts = state.collapsedDepts || {};
+
+  window.toggleDeptGroupCollapse = function (headEl) {
+    var card = headEl.closest('.dept-group-card');
+    if (!card) return;
+    var deptKey = headEl.getAttribute('data-dept-key');
+    card.classList.toggle('is-collapsed');
+    if (deptKey) {
+      state.collapsedDepts[deptKey] = card.classList.contains('is-collapsed');
+    }
+  };
+
+  window.toggleAllDeptGroups = function (prefix, collapse) {
+    state.collapsedDepts = state.collapsedDepts || {};
+    var cards = document.querySelectorAll('.dept-group-card');
+    for (var i = 0; i < cards.length; i++) {
+      var head = cards[i].querySelector('.dept-group-head');
+      var deptKey = head ? head.getAttribute('data-dept-key') : null;
+      if (!prefix || (deptKey && deptKey.indexOf(prefix) === 0)) {
+        if (collapse) {
+          cards[i].classList.add('is-collapsed');
+          if (deptKey) state.collapsedDepts[deptKey] = true;
+        } else {
+          cards[i].classList.remove('is-collapsed');
+          if (deptKey) state.collapsedDepts[deptKey] = false;
+        }
+      }
+    }
+  };
+
+  function buildSingleUserRow(u, showDeptCol) {
+    var sourceBadge = '<span class="badge badge-source-manual">MANUAL</span>';
+    if (u.authSource === 'ACTIVE_DIRECTORY') {
+      sourceBadge = '<span class="badge badge-source-ad">AD / LDAP</span>';
+    } else if (u.authSource === 'WINDOWS_LOCAL') {
+      sourceBadge = '<span class="badge badge-source-win">WINDOWS LOCAL</span>';
+    }
+
+    var pinBadge = u.hasPin
+      ? '<span class="badge badge-pin-yes">CONFIGURED</span>'
+      : '<span class="badge badge-pin-no">NOT SET</span>';
+
+    var statusBadge = u.isActive
+      ? '<span class="badge badge-online">ACTIVE</span>'
+      : '<span class="badge badge-offline">DISABLED</span>';
+
+    var printPages = (u.printCount != null) ? u.printCount : 0;
+    var copyPages = (u.copyCount != null) ? u.copyCount : 0;
+    var totalPages = printPages + copyPages;
+
+    var cardHtml = '';
+    if (u.badgeId) cardHtml += '<span class="badge" style="background:#eff6ff; color:#1d4ed8; font-weight:700; margin-right:4px;">RFID: ' + esc(u.badgeId) + '</span>';
+    if (u.secondaryBadgeId) cardHtml += '<span class="badge" style="background:#f0fdf4; color:#15803d; font-weight:700;">NFC: ' + esc(u.secondaryBadgeId) + '</span>';
+    if (!cardHtml) cardHtml = '<span style="color:#94a3b8;">None</span>';
+
+    var extAttrs = [];
+    if (u.externalAttribute1) extAttrs.push('<span class="badge" style="background:#F1F5F9; color:#334155; border:1px solid #CBD5E1; font-size:10.5px; font-weight:600;">Ext1: ' + esc(u.externalAttribute1) + '</span>');
+    if (u.externalAttribute2) extAttrs.push('<span class="badge" style="background:#F1F5F9; color:#334155; border:1px solid #CBD5E1; font-size:10.5px; font-weight:600;">Ext2: ' + esc(u.externalAttribute2) + '</span>');
+    if (u.externalAttribute3) extAttrs.push('<span class="badge" style="background:#F1F5F9; color:#334155; border:1px solid #CBD5E1; font-size:10.5px; font-weight:600;">Ext3: ' + esc(u.externalAttribute3) + '</span>');
+    if (extAttrs.length > 0) {
+      cardHtml += '<div style="margin-top:4px;display:flex;gap:4px;flex-wrap:wrap;">' + extAttrs.join(' ') + '</div>';
+    }
+
+    var userDropdown =
+      '<div class="action-dropdown-wrap" id="user-action-wrap-' + u.id + '">' +
+        '<button type="button" class="btn-action-dropdown" onclick="window.toggleUserDropdown(event, ' + u.id + ')" id="user-dropdown-btn-' + u.id + '">' +
+          'Actions ' +
+        '</button>' +
+        '<div class="action-dropdown-menu" id="user-dropdown-menu-' + u.id + '">' +
+          '<button type="button" class="action-dropdown-item item-primary" onclick="window.viewUserDetails(' + u.id + ')">' +
+            '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="10" r="3"/><path d="M7 20.662V19a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v1.662"/></svg>' +
+            'View User Profile' +
+          '</button>' +
+          '<button type="button" class="action-dropdown-item" onclick="openResetPinModal(' + u.id + ', \'' + esc(u.username) + '\')">' +
+            '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>' +
+            'Configure Touch PIN' +
+          '</button>' +
+          '<button type="button" class="action-dropdown-item" onclick="openEditUserModal(' + u.id + ')">' +
+            '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>' +
+            'Edit User Details' +
+          '</button>' +
+          '<div class="action-dropdown-divider"></div>' +
+          '<button type="button" class="action-dropdown-item item-danger" onclick="deleteUser(' + u.id + ', \'' + esc(u.username) + '\')">' +
+            '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>' +
+            'Delete User' +
+          '</button>' +
+        '</div>' +
+      '</div>';
+
+    var deptCell = showDeptCol ? '<td>' + esc(u.department || 'Operations') + '</td>' : '';
+
+    return '<tr>' +
+      '<td><a href="javascript:void(0)" onclick="window.viewUserDetails(' + u.id + ')" style="font-weight:700; color:#1D4ED8; text-decoration:none;" title="Click to view full user profile">' + esc(u.username) + '</a></td>' +
+      '<td>' + esc(u.displayName) + '</td>' +
+      deptCell +
+      '<td>' + (u.costCenter ? ('<span class="badge" style="background:#fef3c7; color:#92400e; font-weight:700;">' + esc(u.costCenter) + '</span>') : '<span style="color:#94a3b8;">-</span>') + '</td>' +
+      '<td>' + sourceBadge + '</td>' +
+      '<td>' + pinBadge + '</td>' +
+      '<td><span class="badge" style="background:#EFF6FF; color:#1D4ED8; font-weight:700; border:1px solid #BFDBFE;">PRINT: ' + printPages + '</span></td>' +
+      '<td><span class="badge" style="background:#F0FDF4; color:#15803D; font-weight:700; border:1px solid #BBF7D0;">COPY: ' + copyPages + '</span></td>' +
+      '<td><strong style="color:var(--text-dark); font-size:13px;">' + totalPages + '</strong></td>' +
+      '<td>' + statusBadge + '</td>' +
+      '<td style="text-align:right; white-space:nowrap; position:relative;">' + userDropdown + '</td>' +
+    '</tr>';
+  }
+
   function renderUsers() {
-    var tbody = document.getElementById('usersTableBody');
-    if (!tbody) return;
-    tbody.innerHTML = '';
+    var container = document.getElementById('usersListContainer');
+    var fallbackTbody = document.getElementById('usersTableBody');
+    if (!container && !fallbackTbody) return;
 
     if (state.users.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="11" style="text-align:center;padding:30px;color:#6B7299;">No users registered yet.</td></tr>';
+      if (container) {
+        container.innerHTML = '<div class="card p-4 text-center text-muted">No users registered yet. Click "+ Add New User" to register one.</div>';
+      } else if (fallbackTbody) {
+        fallbackTbody.innerHTML = '<tr><td colspan="12" style="text-align:center;padding:30px;color:#6B7299;">No users registered yet.</td></tr>';
+      }
       return;
     }
 
+    // 1. Build Department Pills Strip
+    var deptCounts = {};
     for (var i = 0; i < state.users.length; i++) {
-      var u = state.users[i];
-      var tr = document.createElement('tr');
-
-      var sourceBadge = '<span class="badge badge-source-manual">MANUAL</span>';
-      if (u.authSource === 'ACTIVE_DIRECTORY') {
-        sourceBadge = '<span class="badge badge-source-ad">AD / LDAP</span>';
-      } else if (u.authSource === 'WINDOWS_LOCAL') {
-        sourceBadge = '<span class="badge badge-source-win">WINDOWS LOCAL</span>';
-      }
-
-      var pinBadge = u.hasPin
-        ? '<span class="badge badge-pin-yes">CONFIGURED</span>'
-        : '<span class="badge badge-pin-no">NOT SET</span>';
-
-      var statusBadge = u.isActive
-        ? '<span class="badge badge-online">ACTIVE</span>'
-        : '<span class="badge badge-offline">DISABLED</span>';
-
-      var printPages = (u.printCount != null) ? u.printCount : 0;
-      var copyPages = (u.copyCount != null) ? u.copyCount : 0;
-      var totalPages = printPages + copyPages;
-
-      var cardHtml = '';
-      if (u.badgeId) cardHtml += '<span class="badge" style="background:#eff6ff; color:#1d4ed8; font-weight:700; margin-right:4px;">RFID: ' + esc(u.badgeId) + '</span>';
-      if (u.secondaryBadgeId) cardHtml += '<span class="badge" style="background:#f0fdf4; color:#15803d; font-weight:700;">NFC: ' + esc(u.secondaryBadgeId) + '</span>';
-      if (!cardHtml) cardHtml = '<span style="color:#94a3b8;">None</span>';
-      var extAttrs = [];
-      if (u.externalAttribute1) extAttrs.push('<span class="badge" style="background:#F1F5F9; color:#334155; border:1px solid #CBD5E1; font-size:10.5px; font-weight:600;">Ext1: ' + esc(u.externalAttribute1) + '</span>');
-      if (u.externalAttribute2) extAttrs.push('<span class="badge" style="background:#F1F5F9; color:#334155; border:1px solid #CBD5E1; font-size:10.5px; font-weight:600;">Ext2: ' + esc(u.externalAttribute2) + '</span>');
-      if (u.externalAttribute3) extAttrs.push('<span class="badge" style="background:#F1F5F9; color:#334155; border:1px solid #CBD5E1; font-size:10.5px; font-weight:600;">Ext3: ' + esc(u.externalAttribute3) + '</span>');
-      if (extAttrs.length > 0) {
-        cardHtml += '<div style="margin-top:4px;display:flex;gap:4px;flex-wrap:wrap;">' + extAttrs.join(' ') + '</div>';
-      }
-
-      tr.innerHTML =
-        '<td><strong>' + esc(u.username) + '</strong></td>' +
-        '<td>' + esc(u.displayName) + '</td>' +
-        '<td>' + esc(u.department || 'Operations') + '</td>' +
-        '<td>' + sourceBadge + '</td>' +
-        '<td>' + pinBadge + '</td>' +
-        '<td>' + cardHtml + '</td>' +
-        '<td><span class="badge" style="background:#eff6ff; color:#1d4ed8; font-weight:700;">🖨️ ' + printPages + '</span></td>' +
-        '<td><span class="badge" style="background:#f0fdf4; color:#15803d; font-weight:700;">📄 ' + copyPages + '</span></td>' +
-        '<td><strong style="color:#0f172a; font-size:13px;">' + totalPages + '</strong></td>' +
-        '<td>' + statusBadge + '</td>' +
-        '<td style="text-align:right; white-space:nowrap;">' +
-          '<button class="btn btn-sm btn-action-pin" onclick="openResetPinModal(' + u.id + ', \'' + esc(u.username) + '\')">PIN</button>' +
-          '<button class="btn btn-sm btn-action-edit" onclick="openEditUserModal(' + u.id + ')">EDIT</button>' +
-          '<button class="btn btn-sm btn-action-delete" onclick="deleteUser(' + u.id + ', \'' + esc(u.username) + '\')">DELETE</button>' +
-        '</td>';
-
-      tbody.appendChild(tr);
+      var d = state.users[i].department || 'Operations';
+      deptCounts[d] = (deptCounts[d] || 0) + 1;
     }
+
+    var pillsContainer = document.getElementById('userDeptPillsContainer');
+    if (pillsContainer) {
+      var pillsHtml = '<button type="button" class="dept-pill-btn' + (state.selectedUserDept === 'ALL' ? ' active' : '') + '" onclick="window.selectUserDeptPill(\'ALL\')">All Departments <span class="pill-count">' + state.users.length + '</span></button>';
+      var depts = Object.keys(deptCounts).sort();
+      for (var k = 0; k < depts.length; k++) {
+        var dName = depts[k];
+        var count = deptCounts[dName];
+        pillsHtml += '<button type="button" class="dept-pill-btn' + (state.selectedUserDept === dName ? ' active' : '') + '" onclick="window.selectUserDeptPill(\'' + esc(dName) + '\')">' + esc(dName) + ' <span class="pill-count">' + count + '</span></button>';
+      }
+      pillsContainer.innerHTML = pillsHtml;
+    }
+
+    // 2. Filter users by search and selected department
+    var searchInput = document.getElementById('userSearchInput');
+    var searchVal = (searchInput ? searchInput.value : '').toLowerCase().trim();
+
+    var filtered = state.users.filter(function (u) {
+      var uDept = u.department || 'Operations';
+      if (state.selectedUserDept !== 'ALL' && uDept !== state.selectedUserDept) return false;
+      if (!searchVal) return true;
+      return (u.username || '').toLowerCase().indexOf(searchVal) !== -1 ||
+             (u.displayName || '').toLowerCase().indexOf(searchVal) !== -1 ||
+             (u.badgeId || '').toLowerCase().indexOf(searchVal) !== -1 ||
+             (u.secondaryBadgeId || '').toLowerCase().indexOf(searchVal) !== -1 ||
+             (u.costCenter || '').toLowerCase().indexOf(searchVal) !== -1 ||
+             uDept.toLowerCase().indexOf(searchVal) !== -1;
+    });
+
+    if (filtered.length === 0) {
+      if (container) {
+        container.innerHTML = '<div class="card p-4 text-center text-muted">No users matching "' + esc(searchVal || state.selectedUserDept) + '".</div>';
+      }
+      return;
+    }
+
+    // 3. Render Grouped vs Flat
+    if (!container || state.userViewMode === 'flat') {
+      var tableHtml =
+        '<div class="card">' +
+          '<div class="table-wrap">' +
+            '<table>' +
+              '<thead>' +
+                '<tr>' +
+                  '<th>Username</th>' +
+                  '<th>Display Name</th>' +
+                  '<th>Department</th>' +
+                  '<th>Cost Center</th>' +
+                  '<th>Security Role</th>' +
+                  '<th>Touch PIN</th>' +
+                  '<th>Print Pages</th>' +
+                  '<th>Copy Pages</th>' +
+                  '<th>Total Pages</th>' +
+                  '<th>Account Status</th>' +
+                  '<th style="text-align:right;">Actions</th>' +
+                '</tr>' +
+              '</thead>' +
+              '<tbody>' +
+                filtered.map(function (u) { return buildSingleUserRow(u, true); }).join('') +
+              '</tbody>' +
+            '</table>' +
+          '</div>' +
+        '</div>';
+      if (container) container.innerHTML = tableHtml;
+      return;
+    }
+
+    // Grouped by Department Mode
+    var grouped = {};
+    for (var j = 0; j < filtered.length; j++) {
+      var usr = filtered[j];
+      var usrDept = usr.department || 'Operations';
+      if (!grouped[usrDept]) grouped[usrDept] = [];
+      grouped[usrDept].push(usr);
+    }
+
+    var groupKeys = Object.keys(grouped).sort();
+    var outHtml = '';
+
+    for (var g = 0; g < groupKeys.length; g++) {
+      var grpDept = groupKeys[g];
+      var list = grouped[grpDept];
+      
+      var grpPrint = 0, grpCopy = 0;
+      var ccs = {};
+      for (var uIdx = 0; uIdx < list.length; uIdx++) {
+        grpPrint += (list[uIdx].printCount || 0);
+        grpCopy += (list[uIdx].copyCount || 0);
+        if (list[uIdx].costCenter) ccs[list[uIdx].costCenter] = true;
+      }
+      var grpTotal = grpPrint + grpCopy;
+      var ccList = Object.keys(ccs).join(', ') || 'Unassigned';
+
+      var isUserCollapsed = (state.collapsedDepts && state.collapsedDepts['user_' + grpDept]) ? ' is-collapsed' : '';
+
+      outHtml +=
+        '<div class="card dept-group-card shadow-sm' + isUserCollapsed + '" id="user-dept-card-' + esc(grpDept).replace(/[^a-zA-Z0-9]/g, '_') + '">' +
+          '<div class="dept-group-head" onclick="window.toggleDeptGroupCollapse(this)" data-dept-key="user_' + esc(grpDept) + '" title="Click to collapse / expand ' + esc(grpDept) + ' department users">' +
+            '<div class="d-flex align-items-center gap-2 flex-wrap">' +
+              '<span class="dept-collapse-toggle"><svg class="dept-collapse-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg></span>' +
+              '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--primary); flex-shrink:0;"><rect x="2" y="2" width="20" height="8" rx="2" ry="2"/><rect x="2" y="14" width="20" height="8" rx="2" ry="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/></svg>' +
+              '<strong style="font-size:13.5px; color:var(--text-dark);">' + esc(grpDept) + ' Department</strong>' +
+              '<span class="badge bg-primary-subtle text-primary border border-primary-subtle ms-2">' + list.length + ' ' + (list.length === 1 ? 'User' : 'Users') + '</span>' +
+              '<span class="badge bg-light text-secondary border">Cost Center: ' + esc(ccList) + '</span>' +
+            '</div>' +
+            '<div class="d-flex align-items-center gap-3">' +
+              '<div class="text-secondary small fw-semibold">' +
+                'Volume: <span class="text-primary fw-bold">' + grpPrint + ' Print</span> | <span class="text-success fw-bold">' + grpCopy + ' Copy</span> &bull; Total: <strong>' + grpTotal + ' Pages</strong>' +
+              '</div>' +
+              '<span class="text-muted small" style="font-size:11px; user-select:none;">(click to collapse)</span>' +
+            '</div>' +
+          '</div>' +
+          '<div class="table-wrap" style="max-height:360px;">' +
+            '<table>' +
+              '<thead>' +
+                '<tr>' +
+                  '<th>Username</th>' +
+                  '<th>Display Name</th>' +
+                  '<th>Cost Center</th>' +
+                  '<th>Security Role</th>' +
+                  '<th>Touch PIN</th>' +
+                  '<th>Print Pages</th>' +
+                  '<th>Copy Pages</th>' +
+                  '<th>Total Pages</th>' +
+                  '<th>Account Status</th>' +
+                  '<th style="text-align:right;">Actions</th>' +
+                '</tr>' +
+              '</thead>' +
+              '<tbody>' +
+                list.map(function (u) { return buildSingleUserRow(u, false); }).join('') +
+              '</tbody>' +
+            '</table>' +
+          '</div>' +
+        '</div>';
+    }
+
+    container.innerHTML = outHtml;
   }
 
   window.openAddUserModal = function () {
@@ -1054,6 +1463,7 @@
     document.getElementById('userUsername').disabled = false;
     document.getElementById('userDisplayName').value = '';
     document.getElementById('userDepartment').value = 'Operations';
+    if (document.getElementById('userCostCenter')) document.getElementById('userCostCenter').value = '';
     document.getElementById('userRole').value = 'USER';
     document.getElementById('userPin').value = '';
     document.getElementById('userPin').required = false;
@@ -1089,6 +1499,7 @@
     document.getElementById('userUsername').disabled = true; // Username is immutable
     document.getElementById('userDisplayName').value = u.displayName;
     document.getElementById('userDepartment').value = u.department || '';
+    if (document.getElementById('userCostCenter')) document.getElementById('userCostCenter').value = u.costCenter || u.externalAttribute3 || '';
     document.getElementById('userRole').value = u.role || 'USER';
     document.getElementById('userPin').value = '';
     document.getElementById('userPinHint').textContent = 'Leave empty to keep existing PIN unchanged.';
@@ -1123,6 +1534,7 @@
       username: document.getElementById('userUsername').value.trim(),
       displayName: document.getElementById('userDisplayName').value.trim(),
       department: document.getElementById('userDepartment').value.trim(),
+      costCenter: (document.getElementById('userCostCenter') && document.getElementById('userCostCenter').value.trim()) ? document.getElementById('userCostCenter').value.trim() : null,
       role: document.getElementById('userRole').value,
       pin: document.getElementById('userPin').value.trim() || null,
       password: (passElem && passElem.value.trim()) ? passElem.value.trim() : null,
@@ -1500,10 +1912,25 @@
 
       var actions = '';
       if (job.status === 'HELD') {
-        actions = '<button class="btn btn-sm btn-action-edit" onclick="releaseJobAdmin(\'' + job.id + '\')">RELEASE</button>' +
-                  '<button class="btn btn-sm btn-action-delete" onclick="cancelJobAdmin(\'' + job.id + '\')">CANCEL</button>';
+        actions =
+          '<div class="action-dropdown-wrap" id="job-action-wrap-' + esc(job.id) + '">' +
+            '<button type="button" class="btn-action-dropdown" onclick="window.toggleJobDropdown(event, \'' + esc(job.id) + '\')" id="job-dropdown-btn-' + esc(job.id) + '">' +
+              'Actions <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>' +
+            '</button>' +
+            '<div class="action-dropdown-menu" id="job-dropdown-menu-' + esc(job.id) + '">' +
+              '<button type="button" class="action-dropdown-item item-primary" onclick="releaseJobAdmin(\'' + esc(job.id) + '\')">' +
+                '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>' +
+                'Release Job Now' +
+              '</button>' +
+              '<div class="action-dropdown-divider"></div>' +
+              '<button type="button" class="action-dropdown-item item-danger" onclick="cancelJobAdmin(\'' + esc(job.id) + '\')">' +
+                '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>' +
+                'Cancel &amp; Delete Job' +
+              '</button>' +
+            '</div>' +
+          '</div>';
       } else {
-        actions = '<span style="color:#94a3b8; font-size:11px;">Completed</span>';
+        actions = '<span class="badge bg-light text-muted border">Completed</span>';
       }
 
       tr.innerHTML =
@@ -1523,7 +1950,7 @@
   };
 
   function renderDashboardJobs() {
-    var tbody = document.getElementById('dashboardJobsTbody');
+    var tbody = document.getElementById('dashboardJobsTbody') || document.getElementById('dashboardJobbody');
     if (!tbody) return;
     tbody.innerHTML = '';
 
@@ -1699,8 +2126,8 @@
   window.pollFleetCopyJobs = function () {
     var btnPrinters = document.getElementById('btnPollCopyFleet');
     var btnLogs = document.getElementById('btnPollCopyFleetLogs');
-    if (btnPrinters) { btnPrinters.disabled = true; btnPrinters.textContent = '⏳ Polling MFPs...'; }
-    if (btnLogs) { btnLogs.disabled = true; btnLogs.textContent = '⏳ Polling MFPs...'; }
+    if (btnPrinters) { btnPrinters.disabled = true; btnPrinters.textContent = ' Polling MFPs...'; }
+    if (btnLogs) { btnLogs.disabled = true; btnLogs.textContent = ' Polling MFPs...'; }
 
     fetch('/api/admin/printers/poll-copy-jobs', {
       method: 'POST',
@@ -1724,8 +2151,8 @@
         showToast('Fleet poll failed: ' + err.message, 'error');
       })
       .finally(function () {
-        if (btnPrinters) { btnPrinters.disabled = false; btnPrinters.textContent = '📑 Poll Walk-Up Copy Jobs'; }
-        if (btnLogs) { btnLogs.disabled = false; btnLogs.textContent = '🔄 Poll MFPs Now'; }
+        if (btnPrinters) { btnPrinters.disabled = false; btnPrinters.textContent = ' Poll Walk-Up Copy Jobs'; }
+        if (btnLogs) { btnLogs.disabled = false; btnLogs.textContent = ' Poll MFPs Now'; }
       });
   };
 
@@ -1790,9 +2217,9 @@
 
     var cfg = {
       title: 'Information',
-      headIcon: 'ℹ️',
+      headIcon: '',
       badgeClass: 'notify-badge-info',
-      badgeIcon: 'ℹ',
+      badgeIcon: '',
       borderColor: '#2563EB',
       btnClass: 'btn btn-primary',
       btnBg: '#2563EB',
@@ -1801,25 +2228,25 @@
 
     if (type === 'success') {
       cfg.title = 'Success';
-      cfg.headIcon = '✓';
+      cfg.headIcon = '[OK]';
       cfg.badgeClass = 'notify-badge-success';
-      cfg.badgeIcon = '✓';
+      cfg.badgeIcon = '[OK]';
       cfg.borderColor = '#10B981';
       cfg.btnClass = 'btn btn-primary';
       cfg.btnBg = '#059669';
       cfg.btnBorder = '#047857';
     } else if (type === 'error' || type === 'danger') {
       cfg.title = 'Error';
-      cfg.headIcon = '✕';
+      cfg.headIcon = '[FAIL]';
       cfg.badgeClass = 'notify-badge-error';
-      cfg.badgeIcon = '✕';
+      cfg.badgeIcon = '[FAIL]';
       cfg.borderColor = '#EF4444';
       cfg.btnClass = 'btn btn-danger';
       cfg.btnBg = '#DC2626';
       cfg.btnBorder = '#B91C1C';
     } else if (type === 'warning' || type === 'warn') {
       cfg.title = 'Warning';
-      cfg.headIcon = '⚠';
+      cfg.headIcon = '';
       cfg.badgeClass = 'notify-badge-warning';
       cfg.badgeIcon = '!';
       cfg.borderColor = '#F59E0B';
@@ -2017,14 +2444,14 @@
 
             var badges = '';
             if (q.isDefault) {
-              badges += '<span class="badge" style="background:#DCFCE7; color:#166534; font-size:10px; margin-left:6px;">⭐ Primary Default</span>';
+              badges += '<span class="badge" style="background:#DCFCE7; color:#166534; font-size:10px; margin-left:6px;"> Primary Default</span>';
             }
             var count = q.physicalPrinterCount !== undefined ? q.physicalPrinterCount : 0;
 
             tab.innerHTML = '<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">' +
               '<strong style="color:' + (isSel ? '#1D4ED8' : '#0F172A') + '; font-size:13px;">' + q.name + '</strong>' +
               '</div>' +
-              '<div style="font-size:11px; color:#475569; margin-bottom:4px;">Code: <code style="font-size:11px; color:#1E40AF; font-weight:700;">' + q.queueCode + '</code> &nbsp;|&nbsp; 🖨️ <strong>' + count + '</strong> MFPs</div>' +
+              '<div style="font-size:11px; color:#475569; margin-bottom:4px;">Code: <code style="font-size:11px; color:#1E40AF; font-weight:700;">' + q.queueCode + '</code> &nbsp;|&nbsp;  <strong>' + count + '</strong> MFPs</div>' +
               '<div style="font-size:11px; color:#64748B; font-family:monospace; word-break:break-all;">\\\\' + (cfg.serverHost || 'SERVER') + '\\' + (q.shareName || q.windowsPrinterName) + '</div>' +
               badges;
 
@@ -2081,26 +2508,26 @@
       }
 
       if (badge) {
-        badge.textContent = cfg.isShared ? '🟢 Shared on Network' : '🟡 Local Queue';
+        badge.textContent = cfg.isShared ? ' Shared on Network' : ' Local Queue';
         badge.style.background = cfg.isShared ? '#DCFCE7' : '#FEF3C7';
         badge.style.color = cfg.isShared ? '#166534' : '#92400E';
       }
 
       if (liveBtn) {
         if (cfg.livePrintingEnabled) {
-          liveBtn.innerHTML = '🟢 Hardware Printing: LIVE (Port 9100)';
+          liveBtn.innerHTML = ' Hardware Printing: LIVE (Port 9100)';
           liveBtn.style.background = '#DCFCE7';
           liveBtn.style.color = '#166534';
           liveBtn.style.borderColor = '#86EFAC';
         } else {
-          liveBtn.innerHTML = '🟡 Simulation Guard Mode (No Paper)';
+          liveBtn.innerHTML = ' Simulation Guard Mode (No Paper)';
           liveBtn.style.background = '#FEF3C7';
           liveBtn.style.color = '#92400E';
           liveBtn.style.borderColor = '#FCD34D';
         }
       }
       if (liveBtnTop) {
-        liveBtnTop.innerHTML = cfg.livePrintingEnabled ? '🟢 Mode: Hardware Live' : '🟡 Mode: Simulation Guard';
+        liveBtnTop.innerHTML = cfg.livePrintingEnabled ? ' Mode: Hardware Live' : ' Mode: Simulation Guard';
       }
       if (statMode) {
         statMode.textContent = cfg.livePrintingEnabled ? 'Live (Port 9100)' : 'Simulation Guard';
@@ -2207,7 +2634,7 @@
     if (filtered.length === 0) {
       tbody.innerHTML = '<tr><td colspan="9" style="text-align:center; padding:32px; color:#64748B;">' +
         (allPhysical.length === 0
-          ? 'No physical printers registered in fleet. Click "+ Register New Physical MFP" or "⚡ Seed 20 Test MFPs" to add devices!'
+          ? 'No physical printers registered in fleet. Click "+ Register New Physical MFP" or " Seed 20 Test MFPs" to add devices!'
           : 'No physical printers matching current filters / search query.') +
         '</td></tr>';
 
@@ -2247,15 +2674,15 @@
       var isChecked = state.vqCheckedPrinterIds.has(printer.id);
 
       var poolBadge = inPool
-        ? '<span class="badge" style="background:#DCFCE7; color:#166534; font-weight:700;">🟢 In Pool</span>'
-        : '<span class="badge" style="background:#F1F5F9; color:#64748B;">⚪ Not in Pool</span>';
+        ? '<span class="badge" style="background:#DCFCE7; color:#166534; font-weight:700;"> In Pool</span>'
+        : '<span class="badge" style="background:#F1F5F9; color:#64748B;"> Not in Pool</span>';
 
       var actionBtn = inPool
         ? '<button type="button" class="btn btn-secondary btn-sm" onclick="window.togglePrinterPoolMembership(' + printer.id + ')" style="color:#DC2626;" title="Remove this MFP from virtual pool">Remove from Pool</button>'
         : '<button type="button" class="btn btn-primary btn-sm" onclick="window.togglePrinterPoolMembership(' + printer.id + ')" title="Link this MFP to virtual pool">+ Add to Pool</button>';
 
       var defaultBadge = printer.defaultHoldQueue
-        ? ' <span class="badge" style="background:#EFF6FF; color:#1D4ED8; font-size:10px;">⭐ Default MFP</span>'
+        ? ' <span class="badge" style="background:#EFF6FF; color:#1D4ED8; font-size:10px;"> Default MFP</span>'
         : '';
 
       var isOldModel = (printer.deviceGeneration === 'TOSHIBA_OLD' || (printer.model && (printer.model.indexOf('306') !== -1 || printer.model.indexOf('256') !== -1 || printer.model.indexOf('356') !== -1 || printer.model.indexOf('456') !== -1)));
@@ -2274,7 +2701,7 @@
         '<td style="color:#475569;">' + (printer.model || (isOldModel ? 'Toshiba e-STUDIO 306SE' : 'Toshiba e-STUDIO')) + genTag + '</td>' +
         '<td>' + poolBadge + '</td>' +
         '<td style="text-align:center;">' + actionBtn + '</td>' +
-        '<td><span style="color:#059669; font-weight:600; font-size:11px;">● Online</span></td>' +
+        '<td><span style="color:#059669; font-weight:600; font-size:11px;"> Online</span></td>' +
       '</tr>';
     }
 
@@ -2867,6 +3294,63 @@
       });
   };
 
+  function loadLdapDeptSettings() {
+    fetch('/api/admin/directory/config')
+      .then(function (res) { return res.json(); })
+      .then(function (cfg) {
+        state.directoryConfig = cfg;
+        var elDomainBadge = document.getElementById('settingsLdapDomainBadge');
+        var elStatusBadge = document.getElementById('settingsLdapStatusBadge');
+        var elUserCountBadge = document.getElementById('settingsLdapUserCountBadge');
+        var elDeptBadge = document.getElementById('settingsLdapDeptBadge');
+        var statusEl = document.getElementById('settingLdapSyncStatus');
+
+        if (elDomainBadge) elDomainBadge.textContent = cfg.domainName || 'qoa.local';
+        if (elStatusBadge) {
+          elStatusBadge.innerHTML = cfg.isEnabled !== false ? '<span class="badge badge-online">Connected</span>' : '<span class="badge badge-offline">Disabled</span>';
+        }
+        if (elUserCountBadge) {
+          elUserCountBadge.textContent = (cfg.syncedUserCount || 6) + ' Users';
+        }
+        if (elDeptBadge) {
+          elDeptBadge.innerHTML = '<code>' + esc(cfg.departmentAttribute || 'department') + '</code>';
+        }
+        if (statusEl) {
+          statusEl.innerHTML = 'LDAP Host: <strong>' + esc(cfg.ldapUrl || 'ldap://127.0.0.1:389') + '</strong> &bull; Card Attribute: <code>' + esc(cfg.cardIdAttribute || 'employeeNumber') + '</code> &bull; Base DN: <code>' + esc(cfg.baseDn || 'DC=qoa,DC=local') + '</code>';
+        }
+      })
+      .catch(function (e) {
+        console.warn('Could not load LDAP settings for settings page:', e);
+      });
+  }
+
+  window.handleSaveLdapDeptSettings = function (event) {
+    if (event) event.preventDefault();
+  };
+
+  window.triggerSettingsAdSync = function () {
+    var btn = document.getElementById('btnSettingsSyncAd');
+    if (btn) { btn.disabled = true; btn.textContent = 'Syncing...'; }
+    fetch('/api/admin/directory/sync-ad', { method: 'POST' })
+      .then(function (res) { return res.json(); })
+      .then(function (data) {
+        if (btn) {
+          btn.disabled = false;
+          btn.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg> <span>Sync AD Users Now</span>';
+        }
+        showToast('Active Directory Sync complete! ' + (data.importedCount || 0) + ' users synced with department mappings.', 'success');
+        loadLdapDeptSettings();
+        if (typeof loadUsers === 'function') loadUsers();
+      })
+      .catch(function (err) {
+        if (btn) {
+          btn.disabled = false;
+          btn.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg> <span>Sync AD Users Now</span>';
+        }
+        showToast('AD sync error: ' + err.message, 'error');
+      });
+  };
+
   function updateLogoPreviewUI(logoData, filename) {
     var previewImg = document.getElementById('settingsLogoPreviewImg');
     var defaultMark = document.getElementById('settingsLogoDefaultMark');
@@ -3182,16 +3666,16 @@
         if (btn) btn.disabled = false;
         if (data.success) {
           showToast('LDAP & Card Lock pushed to ' + ip + ' successfully!', 'success');
-          if (logBox) logBox.textContent = '✅ SUCCESS: ' + (data.message || 'Configured for LDAP & Card Lockdown.') + '\nConfigured At: ' + (data.configuredAt || new Date().toISOString());
+          if (logBox) logBox.textContent = ' SUCCESS: ' + (data.message || 'Configured for LDAP & Card Lockdown.') + '\nConfigured At: ' + (data.configuredAt || new Date().toISOString());
         } else {
           showToast('Push failed: ' + (data.message || 'Error communicating with MFP'), 'error');
-          if (logBox) logBox.textContent = '❌ FAILED: ' + (data.message || 'Unknown error');
+          if (logBox) logBox.textContent = ' FAILED: ' + (data.message || 'Unknown error');
         }
       })
       .catch(function (err) {
         if (btn) btn.disabled = false;
         showToast('Network error: ' + err.message, 'error');
-        if (logBox) logBox.textContent = '❌ ERROR: ' + err.message;
+        if (logBox) logBox.textContent = ' ERROR: ' + err.message;
       });
   };
 
@@ -3212,14 +3696,14 @@
         .then(function (res) { return res.json(); })
         .then(function (data) {
           if (data.success) {
-            showToast('✅ ' + (data.message || 'LDAP & Card Lock configured successfully!'), 'success');
+            showToast(' ' + (data.message || 'LDAP & Card Lock configured successfully!'), 'success');
             loadPrinters();
           } else {
-            showToast('❌ Push failed: ' + (data.message || 'Unknown error'), 'error');
+            showToast(' Push failed: ' + (data.message || 'Unknown error'), 'error');
           }
         })
         .catch(function (err) {
-          showToast('❌ Network error: ' + err.message, 'error');
+          showToast(' Network error: ' + err.message, 'error');
         });
     });
   };
@@ -3241,18 +3725,18 @@
       .then(function (data) {
         if (btn) btn.disabled = false;
         if (data.success) {
-          showToast('✅ LDAP & Card Lock pushed to ' + ip + ' successfully!', 'success');
-          if (logBox) logBox.textContent = '✅ SUCCESS: ' + (data.message || 'Configured for LDAP & Card Lockdown.') + '\nConfigured At: ' + (data.configuredAt || new Date().toISOString());
+          showToast(' LDAP & Card Lock pushed to ' + ip + ' successfully!', 'success');
+          if (logBox) logBox.textContent = ' SUCCESS: ' + (data.message || 'Configured for LDAP & Card Lockdown.') + '\nConfigured At: ' + (data.configuredAt || new Date().toISOString());
           loadPrinters();
         } else {
-          showToast('❌ Push failed: ' + (data.message || 'Error communicating with MFP'), 'error');
-          if (logBox) logBox.textContent = '❌ FAILED: ' + (data.message || 'Unknown error');
+          showToast(' Push failed: ' + (data.message || 'Error communicating with MFP'), 'error');
+          if (logBox) logBox.textContent = ' FAILED: ' + (data.message || 'Unknown error');
         }
       })
       .catch(function (err) {
         if (btn) btn.disabled = false;
-        showToast('❌ Network error: ' + err.message, 'error');
-        if (logBox) logBox.textContent = '❌ ERROR: ' + err.message;
+        showToast(' Network error: ' + err.message, 'error');
+        if (logBox) logBox.textContent = ' ERROR: ' + err.message;
       });
   };
 
@@ -3267,7 +3751,7 @@
       if (!isOld) {
         var opt = document.createElement('option');
         opt.value = p.id;
-        opt.textContent = p.name + ' (' + p.ipAddress + ')' + (p.functionsLocked ? ' [🔒 Locked]' : '');
+        opt.textContent = p.name + ' (' + p.ipAddress + ')' + (p.functionsLocked ? ' [ Locked]' : '');
         sel.appendChild(opt);
       }
     });
@@ -3297,23 +3781,23 @@
       .then(function (data) {
         if (btn) btn.disabled = false;
         if (data.success) {
-          showToast('✅ ' + (data.message || 'LDAP & Card Lock configured!'), 'success');
+          showToast(' ' + (data.message || 'LDAP & Card Lock configured!'), 'success');
           if (logBox) {
-            logBox.textContent = '[' + new Date().toLocaleTimeString() + '] ✅ SUCCESS on ' + pName + ':\n' +
+            logBox.textContent = '[' + new Date().toLocaleTimeString() + ']  SUCCESS on ' + pName + ':\n' +
               (data.message || 'Configured for LDAP & Card Lockdown.') + '\nConfigured At: ' + (data.configuredAt || new Date().toISOString());
           }
           loadPrinters();
         } else {
-          showToast('❌ Push failed: ' + (data.message || 'Unknown error'), 'error');
+          showToast(' Push failed: ' + (data.message || 'Unknown error'), 'error');
           if (logBox) {
-            logBox.textContent = '[' + new Date().toLocaleTimeString() + '] ❌ FAILED on ' + pName + ':\n' + (data.message || 'Unknown error');
+            logBox.textContent = '[' + new Date().toLocaleTimeString() + ']  FAILED on ' + pName + ':\n' + (data.message || 'Unknown error');
           }
         }
       })
       .catch(function (err) {
         if (btn) btn.disabled = false;
-        showToast('❌ Network error: ' + err.message, 'error');
-        if (logBox) logBox.textContent = '[' + new Date().toLocaleTimeString() + '] ❌ ERROR: ' + err.message;
+        showToast(' Network error: ' + err.message, 'error');
+        if (logBox) logBox.textContent = '[' + new Date().toLocaleTimeString() + ']  ERROR: ' + err.message;
       });
   };
 
@@ -3603,5 +4087,958 @@
         if (logBox) logBox.textContent = '[' + new Date().toLocaleTimeString() + '] Error: ' + err.message;
         showToast('Scan error: ' + err.message, 'error');
       });
+  };
+
+
+  
+  
+  /* =========================================================================
+     PAGE: ENTERPRISE REPORTS & ADVANCED CUSTOM REPORT SYSTEM
+     ========================================================================= */
+
+  state.reports = {
+    activeTab: 'departments', // 'departments' | 'costCenters' | 'printers' | 'users' | 'transactions'
+    dateRange: 'ALL',
+    startDate: '',
+    endDate: '',
+    filterDept: '',
+    filterCostCenter: '',
+    filterPrinter: '',
+    filterSearch: '',
+    summary: null,
+    departments: [],
+    costCenters: [],
+    printers: [],
+    users: [],
+    transactions: []
+  };
+
+  window.loadReports = function () {
+    var tbody = document.getElementById('reportsTableBody');
+    if (tbody) {
+      tbody.innerHTML = '<tr><td colspan="11" class="text-center py-4 text-muted">Loading report data...</td></tr>';
+    }
+
+    // 1. Fetch Summary KPI
+    fetch('/api/admin/reports/summary')
+      .then(function (r) { return r.json(); })
+      .then(function (summary) {
+        state.reports.summary = summary;
+        var totalVol = summary.totalVolumePages || 0;
+        var printPages = summary.totalPrintPages || 0;
+        var copyPages = summary.totalCopyPages || 0;
+        var totalCost = (summary.totalEstimatedCostLkr != null) ? summary.totalEstimatedCostLkr : (summary.totalCost != null ? summary.totalCost : (totalVol * 3.00));
+        var depts = summary.totalDepartments || 0;
+        var topDept = summary.topDepartment || 'None';
+        var topDeptPages = summary.topDepartmentPages || 0;
+        var ccs = summary.totalCostCenters || 0;
+        var topCC = summary.topCostCenter || 'None';
+        var topCCPages = summary.topCostCenterPages || 0;
+        var printers = summary.totalPrinters || 0;
+        var topPrn = summary.topPrinter || 'None';
+        var topPrnPages = summary.topPrinterPages || 0;
+
+        var el;
+        el = document.getElementById('repStatTotalVolume'); if (el) el.textContent = totalVol.toLocaleString();
+        el = document.getElementById('repStatPrintPages'); if (el) el.textContent = printPages.toLocaleString();
+        el = document.getElementById('repStatCopyPages'); if (el) el.textContent = copyPages.toLocaleString();
+        el = document.getElementById('repStatTotalCost'); if (el) el.textContent = 'LKR ' + totalCost.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2});
+        el = document.getElementById('repStatPageRate'); if (el) el.textContent = 'LKR 3.00';
+        el = document.getElementById('repStatTotalDepts'); if (el) el.textContent = depts;
+        el = document.getElementById('repStatTopDept'); if (el) el.textContent = topDept + (topDeptPages > 0 ? ' (' + topDeptPages + ' p.)' : '');
+        el = document.getElementById('repStatTotalCC'); if (el) el.textContent = ccs;
+        el = document.getElementById('repStatTopCC'); if (el) el.textContent = topCC + (topCCPages > 0 ? ' (' + topCCPages + ' p.)' : '');
+        el = document.getElementById('repStatTotalPrinters'); if (el) el.textContent = printers;
+        el = document.getElementById('repStatTopPrinter'); if (el) el.textContent = topPrn + (topPrnPages > 0 ? ' (' + topPrnPages + ' p.)' : '');
+      })
+      .catch(function (e) {
+        console.error('Error fetching report summary:', e);
+      });
+
+    // 2. Build query parameters for concurrent requests
+    var qParams = '?';
+    if (state.reports.filterDept) qParams += 'department=' + encodeURIComponent(state.reports.filterDept) + '&';
+    if (state.reports.filterCostCenter) qParams += 'costCenter=' + encodeURIComponent(state.reports.filterCostCenter) + '&';
+    if (state.reports.filterPrinter) qParams += 'printer=' + encodeURIComponent(state.reports.filterPrinter) + '&';
+    if (state.reports.startDate) qParams += 'startDate=' + encodeURIComponent(state.reports.startDate) + '&';
+    if (state.reports.endDate) qParams += 'endDate=' + encodeURIComponent(state.reports.endDate) + '&';
+    if (state.reports.filterSearch) qParams += 'search=' + encodeURIComponent(state.reports.filterSearch) + '&';
+
+    // 3. Fetch Departments, Cost Centers, Printers, Users, and Transactions concurrently
+    Promise.all([
+      fetch('/api/admin/reports/departments').then(function (r) { return r.json(); }),
+      fetch('/api/admin/reports/cost-centers').then(function (r) { return r.json(); }),
+      fetch('/api/admin/reports/printers').then(function (r) { return r.json(); }),
+      fetch('/api/admin/reports/users').then(function (r) { return r.json(); }),
+      fetch('/api/admin/reports/transactions' + qParams).then(function (r) { return r.json(); })
+    ]).then(function (results) {
+      state.reports.departments = Array.isArray(results[0]) ? results[0] : [results[0]];
+      state.reports.costCenters = Array.isArray(results[1]) ? results[1] : [results[1]];
+      state.reports.printers = Array.isArray(results[2]) ? results[2] : [results[2]];
+      state.reports.users = Array.isArray(results[3]) ? results[3] : [results[3]];
+      state.reports.transactions = Array.isArray(results[4]) ? results[4] : [results[4]];
+
+      populateReportDropdowns();
+      window.renderReports();
+    }).catch(function (err) {
+      if (tbody) {
+        tbody.innerHTML = '<tr><td colspan="11" class="text-center py-4 text-danger">Failed to load report data: ' + esc(err.message) + '</td></tr>';
+      }
+    });
+  };
+
+  function populateReportDropdowns() {
+    var deptSelect = document.getElementById('reportDeptFilter');
+    var ccSelect = document.getElementById('reportCCFilter');
+    var prnSelect = document.getElementById('reportPrinterFilter');
+    var crDept = document.getElementById('crDeptFilter');
+    var crCC = document.getElementById('crCCFilter');
+
+    // 1. Departments
+    var deptSet = {};
+    state.reports.departments.forEach(function (d) { if (d && d.department) deptSet[d.department] = true; });
+    state.reports.users.forEach(function (u) { if (u && u.department) deptSet[u.department] = true; });
+    state.reports.printers.forEach(function (p) { if (p && p.department) deptSet[p.department] = true; });
+
+    var currentDept = deptSelect ? deptSelect.value : '';
+    var deptOpts = '<option value="">All Departments</option>';
+    Object.keys(deptSet).sort().forEach(function (dept) {
+      deptOpts += '<option value="' + esc(dept) + '"' + (dept === currentDept ? ' selected' : '') + '>' + esc(dept) + '</option>';
+    });
+    if (deptSelect) deptSelect.innerHTML = deptOpts;
+    if (crDept) crDept.innerHTML = deptOpts;
+
+    // 2. Cost Centers
+    var ccSet = {};
+    state.reports.costCenters.forEach(function (c) { if (c && c.costCenter) ccSet[c.costCenter] = true; });
+    state.reports.users.forEach(function (u) { if (u && u.costCenter) ccSet[u.costCenter] = true; });
+
+    var currentCC = ccSelect ? ccSelect.value : '';
+    var ccOpts = '<option value="">All Cost Centers</option>';
+    Object.keys(ccSet).sort().forEach(function (cc) {
+      ccOpts += '<option value="' + esc(cc) + '"' + (cc === currentCC ? ' selected' : '') + '>' + esc(cc) + '</option>';
+    });
+    if (ccSelect) ccSelect.innerHTML = ccOpts;
+    if (crCC) crCC.innerHTML = ccOpts;
+
+    // 3. Printers
+    if (prnSelect) {
+      var currentPrn = prnSelect.value;
+      var prnOpts = '<option value="">All Printers</option>';
+      state.reports.printers.forEach(function (p) {
+        if (p && p.name) {
+          prnOpts += '<option value="' + esc(p.name) + '"' + (p.name === currentPrn ? ' selected' : '') + '>' + esc(p.name) + ' (' + esc(p.ipAddress) + ')</option>';
+        }
+      });
+      prnSelect.innerHTML = prnOpts;
+    }
+  }
+
+  window.switchReportTab = function (tab) {
+    state.reports.activeTab = tab;
+
+    var tabs = ['departments', 'costCenters', 'printers', 'users', 'transactions'];
+    var btnMap = {
+      departments: 'btnRepTabDepts',
+      costCenters: 'btnRepTabCC',
+      printers: 'btnRepTabPrinters',
+      users: 'btnRepTabUsers',
+      transactions: 'btnRepTabTransactions'
+    };
+
+    tabs.forEach(function (t) {
+      var btn = document.getElementById(btnMap[t]);
+      if (btn) {
+        if (t === tab) {
+          btn.className = 'nav-link active btn-sm py-1 px-3 fw-bold';
+        } else {
+          btn.className = 'nav-link btn-sm py-1 px-3 fw-semibold text-secondary';
+        }
+      }
+    });
+
+    window.renderReports();
+  };
+
+  window.setReportDateRange = function (range) {
+    state.reports.dateRange = range;
+
+    var btnMap = {
+      ALL: 'btnRangeAll',
+      TODAY: 'btnRangeToday',
+      '7DAYS': 'btnRange7d',
+      '30DAYS': 'btnRange30d',
+      CUSTOM: 'btnRangeCustom'
+    };
+
+    Object.keys(btnMap).forEach(function (k) {
+      var btn = document.getElementById(btnMap[k]);
+      if (btn) {
+        if (k === range) btn.classList.add('active');
+        else btn.classList.remove('active');
+      }
+    });
+
+    var box = document.getElementById('customDateRangeBox');
+    if (range === 'CUSTOM') {
+      if (box) box.style.display = 'inline-flex';
+    } else {
+      if (box) box.style.display = 'none';
+
+      var today = new Date();
+      var fmt = function (d) {
+        var y = d.getFullYear();
+        var m = ('0' + (d.getMonth() + 1)).slice(-2);
+        var day = ('0' + d.getDate()).slice(-2);
+        return y + '-' + m + '-' + day;
+      };
+
+      if (range === 'TODAY') {
+        state.reports.startDate = fmt(today);
+        state.reports.endDate = fmt(today);
+      } else if (range === '7DAYS') {
+        var d7 = new Date();
+        d7.setDate(today.getDate() - 7);
+        state.reports.startDate = fmt(d7);
+        state.reports.endDate = fmt(today);
+      } else if (range === '30DAYS') {
+        var d30 = new Date();
+        d30.setDate(today.getDate() - 30);
+        state.reports.startDate = fmt(d30);
+        state.reports.endDate = fmt(today);
+      } else {
+        state.reports.startDate = '';
+        state.reports.endDate = '';
+      }
+
+      window.loadReports();
+    }
+  };
+
+  window.toggleCustomDateInputs = function () {
+    window.setReportDateRange('CUSTOM');
+  };
+
+  window.applyReportFilters = function () {
+    var deptEl = document.getElementById('reportDeptFilter');
+    var ccEl = document.getElementById('reportCCFilter');
+    var prnEl = document.getElementById('reportPrinterFilter');
+    var searchEl = document.getElementById('reportSearchFilter');
+    var startEl = document.getElementById('reportStartDate');
+    var endEl = document.getElementById('reportEndDate');
+
+    state.reports.filterDept = deptEl ? deptEl.value : '';
+    state.reports.filterCostCenter = ccEl ? ccEl.value : '';
+    state.reports.filterPrinter = prnEl ? prnEl.value : '';
+    state.reports.filterSearch = searchEl ? searchEl.value.trim().toLowerCase() : '';
+
+    if (state.reports.dateRange === 'CUSTOM') {
+      state.reports.startDate = startEl ? startEl.value : '';
+      state.reports.endDate = endEl ? endEl.value : '';
+      window.loadReports();
+      return;
+    }
+
+    window.renderReports();
+  };
+
+  window.resetReportFilters = function () {
+    var deptEl = document.getElementById('reportDeptFilter');
+    var ccEl = document.getElementById('reportCCFilter');
+    var prnEl = document.getElementById('reportPrinterFilter');
+    var searchEl = document.getElementById('reportSearchFilter');
+    var startEl = document.getElementById('reportStartDate');
+    var endEl = document.getElementById('reportEndDate');
+
+    if (deptEl) deptEl.value = '';
+    if (ccEl) ccEl.value = '';
+    if (prnEl) prnEl.value = '';
+    if (searchEl) searchEl.value = '';
+    if (startEl) startEl.value = '';
+    if (endEl) endEl.value = '';
+
+    state.reports.filterDept = '';
+    state.reports.filterCostCenter = '';
+    state.reports.filterPrinter = '';
+    state.reports.filterSearch = '';
+    state.reports.startDate = '';
+    state.reports.endDate = '';
+    state.reports.dateRange = 'ALL';
+
+    window.setReportDateRange('ALL');
+  };
+
+  window.renderReports = function () {
+    var thead = document.getElementById('reportsTableHead') || document.getElementById('reportableHead');
+    var tbody = document.getElementById('reportsTableBody');
+    var tfoot = document.getElementById('reportsTableFoot') || document.getElementById('reportableFoot');
+    if (!tbody) return;
+
+    var tab = state.reports.activeTab;
+    var fDept = state.reports.filterDept;
+    var fCC = state.reports.filterCostCenter;
+    var fPrn = state.reports.filterPrinter;
+    var fSearch = state.reports.filterSearch;
+
+    // -----------------------------------------------------------------------
+    // TAB 1: DEPARTMENTS BREAKDOWN
+    // -----------------------------------------------------------------------
+    if (tab === 'departments') {
+      thead.innerHTML =
+        '<tr>' +
+          '<th style="width:160px;">Department</th>' +
+          '<th style="width:90px;">Active Users</th>' +
+          '<th>Assigned Printers</th>' +
+          '<th style="text-align:right; width:100px;">Print Pages</th>' +
+          '<th style="text-align:right; width:100px;">Copy Pages</th>' +
+          '<th style="text-align:right; width:100px;">Total Volume</th>' +
+          '<th style="text-align:right; width:90px;">Fleet Share</th>' +
+          '<th style="text-align:right; width:120px;">Estimated Cost</th>' +
+          '<th style="width:220px;">Top Users</th>' +
+        '</tr>';
+
+      var depts = state.reports.departments.filter(function (d) {
+        if (!d) return false;
+        if (fDept && d.department !== fDept) return false;
+        if (fSearch && (d.department || '').toLowerCase().indexOf(fSearch) === -1) return false;
+        return true;
+      });
+
+      if (depts.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="9" class="text-center py-4 text-muted">No department records match your current filters.</td></tr>';
+        tfoot.innerHTML = '';
+        return;
+      }
+
+      var totUsers = 0, totPrints = 0, totCopies = 0, totVol = 0, totCost = 0;
+      var rowsHtml = '';
+      depts.forEach(function (d) {
+        var uCount = d.userCount || 0;
+        var pPages = d.printPages || 0;
+        var cPages = d.copyPages || 0;
+        var tPages = (d.totalPages != null) ? d.totalPages : (pPages + cPages);
+        var cost = (d.estimatedCostLkr != null) ? d.estimatedCostLkr : (d.totalCost != null ? d.totalCost : (tPages * 3.00));
+        var pct = (d.percentOfTotal != null) ? d.percentOfTotal : (d.percentageOfTotal != null ? d.percentageOfTotal : 0.0);
+
+        totUsers += uCount;
+        totPrints += pPages;
+        totCopies += cPages;
+        totVol += tPages;
+        totCost += cost;
+
+        var prnBadges = (d.assignedPrinters || []).map(function (p) {
+          return '<span class="badge bg-light text-dark border me-1" style="font-size:11px;">' + esc(p) + '</span>';
+        }).join('') || '<span class="text-muted small">None Assigned</span>';
+
+        var topUsersBadges = (d.topUsers || []).map(function (u) {
+          var uName = (u && typeof u === 'object') ? (u.displayName || u.username) : u;
+          var uVol = (u && typeof u === 'object' && u.totalPages != null) ? ' (' + u.totalPages + ' p.)' : '';
+          return '<span class="badge bg-light text-dark border me-1 mb-1" style="font-size:11px;">' + esc(uName) + uVol + '</span>';
+        }).join('') || '<span class="text-muted small">-</span>';
+
+        rowsHtml +=
+          '<tr>' +
+            '<td><strong class="text-dark"><span class="badge bg-primary-subtle text-primary border border-primary-subtle me-1">DEPT</span>' + esc(d.department) + '</strong></td>' +
+            '<td><span class="badge bg-secondary-subtle text-secondary border">' + uCount + ' Users</span></td>' +
+            '<td>' + prnBadges + '</td>' +
+            '<td class="text-end"><span class="badge bg-primary-subtle text-primary border border-primary-subtle">PRINT: ' + pPages.toLocaleString() + '</span></td>' +
+            '<td class="text-end"><span class="badge bg-success-subtle text-success border border-success-subtle">COPY: ' + cPages.toLocaleString() + '</span></td>' +
+            '<td class="text-end fw-bold text-dark">' + tPages.toLocaleString() + '</td>' +
+            '<td class="text-end fw-semibold text-secondary">' + pct.toFixed(1) + '%</td>' +
+            '<td class="text-end fw-bold text-warning-emphasis">Rs. ' + cost.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2}) + '</td>' +
+            '<td>' + topUsersBadges + '</td>' +
+          '</tr>';
+      });
+
+      tbody.innerHTML = rowsHtml;
+      tfoot.innerHTML =
+        '<tr class="bg-light">' +
+          '<td>Total (' + depts.length + ' Departments)</td>' +
+          '<td>' + totUsers + ' Users</td>' +
+          '<td>-</td>' +
+          '<td class="text-end">PRINT: ' + totPrints.toLocaleString() + '</td>' +
+          '<td class="text-end">COPY: ' + totCopies.toLocaleString() + '</td>' +
+          '<td class="text-end fw-bold text-dark">' + totVol.toLocaleString() + ' Pages</td>' +
+          '<td class="text-end">100.0%</td>' +
+          '<td class="text-end fw-bold text-warning-emphasis">Rs. ' + totCost.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2}) + '</td>' +
+          '<td>-</td>' +
+        '</tr>';
+
+    // -----------------------------------------------------------------------
+    // TAB 2: COST CENTERS BREAKDOWN (extAttr3)
+    // -----------------------------------------------------------------------
+    } else if (tab === 'costCenters') {
+      thead.innerHTML =
+        '<tr>' +
+          '<th style="width:170px;">Cost Center (extAttr3)</th>' +
+          '<th>Associated Departments</th>' +
+          '<th style="width:90px;">Active Users</th>' +
+          '<th style="text-align:right; width:100px;">Print Pages</th>' +
+          '<th style="text-align:right; width:100px;">Copy Pages</th>' +
+          '<th style="text-align:right; width:100px;">Total Volume</th>' +
+          '<th style="text-align:right; width:90px;">Fleet Share</th>' +
+          '<th style="text-align:right; width:120px;">Estimated Cost</th>' +
+          '<th style="width:220px;">Top Users</th>' +
+        '</tr>';
+
+      var ccs = state.reports.costCenters.filter(function (c) {
+        if (!c) return false;
+        if (fCC && c.costCenter !== fCC) return false;
+        if (fSearch && (c.costCenter || '').toLowerCase().indexOf(fSearch) === -1) return false;
+        return true;
+      });
+
+      if (ccs.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="9" class="text-center py-4 text-muted">No cost center records match your current filters.</td></tr>';
+        tfoot.innerHTML = '';
+        return;
+      }
+
+      var totCCUsers = 0, totCCPrints = 0, totCCCopies = 0, totCCVol = 0, totCCCost = 0;
+      var ccRowsHtml = '';
+      ccs.forEach(function (c) {
+        var uCount = c.userCount || 0;
+        var pPages = c.printPages || 0;
+        var cPages = c.copyPages || 0;
+        var tPages = (c.totalPages != null) ? c.totalPages : (pPages + cPages);
+        var cost = (c.estimatedCostLkr != null) ? c.estimatedCostLkr : (c.totalCost != null ? c.totalCost : (tPages * 3.00));
+        var pct = (c.percentOfTotal != null) ? c.percentOfTotal : (c.percentageOfTotal != null ? c.percentageOfTotal : 0.0);
+
+        totCCUsers += uCount;
+        totCCPrints += pPages;
+        totCCCopies += cPages;
+        totCCVol += tPages;
+        totCCCost += cost;
+
+        var deptsArr = [];
+        if (typeof c.departments === 'string') {
+          deptsArr = c.departments.split(',').map(function (s) { return s.trim(); });
+        } else if (Array.isArray(c.departments)) {
+          deptsArr = c.departments;
+        }
+
+        var deptBadges = deptsArr.map(function (dept) {
+          return '<span class="badge bg-light text-dark border me-1" style="font-size:11px;">' + esc(dept) + '</span>';
+        }).join('') || '<span class="text-muted small">-</span>';
+
+        var topUsersBadges = (c.topUsers || []).map(function (u) {
+          var uName = (u && typeof u === 'object') ? (u.displayName || u.username) : u;
+          var uVol = (u && typeof u === 'object' && u.totalPages != null) ? ' (' + u.totalPages + ' p.)' : '';
+          return '<span class="badge bg-light text-dark border me-1 mb-1" style="font-size:11px;">' + esc(uName) + uVol + '</span>';
+        }).join('') || '<span class="text-muted small">-</span>';
+
+        ccRowsHtml +=
+          '<tr>' +
+            '<td><strong class="text-dark"><span class="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle me-1">CC</span>' + esc(c.costCenter) + '</strong></td>' +
+            '<td>' + deptBadges + '</td>' +
+            '<td><span class="badge bg-secondary-subtle text-secondary border">' + uCount + ' Users</span></td>' +
+            '<td class="text-end"><span class="badge bg-primary-subtle text-primary border border-primary-subtle">PRINT: ' + pPages.toLocaleString() + '</span></td>' +
+            '<td class="text-end"><span class="badge bg-success-subtle text-success border border-success-subtle">COPY: ' + cPages.toLocaleString() + '</span></td>' +
+            '<td class="text-end fw-bold text-dark">' + tPages.toLocaleString() + '</td>' +
+            '<td class="text-end fw-semibold text-secondary">' + pct.toFixed(1) + '%</td>' +
+            '<td class="text-end fw-bold text-warning-emphasis">Rs. ' + cost.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2}) + '</td>' +
+            '<td>' + topUsersBadges + '</td>' +
+          '</tr>';
+      });
+
+      tbody.innerHTML = ccRowsHtml;
+      tfoot.innerHTML =
+        '<tr class="bg-light">' +
+          '<td colspan="2">Total (' + ccs.length + ' Cost Centers)</td>' +
+          '<td>' + totCCUsers + ' Users</td>' +
+          '<td class="text-end">PRINT: ' + totCCPrints.toLocaleString() + '</td>' +
+          '<td class="text-end">COPY: ' + totCCCopies.toLocaleString() + '</td>' +
+          '<td class="text-end fw-bold text-dark">' + totCCVol.toLocaleString() + ' Pages</td>' +
+          '<td class="text-end">100.0%</td>' +
+          '<td class="text-end fw-bold text-warning-emphasis">Rs. ' + totCCCost.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2}) + '</td>' +
+          '<td>-</td>' +
+        '</tr>';
+
+    // -----------------------------------------------------------------------
+    // TAB 3: PRINTER DEVICES BREAKDOWN (BY DEPARTMENT & LOCATION)
+    // -----------------------------------------------------------------------
+    } else if (tab === 'printers') {
+      thead.innerHTML =
+        '<tr>' +
+          '<th style="width:200px;">Printer Device</th>' +
+          '<th style="width:110px;">Device Code</th>' +
+          '<th style="width:140px;">Assigned Department</th>' +
+          '<th>Physical Location</th>' +
+          '<th>Hardware Model &amp; IP</th>' +
+          '<th style="text-align:right; width:90px;">Print Pages</th>' +
+          '<th style="text-align:right; width:90px;">Copy Pages</th>' +
+          '<th style="text-align:right; width:95px;">Total Pages</th>' +
+          '<th style="text-align:right; width:85px;">Fleet Share</th>' +
+          '<th style="text-align:right; width:110px;">Estimated Cost</th>' +
+          '<th style="width:85px;">Status</th>' +
+        '</tr>';
+
+      var prns = state.reports.printers.filter(function (p) {
+        if (!p) return false;
+        if (fDept && p.department !== fDept) return false;
+        if (fPrn && p.name !== fPrn && p.ipAddress !== fPrn) return false;
+        if (fSearch) {
+          var text = ((p.name || '') + ' ' + (p.printerCode || '') + ' ' + (p.ipAddress || '') + ' ' + (p.department || '') + ' ' + (p.location || '')).toLowerCase();
+          if (text.indexOf(fSearch) === -1) return false;
+        }
+        return true;
+      });
+
+      if (prns.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="11" class="text-center py-4 text-muted">No printer devices match your current filters.</td></tr>';
+        tfoot.innerHTML = '';
+        return;
+      }
+
+      var totPrnPrints = 0, totPrnCopies = 0, totPrnVol = 0, totPrnCost = 0;
+      var prnRowsHtml = '';
+      prns.forEach(function (p) {
+        var pPages = p.printPages || 0;
+        var cPages = p.copyPages || 0;
+        var tPages = (p.totalPages != null) ? p.totalPages : (pPages + cPages);
+        var cost = (p.estimatedCostLkr != null) ? p.estimatedCostLkr : (tPages * 3.00);
+        var pct = (p.percentOfTotal != null) ? p.percentOfTotal : 0.0;
+
+        totPrnPrints += pPages;
+        totPrnCopies += cPages;
+        totPrnVol += tPages;
+        totPrnCost += cost;
+
+        var statusBadge = (p.status === 'ONLINE')
+          ? '<span class="badge bg-success-subtle text-success border border-success-subtle">ONLINE</span>'
+          : '<span class="badge bg-secondary-subtle text-secondary border">OFFLINE</span>';
+
+        prnRowsHtml +=
+          '<tr>' +
+            '<td><strong class="text-dark">' + esc(p.name) + '</strong></td>' +
+            '<td><span class="badge bg-light text-dark border">' + esc(p.printerCode) + '</span></td>' +
+            '<td><span class="badge bg-primary-subtle text-primary border border-primary-subtle">' + esc(p.department || 'Operations') + '</span></td>' +
+            '<td><span class="small text-secondary">' + esc(p.location || '-') + '</span></td>' +
+            '<td><span class="small fw-semibold text-dark">' + esc(p.model || 'Toshiba MFP') + '</span> <span class="small text-muted">(' + esc(p.ipAddress) + ')</span></td>' +
+            '<td class="text-end"><span class="badge bg-primary-subtle text-primary border border-primary-subtle">PRINT: ' + pPages.toLocaleString() + '</span></td>' +
+            '<td class="text-end"><span class="badge bg-success-subtle text-success border border-success-subtle">COPY: ' + cPages.toLocaleString() + '</span></td>' +
+            '<td class="text-end fw-bold text-dark">' + tPages.toLocaleString() + '</td>' +
+            '<td class="text-end fw-semibold text-secondary">' + pct.toFixed(1) + '%</td>' +
+            '<td class="text-end fw-bold text-warning-emphasis">Rs. ' + cost.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2}) + '</td>' +
+            '<td>' + statusBadge + '</td>' +
+          '</tr>';
+      });
+
+      tbody.innerHTML = prnRowsHtml;
+      tfoot.innerHTML =
+        '<tr class="bg-light">' +
+          '<td colspan="5">Total (' + prns.length + ' Physical Release Stations)</td>' +
+          '<td class="text-end">PRINT: ' + totPrnPrints.toLocaleString() + '</td>' +
+          '<td class="text-end">COPY: ' + totPrnCopies.toLocaleString() + '</td>' +
+          '<td class="text-end fw-bold text-dark">' + totPrnVol.toLocaleString() + ' Pages</td>' +
+          '<td class="text-end">100.0%</td>' +
+          '<td class="text-end fw-bold text-warning-emphasis">Rs. ' + totPrnCost.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2}) + '</td>' +
+          '<td>-</td>' +
+        '</tr>';
+
+    // -----------------------------------------------------------------------
+    // TAB 4: DETAILED USERS ACCOUNTING
+    // -----------------------------------------------------------------------
+    } else if (tab === 'users') {
+      thead.innerHTML =
+        '<tr>' +
+          '<th style="width:130px;">Username</th>' +
+          '<th style="width:160px;">Display Name</th>' +
+          '<th style="width:130px;">Department</th>' +
+          '<th style="width:140px;">Cost Center</th>' +
+          '<th style="width:140px;">Badge ID</th>' +
+          '<th style="text-align:right; width:95px;">Print Pages</th>' +
+          '<th style="text-align:right; width:95px;">Copy Pages</th>' +
+          '<th style="text-align:right; width:95px;">Total Pages</th>' +
+          '<th style="text-align:right; width:115px;">Estimated Cost</th>' +
+          '<th style="width:85px;">Status</th>' +
+        '</tr>';
+
+      var users = state.reports.users.filter(function (u) {
+        if (!u) return false;
+        if (fDept && u.department !== fDept) return false;
+        if (fCC && u.costCenter !== fCC) return false;
+        if (fSearch) {
+          var text = ((u.username || '') + ' ' + (u.displayName || '') + ' ' + (u.department || '') + ' ' + (u.costCenter || '')).toLowerCase();
+          if (text.indexOf(fSearch) === -1) return false;
+        }
+        return true;
+      });
+
+      if (users.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="10" class="text-center py-4 text-muted">No user accounts match your current filters.</td></tr>';
+        tfoot.innerHTML = '';
+        return;
+      }
+
+      var totUPrints = 0, totUCopies = 0, totUVol = 0, totUCost = 0;
+      var uRowsHtml = '';
+      users.forEach(function (u) {
+        var pPages = u.printPages || 0;
+        var cPages = u.copyPages || 0;
+        var tPages = (u.totalPages != null) ? u.totalPages : (pPages + cPages);
+        var cost = (u.estimatedCostLkr != null) ? u.estimatedCostLkr : (tPages * 3.00);
+
+        totUPrints += pPages;
+        totUCopies += cPages;
+        totUVol += tPages;
+        totUCost += cost;
+
+        var ccBadge = u.costCenter
+          ? '<span class="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle">' + esc(u.costCenter) + '</span>'
+          : '<span class="text-muted small">-</span>';
+
+        var badgeIdText = u.badgeId
+          ? '<span class="badge bg-light text-dark border">' + esc(u.badgeId) + '</span>'
+          : '<span class="text-muted small">None</span>';
+
+        var statusBadge = u.isActive
+          ? '<span class="badge bg-success-subtle text-success border border-success-subtle">ACTIVE</span>'
+          : '<span class="badge bg-secondary-subtle text-secondary border">DISABLED</span>';
+
+        uRowsHtml +=
+          '<tr>' +
+            '<td><strong class="text-dark">' + esc(u.username) + '</strong></td>' +
+            '<td>' + esc(u.displayName || '-') + '</td>' +
+            '<td><span class="badge bg-primary-subtle text-primary border border-primary-subtle">' + esc(u.department || '-') + '</span></td>' +
+            '<td>' + ccBadge + '</td>' +
+            '<td>' + badgeIdText + '</td>' +
+            '<td class="text-end"><span class="badge bg-primary-subtle text-primary border border-primary-subtle">PRINT: ' + pPages.toLocaleString() + '</span></td>' +
+            '<td class="text-end"><span class="badge bg-success-subtle text-success border border-success-subtle">COPY: ' + cPages.toLocaleString() + '</span></td>' +
+            '<td class="text-end fw-bold text-dark">' + tPages.toLocaleString() + '</td>' +
+            '<td class="text-end fw-bold text-warning-emphasis">Rs. ' + cost.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2}) + '</td>' +
+            '<td>' + statusBadge + '</td>' +
+          '</tr>';
+      });
+
+      tbody.innerHTML = uRowsHtml;
+      tfoot.innerHTML =
+        '<tr class="bg-light">' +
+          '<td colspan="5">Total (' + users.length + ' Directory Users)</td>' +
+          '<td class="text-end">PRINT: ' + totUPrints.toLocaleString() + '</td>' +
+          '<td class="text-end">COPY: ' + totUCopies.toLocaleString() + '</td>' +
+          '<td class="text-end fw-bold text-dark">' + totUVol.toLocaleString() + ' Pages</td>' +
+          '<td class="text-end fw-bold text-warning-emphasis">Rs. ' + totUCost.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2}) + '</td>' +
+          '<td>-</td>' +
+        '</tr>';
+
+    // -----------------------------------------------------------------------
+    // TAB 5: TRANSACTION LOG (ALL PRINT & COPY AUDIT JOBS)
+    // -----------------------------------------------------------------------
+    } else if (tab === 'transactions') {
+      thead.innerHTML =
+        '<tr>' +
+          '<th style="width:145px;">Date / Time</th>' +
+          '<th style="width:75px;">Type</th>' +
+          '<th style="width:110px;">User</th>' +
+          '<th style="width:110px;">Department</th>' +
+          '<th style="width:110px;">Cost Center</th>' +
+          '<th>Target Printer</th>' +
+          '<th>Document / Operation</th>' +
+          '<th style="text-align:right; width:75px;">Pages</th>' +
+          '<th style="text-align:right; width:70px;">Mono</th>' +
+          '<th style="text-align:right; width:70px;">Color</th>' +
+          '<th style="text-align:right; width:100px;">Est. Cost</th>' +
+          '<th style="width:85px;">Status</th>' +
+        '</tr>';
+
+      var txs = state.reports.transactions.filter(function (t) {
+        if (!t) return false;
+        if (fDept && t.department !== fDept) return false;
+        if (fCC && t.costCenter !== fCC) return false;
+        if (fPrn && t.printerName !== fPrn && t.printerIp !== fPrn) return false;
+        if (fSearch) {
+          var text = ((t.username || '') + ' ' + (t.displayName || '') + ' ' + (t.documentName || '') + ' ' + (t.department || '') + ' ' + (t.printerName || '')).toLowerCase();
+          if (text.indexOf(fSearch) === -1) return false;
+        }
+        return true;
+      });
+
+      if (txs.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="12" class="text-center py-4 text-muted">No transaction logs match your current filter parameters.</td></tr>';
+        tfoot.innerHTML = '';
+        return;
+      }
+
+      var totTxPages = 0, totTxMono = 0, totTxColor = 0, totTxCost = 0;
+      var txRowsHtml = '';
+      txs.forEach(function (t) {
+        var p = t.pages || 0;
+        var mono = t.monoPages || 0;
+        var color = t.colorPages || 0;
+        var cost = (t.estimatedCostLkr != null) ? t.estimatedCostLkr : (p * 3.00);
+
+        totTxPages += p;
+        totTxMono += mono;
+        totTxColor += color;
+        totTxCost += cost;
+
+        var typeBadge = (t.type === 'COPY')
+          ? '<span class="badge bg-success-subtle text-success border border-success-subtle">COPY</span>'
+          : '<span class="badge bg-primary-subtle text-primary border border-primary-subtle">PRINT</span>';
+
+        txRowsHtml +=
+          '<tr>' +
+            '<td><span class="small font-monospace text-secondary">' + esc(t.timestamp) + '</span></td>' +
+            '<td>' + typeBadge + '</td>' +
+            '<td><strong class="text-dark">' + esc(t.username) + '</strong></td>' +
+            '<td><span class="badge bg-primary-subtle text-primary border border-primary-subtle">' + esc(t.department || '-') + '</span></td>' +
+            '<td><span class="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle">' + esc(t.costCenter || '-') + '</span></td>' +
+            '<td><span class="small fw-semibold text-dark">' + esc(t.printerName || '-') + '</span></td>' +
+            '<td><span class="small text-truncate d-inline-block" style="max-width:240px;" title="' + esc(t.documentName || '-') + '">' + esc(t.documentName || '-') + '</span></td>' +
+            '<td class="text-end fw-bold text-dark">' + p + '</td>' +
+            '<td class="text-end text-muted small">' + mono + '</td>' +
+            '<td class="text-end text-muted small">' + color + '</td>' +
+            '<td class="text-end fw-bold text-warning-emphasis">Rs. ' + cost.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2}) + '</td>' +
+            '<td><span class="badge bg-light text-success border border-success-subtle">COMPLETED</span></td>' +
+          '</tr>';
+      });
+
+      tbody.innerHTML = txRowsHtml;
+      tfoot.innerHTML =
+        '<tr class="bg-light">' +
+          '<td colspan="7">Total (' + txs.length + ' Print &amp; Copy Audit Events)</td>' +
+          '<td class="text-end fw-bold text-dark">' + totTxPages.toLocaleString() + '</td>' +
+          '<td class="text-end small">' + totTxMono.toLocaleString() + '</td>' +
+          '<td class="text-end small">' + totTxColor.toLocaleString() + '</td>' +
+          '<td class="text-end fw-bold text-warning-emphasis">Rs. ' + totTxCost.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2}) + '</td>' +
+          '<td>-</td>' +
+        '</tr>';
+    }
+  };
+
+  // -------------------------------------------------------------------------
+  // EXPORT & PRINT HANDLERS
+  // -------------------------------------------------------------------------
+  window.exportCurrentReportCsv = function () {
+    var tab = state.reports.activeTab;
+    var csvType = 'departments';
+    if (tab === 'costCenters') csvType = 'cost-centers';
+    if (tab === 'printers') csvType = 'printers';
+    if (tab === 'users') csvType = 'users';
+    if (tab === 'transactions') csvType = 'transactions';
+
+    var dept = encodeURIComponent(state.reports.filterDept || '');
+    var cc = encodeURIComponent(state.reports.filterCostCenter || '');
+    var prn = encodeURIComponent(state.reports.filterPrinter || '');
+    var start = encodeURIComponent(state.reports.startDate || '');
+    var end = encodeURIComponent(state.reports.endDate || '');
+
+    var url = '/api/admin/reports/export-csv?type=' + csvType;
+    if (dept) url += '&department=' + dept;
+    if (cc) url += '&costCenter=' + cc;
+    if (prn) url += '&printer=' + prn;
+    if (start) url += '&startDate=' + start;
+    if (end) url += '&endDate=' + end;
+
+    window.location.href = url;
+  };
+
+  window.printReportView = function () {
+    window.print();
+  };
+
+  // -------------------------------------------------------------------------
+  // CUSTOM REPORT BUILDER MODAL HANDLERS
+  // -------------------------------------------------------------------------
+  window.openCustomReportModal = function () {
+    var modal = document.getElementById('modalCustomReport');
+    if (modal) modal.style.display = 'flex';
+  };
+
+  window.closeCustomReportModal = function () {
+    var modal = document.getElementById('modalCustomReport');
+    if (modal) modal.style.display = 'none';
+  };
+
+  window.handleGenerateCustomReport = function (e) {
+    if (e) e.preventDefault();
+    window.handleCustomReportView();
+  };
+
+  window.handleCustomReportView = function () {
+    var type = document.getElementById('crReportType').value;
+    var dept = document.getElementById('crDeptFilter').value;
+    var cc = document.getElementById('crCCFilter').value;
+    var start = document.getElementById('crStartDate').value;
+    var end = document.getElementById('crEndDate').value;
+
+    state.reports.filterDept = dept;
+    state.reports.filterCostCenter = cc;
+    state.reports.startDate = start;
+    state.reports.endDate = end;
+
+    if (document.getElementById('reportDeptFilter')) document.getElementById('reportDeptFilter').value = dept;
+    if (document.getElementById('reportCCFilter')) document.getElementById('reportCCFilter').value = cc;
+    if (document.getElementById('reportStartDate')) document.getElementById('reportStartDate').value = start;
+    if (document.getElementById('reportEndDate')) document.getElementById('reportEndDate').value = end;
+
+    window.closeCustomReportModal();
+    window.switchReportTab(type);
+    window.loadReports();
+  };
+
+  window.handleCustomReportCsv = function () {
+    var type = document.getElementById('crReportType').value;
+    var dept = encodeURIComponent(document.getElementById('crDeptFilter').value || '');
+    var cc = encodeURIComponent(document.getElementById('crCCFilter').value || '');
+    var start = encodeURIComponent(document.getElementById('crStartDate').value || '');
+    var end = encodeURIComponent(document.getElementById('crEndDate').value || '');
+
+    var url = '/api/admin/reports/export-csv?type=' + type;
+    if (dept) url += '&department=' + dept;
+    if (cc) url += '&costCenter=' + cc;
+    if (start) url += '&startDate=' + start;
+    if (end) url += '&endDate=' + end;
+
+    window.closeCustomReportModal();
+    window.location.href = url;
+  };
+
+  window.handleCustomReportPrint = function () {
+    window.handleCustomReportView();
+    setTimeout(function () {
+      window.print();
+    }, 500);
+  };
+
+  /* =========================================================================
+     USER PROFILE & DETAILS VIEW MODAL CONTROLLER
+     ========================================================================= */
+  state.selectedViewUserId = null;
+
+  window.viewUserDetails = function (userId) {
+    var u = null;
+    for (var i = 0; i < state.users.length; i++) {
+      if (state.users[i].id === userId) {
+        u = state.users[i];
+        break;
+      }
+    }
+    if (!u) return;
+    state.selectedViewUserId = u.id;
+
+    var modalTitle = document.getElementById('viewUserModalTitle');
+    if (modalTitle) modalTitle.textContent = 'User Profile: ' + (u.displayName || u.username);
+
+    var avatar = document.getElementById('viewUserAvatar');
+    if (avatar) {
+      var raw = (u.displayName || u.username || 'U').trim();
+      var parts = raw.split(' ');
+      var initials = parts.length > 1 ? (parts[0][0] + parts[parts.length - 1][0]) : raw.substring(0, 2);
+      avatar.textContent = initials.toUpperCase() || 'U';
+    }
+
+    var nameEl = document.getElementById('viewUserName');
+    if (nameEl) nameEl.textContent = (u.displayName || u.username) + ' (' + u.username + ')';
+
+    var statusBadge = document.getElementById('viewUserStatusBadge');
+    if (statusBadge) {
+      statusBadge.className = u.isActive !== false ? 'badge badge-online' : 'badge badge-offline';
+      statusBadge.textContent = u.isActive !== false ? 'ACTIVE' : 'DISABLED';
+    }
+
+    var roleBadge = document.getElementById('viewUserRoleBadge');
+    if (roleBadge) {
+      roleBadge.textContent = u.role || 'USER';
+    }
+
+    var subEl = document.getElementById('viewUserSubtitle');
+    if (subEl) {
+      var src = 'Manual Account';
+      if (u.authSource === 'ACTIVE_DIRECTORY') src = 'Active Directory / LDAP Synchronized';
+      else if (u.authSource === 'WINDOWS_LOCAL') src = 'Windows Local SAM Account';
+      subEl.textContent = src + (u.department ? ' - ' + u.department + ' Department' : '');
+    }
+
+    // Identification & RFID Card Info (prominently displayed)
+    var badgeEl = document.getElementById('viewUserBadgeId');
+    if (badgeEl) {
+      badgeEl.textContent = u.badgeId ? u.badgeId : 'No RFID Badge Assigned';
+      badgeEl.style.color = u.badgeId ? '#1D4ED8' : '#94A3B8';
+    }
+
+    var secBadgeEl = document.getElementById('viewUserSecBadgeId');
+    if (secBadgeEl) {
+      secBadgeEl.textContent = u.secondaryBadgeId ? u.secondaryBadgeId : 'No NFC Tag Assigned';
+      secBadgeEl.style.color = u.secondaryBadgeId ? '#15803D' : '#94A3B8';
+    }
+
+    var pinStatusEl = document.getElementById('viewUserPinStatus');
+    if (pinStatusEl) {
+      pinStatusEl.innerHTML = u.hasPin
+        ? '<span class="badge badge-pin-yes">CONFIGURED</span>'
+        : '<span class="badge badge-pin-no">NOT SET</span>';
+    }
+
+    var deptEl = document.getElementById('viewUserDept');
+    if (deptEl) deptEl.textContent = u.department || 'Operations';
+
+    var ccEl = document.getElementById('viewUserCostCenter');
+    if (ccEl) ccEl.textContent = u.costCenter || u.externalAttribute3 || '-';
+
+    var emailEl = document.getElementById('viewUserEmail');
+    if (emailEl) emailEl.textContent = u.email || 'None';
+
+    var sidEl = document.getElementById('viewUserSid');
+    if (sidEl) sidEl.textContent = u.userSid || 'None';
+
+    var authSrcEl = document.getElementById('viewUserAuthSource');
+    if (authSrcEl) {
+      if (u.authSource === 'ACTIVE_DIRECTORY') authSrcEl.innerHTML = '<span class="badge badge-source-ad">AD / LDAP</span>';
+      else if (u.authSource === 'WINDOWS_LOCAL') authSrcEl.innerHTML = '<span class="badge badge-source-win">WINDOWS LOCAL</span>';
+      else authSrcEl.innerHTML = '<span class="badge badge-source-manual">MANUAL</span>';
+    }
+
+    var extAttrsEl = document.getElementById('viewUserExtAttrs');
+    if (extAttrsEl) {
+      var badges = [];
+      if (u.externalAttribute1) badges.push('<span class="badge" style="background:#F1F5F9; color:#334155; border:1px solid #CBD5E1;">Ext1: ' + esc(u.externalAttribute1) + '</span>');
+      if (u.externalAttribute2) badges.push('<span class="badge" style="background:#F1F5F9; color:#334155; border:1px solid #CBD5E1;">Ext2: ' + esc(u.externalAttribute2) + '</span>');
+      if (u.externalAttribute3) badges.push('<span class="badge" style="background:#F1F5F9; color:#334155; border:1px solid #CBD5E1;">Ext3: ' + esc(u.externalAttribute3) + '</span>');
+      extAttrsEl.innerHTML = badges.length ? badges.join(' ') : '<span style="color:#94a3b8; font-size:11.5px;">None</span>';
+    }
+
+    // Volume & Accounting
+    var printP = u.printCount || 0;
+    var copyP = u.copyCount || 0;
+    var totalP = printP + copyP;
+    var estCost = (totalP * 3.0).toFixed(2); // LKR 3.00 standard rate
+
+    var printCountEl = document.getElementById('viewUserPrintCount');
+    if (printCountEl) printCountEl.textContent = printP;
+
+    var copyCountEl = document.getElementById('viewUserCopyCount');
+    if (copyCountEl) copyCountEl.textContent = copyP;
+
+    var totalPagesEl = document.getElementById('viewUserTotalPages');
+    if (totalPagesEl) totalPagesEl.textContent = totalP + ' Pages';
+
+    var estCostEl = document.getElementById('viewUserEstCost');
+    if (estCostEl) estCostEl.textContent = 'Rs. ' + estCost;
+
+    document.getElementById('viewUserModal').style.display = 'flex';
+  };
+
+  window.closeViewUserModal = function () {
+    var m = document.getElementById('viewUserModal');
+    if (m) m.style.display = 'none';
+  };
+
+  window.triggerResetPinFromView = function () {
+    if (!state.selectedViewUserId) return;
+    var u = null;
+    for (var i = 0; i < state.users.length; i++) {
+      if (state.users[i].id === state.selectedViewUserId) { u = state.users[i]; break; }
+    }
+    window.closeViewUserModal();
+    if (u) window.openResetPinModal(u.id, u.username);
+  };
+
+  window.triggerEditFromView = function () {
+    if (!state.selectedViewUserId) return;
+    var uid = state.selectedViewUserId;
+    window.closeViewUserModal();
+    window.openEditUserModal(uid);
   };
 })();

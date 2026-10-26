@@ -1,19 +1,67 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
+    <meta charset="UTF-8">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>nexPrint - Administration Console</title>
-  <link rel="stylesheet" href="/css/admin.css?v=20261026_06">
+  <link rel="stylesheet" href="/css/bootstrap.min.css">
+  <link rel="stylesheet" href="/css/admin.css?v=20261026_105">
   <script>
-    /* Instant Pre-Render Sidebar State & Global Offline Toggle Controller */
+    /* Instant Pre-Render Theme & Sidebar State (100% Offline, Zero FOUC) */
     (function () {
       try {
+        var savedTheme = localStorage.getItem('nexprint_theme');
+        if (savedTheme === 'dark') {
+          document.documentElement.setAttribute('data-theme', 'dark');
+          document.documentElement.setAttribute('data-bs-theme', 'dark');
+        } else {
+          document.documentElement.setAttribute('data-theme', 'light');
+          document.documentElement.setAttribute('data-bs-theme', 'light');
+        }
         if (localStorage.getItem('nexprint_sidebar_collapsed') === 'true') {
           document.documentElement.classList.add('sidebar-collapsed');
         }
       } catch (e) {}
     })();
+
+    var MOON_SVG = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>';
+    var SUN_SVG = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>';
+
+    window.updateThemeToggleUI = function (isDark) {
+      var iconEl = document.getElementById('themeToggleIcon');
+      var textEl = document.getElementById('themeToggleText');
+      var btnEl = document.getElementById('themeToggleBtn');
+      if (iconEl && textEl && btnEl) {
+        if (isDark) {
+          iconEl.innerHTML = SUN_SVG;
+          textEl.textContent = 'Light Mode';
+          btnEl.title = 'Switch to Corporate Light Theme';
+          btnEl.setAttribute('aria-label', 'Switch to Corporate Light Theme');
+        } else {
+          iconEl.innerHTML = MOON_SVG;
+          textEl.textContent = 'Dark Mode';
+          btnEl.title = 'Switch to Linear Slate Dark Theme';
+          btnEl.setAttribute('aria-label', 'Switch to Linear Slate Dark Theme');
+        }
+      }
+    };
+
+    window.toggleAppTheme = function () {
+      var current = document.documentElement.getAttribute('data-theme') || 'light';
+      var next = current === 'dark' ? 'light' : 'dark';
+      document.documentElement.setAttribute('data-theme', next);
+      document.documentElement.setAttribute('data-bs-theme', next);
+      try { localStorage.setItem('nexprint_theme', next); } catch (e) {}
+      window.updateThemeToggleUI(next === 'dark');
+    };
+
+    document.addEventListener('DOMContentLoaded', function () {
+      var isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+      window.updateThemeToggleUI(isDark);
+    });
 
     window.toggleAdminSidebar = function () {
       var doc = document.documentElement;
@@ -52,6 +100,23 @@
       }
     });
   </script>
+  <style>
+    /* --- PRINT STYLES FOR EXECUTIVE REPORTS --- */
+    @media print {
+      body { background: #FFFFFF !important; color: #000000 !important; }
+      .sidebar, .topbar, .nav-links, .btn, .rep-tab-btn, #topbarSidebarToggle, .action-dropdown-wrap, .sidebar-collapse-wrapper, #toastNotification {
+        display: none !important;
+      }
+      .main-wrap { margin-left: 0 !important; padding: 0 !important; width: 100% !important; }
+      .admin-body { padding: 10px !important; }
+      .card { border: 1px solid #D1D5DB !important; box-shadow: none !important; margin-bottom: 15px !important; }
+      .table-wrap { overflow: visible !important; }
+      table { width: 100% !important; font-size: 11px !important; }
+      th, td { padding: 6px 8px !important; border: 1px solid #E5E7EB !important; }
+      .stats-row { display: flex !important; flex-wrap: wrap !important; gap: 10px !important; }
+      .stat-card { border: 1px solid #D1D5DB !important; padding: 10px !important; }
+    }
+  </style>
 </head>
 <body>
 
@@ -118,6 +183,12 @@
       </span>
       <span class="sidebar-label">Photocopy Logs</span>
     </a>
+    <a class="sidebar-item" data-page="reports" data-tooltip="Reports &amp; Analytics" onclick="navigatePage('reports')">
+      <span class="sidebar-icon">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+      </span>
+      <span class="sidebar-label">Reports &amp; Analytics</span>
+    </a>
     <a class="sidebar-item" data-page="audit" data-tooltip="Audit Trail" onclick="navigatePage('audit')">
       <span class="sidebar-icon">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
@@ -182,6 +253,10 @@
       </div>
     </div>
     <div class="nav-links">
+      <button type="button" class="theme-toggle-btn shadow-sm" id="themeToggleBtn" onclick="window.toggleAppTheme()" title="Switch Light / Dark Theme">
+        <span id="themeToggleIcon" style="display:inline-flex; align-items:center;"></span>
+        <span id="themeToggleText">Dark Mode</span>
+      </button>
       <button class="nav-btn active" onclick="refreshCurrentPage()">Refresh Page</button>
       <a class="nav-btn" href="/" target="_blank">Open Touchscreen</a>
     </div>
@@ -227,7 +302,7 @@
         </div>
         <div class="card-body-pad">
           <button class="btn btn-primary" onclick="openAddPrinterModal()">+ Add New Printer</button>
-          <button class="btn btn-secondary" onclick="navigatePage('directory')" style="font-weight:600;">⚙️ Configure LDAP / Active Directory</button>
+          <button class="btn btn-secondary" onclick="navigatePage('directory')" style="font-weight:600;">Configure LDAP / Active Directory</button>
           <button class="btn btn-primary" onclick="openAddUserModal()">+ Add New User</button>
           <button class="btn btn-secondary" onclick="navigatePage('queue')">View Held Print Queue</button>
           <button class="btn btn-secondary" onclick="navigatePage('audit')">View Security Logs</button>
@@ -271,11 +346,27 @@
           <h2>Virtual Print Queue Management</h2>
           <p>Multi-Queue PaperCut Find-Me Pull Print Architecture &amp; Physical MFP Pool Assignment</p>
         </div>
-        <div style="display:flex; gap:8px; flex-wrap:wrap;">
-          <button type="button" id="btnOpenCreateVq" class="btn btn-primary" onclick="window.openCreateVirtualQueueModal()">➕ Create Virtual Queue</button>
-          <button type="button" class="btn btn-secondary" onclick="window.refreshVirtualQueuePrinters()">🔄 Scan Local Printers</button>
-          <button type="button" class="btn btn-secondary" onclick="window.sendSimulatedJobToVirtualQueue()">📄 Send Test Print</button>
-          <button type="button" id="vqLiveModeBtnTop" class="btn btn-primary" onclick="window.toggleLivePrintingMode()">Mode: Hardware Live</button>
+        <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+          <button type="button" id="btnOpenCreateVq" class="btn btn-primary" onclick="window.openCreateVirtualQueueModal()">+ Create Virtual Queue</button>
+          <div class="action-dropdown-wrap">
+            <button type="button" class="btn btn-secondary btn-action-dropdown" onclick="window.toggleGenericDropdown(event, 'vq-top-dropdown-menu', 'vq-top-dropdown-btn')" id="vq-top-dropdown-btn">
+              <span>Queue Operations </span>
+            </button>
+            <div class="action-dropdown-menu" id="vq-top-dropdown-menu">
+              <button type="button" class="action-dropdown-item" onclick="window.refreshVirtualQueuePrinters()">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+                Scan Local Printers
+              </button>
+              <button type="button" class="action-dropdown-item" onclick="window.sendSimulatedJobToVirtualQueue()">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+                Send Test Print
+              </button>
+              <div class="action-dropdown-divider"></div>
+              <button type="button" class="action-dropdown-item item-primary" id="vqLiveModeBtnTop" onclick="window.toggleLivePrintingMode()">
+                Toggle Hardware Live Mode
+              </button>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -283,17 +374,17 @@
       <div class="card" style="margin-bottom:20px; border-left:4px solid var(--primary); background:#FFFFFF;">
         <div class="card-head" style="background:#F8FAFC;">
           <div style="display:flex; align-items:center; gap:8px;">
-            <strong style="font-size:13px; color:#1E3A8A; text-transform:uppercase; letter-spacing:0.4px;">🌐 Active Virtual Queues</strong>
+            <strong style="font-size:13px; color:#1E3A8A; text-transform:uppercase; letter-spacing:0.4px;">Active Virtual Queues</strong>
             <span id="vqTotalQueuesBadge" class="badge" style="background:#EFF6FF; color:#1D4ED8; font-weight:700;">1 Queue</span>
           </div>
           <div style="display:flex; gap:6px;">
-            <button type="button" class="btn btn-secondary btn-sm" onclick="window.openEditCurrentVirtualQueueModal()" id="btnEditVq">✏️ Edit Queue</button>
-            <button type="button" class="btn btn-secondary btn-sm" onclick="window.handleSetDefaultVirtualQueue()" id="btnDefaultVq" style="color:#1D4ED8;">⭐ Set as Default</button>
-            <button type="button" class="btn btn-secondary btn-sm" onclick="window.handleDeleteVirtualQueue()" id="btnDeleteVq" style="color:#DC2626;">🗑️ Delete</button>
+            <button type="button" class="btn btn-secondary btn-sm" onclick="window.openEditCurrentVirtualQueueModal()" id="btnEditVq">Edit Queue</button>
+            <button type="button" class="btn btn-secondary btn-sm" onclick="window.handleSetDefaultVirtualQueue()" id="btnDefaultVq" style="color:#1D4ED8;">Set as Default</button>
+            <button type="button" class="btn btn-secondary btn-sm" onclick="window.handleDeleteVirtualQueue()" id="btnDeleteVq" style="color:#DC2626;">Delete</button>
           </div>
         </div>
         <div class="card-body-pad" style="padding:14px 18px;">
-          <div id="vqQueuesTabsContainer" style="display:flex; gap:10px; flex-wrap:wrap; width:100%;">
+          <div id="vqQueueabsContainer" style="display:flex; gap:10px; flex-wrap:wrap; width:100%;">
             <!-- Rendered dynamically by admin-app.js -->
           </div>
         </div>
@@ -327,7 +418,7 @@
       <div class="card" style="margin-bottom:20px; border-left:4px solid var(--primary);">
         <div class="card-head">
           <h2 id="vqDetailsHeader">Virtual Queue Details &amp; Windows Binding</h2>
-          <span id="vqShareBadge" class="badge" style="background:#DCFCE7; color:#166534; font-weight:700; padding:3px 10px; border-radius:2px; font-size:11px;">🟢 Shared on Network</span>
+          <span id="vqShareBadge" class="badge" style="background:#DCFCE7; color:#166534; font-weight:700; padding:3px 10px; border-radius:2px; font-size:11px;">Shared on Network</span>
         </div>
         <div class="card-body-pad" style="flex-direction:column; gap:16px;">
           <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:20px;">
@@ -344,7 +435,7 @@
             <!-- Server Printer Re-bind Selector -->
             <div style="background:#F8FAFC; border:1px solid #CBD5E1; border-radius:2px; padding:16px 18px; min-width:340px; flex:1; max-width:440px;">
               <div style="font-size:11px; font-weight:700; color:#1E3A8A; margin-bottom:8px; text-transform:uppercase; letter-spacing:0.5px;">
-                🖨️ Re-bind this Queue to Local Windows Printer:
+                Re-bind this Queue to Local Windows Printer:
               </div>
               <div style="display:flex; gap:8px; align-items:center; margin-bottom:8px;">
                 <select id="selectServerVirtualPrinter" class="form-input" style="flex:1; height:36px; padding:4px 8px; font-size:12.5px;">
@@ -356,7 +447,7 @@
               </div>
               <div style="display:flex; justify-content:space-between; align-items:center;">
                 <span style="font-size:11px; color:#64748B;">Network users print to this Windows printer.</span>
-                <button type="button" class="btn btn-secondary btn-sm" onclick="window.refreshVirtualQueuePrinters()">🔄 Scan</button>
+                <button type="button" class="btn btn-secondary btn-sm" onclick="window.refreshVirtualQueuePrinters()">Scan</button>
               </div>
             </div>
           </div>
@@ -374,10 +465,10 @@
           </div>
           <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
             <button type="button" class="btn btn-secondary btn-sm" onclick="window.handleSeedSamplePrinters()" title="Generate 20 test Toshiba MFPs across departments to test large fleet performance">
-              ⚡ Seed 20 Test MFPs
+              Seed 20 Test MFPs
             </button>
             <button type="button" class="btn btn-primary btn-sm" onclick="openAddPrinterModal()">
-              ➕ Register New Physical MFP
+              + Register New Physical MFP
             </button>
           </div>
         </div>
@@ -386,7 +477,7 @@
         <div style="padding:14px 18px; background:#F8FAFC; border-bottom:1px solid #E2E8F0; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
           <div style="display:flex; gap:10px; align-items:center; flex:1; min-width:320px; max-width:650px;">
             <div style="position:relative; flex:1;">
-              <input type="text" id="vqPrinterSearchInput" class="form-input" placeholder="🔍 Search 100+ physical printers by name, IP, code, model, location..." oninput="window.handleVqPrinterSearch(this.value)" style="height:34px; padding-left:12px; font-size:12.5px;">
+              <input type="text" id="vqPrinterSearchInput" class="form-input" placeholder="Search 100+ physical printers by name, IP, code, model, location..." oninput="window.handleVqPrinterSearch(this.value)" style="height:34px; padding-left:12px; font-size:12.5px;">
             </div>
             <select id="vqPoolFilterSelect" class="form-input" style="width:200px; height:34px; font-size:12px;" onchange="window.handleVqPoolFilterChange(this.value)">
               <option value="ALL">All Physical MFPs</option>
@@ -448,9 +539,9 @@
               <option value="100">100</option>
               <option value="ALL">All</option>
             </select>
-            <button type="button" class="btn btn-secondary btn-sm" id="vqPrevPageBtn" onclick="window.handleVqPrevPage()">◀ Prev</button>
+            <button type="button" class="btn btn-secondary btn-sm" id="vqPrevPageBtn" onclick="window.handleVqPrevPage()">Prev</button>
             <span id="vqPageIndicator" style="font-size:12px; font-weight:600; padding:0 4px;">Page 1 of 1</span>
-            <button type="button" class="btn btn-secondary btn-sm" id="vqNextPageBtn" onclick="window.handleVqNextPage()">Next ▶</button>
+            <button type="button" class="btn btn-secondary btn-sm" id="vqNextPageBtn" onclick="window.handleVqNextPage()">Next</button>
           </div>
         </div>
       </div>
@@ -475,73 +566,89 @@
     <!-- =====================================================================
          PAGE 3: PRINTER MANAGEMENT
          ===================================================================== -->
+        <!-- =====================================================================
+         PAGE 3: PRINTER MANAGEMENT (Department Categorized Architecture)
+         ===================================================================== -->
     <div id="page-printers" class="page-view" style="display:none;">
       <div class="section-header">
         <div>
           <h2>Physical Printer Devices</h2>
-          <p>Register, monitor, and configure physical Toshiba MFPs and RAW/JetDirect Port 9100 devices.</p>
+          <p>Hardware fleet allocation, walk-up security policies, and department-level printer management.</p>
         </div>
         <div style="display:flex; gap:10px; align-items:center;">
           <button class="btn btn-yellow" onclick="openAddPrinterModal()" style="font-weight:700;">+ Register New Printer</button>
 
           <div class="action-dropdown-wrap" style="position:relative;">
             <button type="button" class="btn btn-secondary btn-action-dropdown" id="btnFleetActionsDropdown" onclick="window.toggleFleetActionsDropdown(event)" style="font-weight:700; display:inline-flex; align-items:center; gap:6px; padding:7px 14px; font-size:12.5px;">
-              <span>⚡ Fleet &amp; Security Actions</span>
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+              <span>Fleet &amp; Security Actions </span>
             </button>
             <div class="action-dropdown-menu" id="fleetActionsDropdownMenu" style="width:280px;">
               <div style="padding:6px 14px 4px; font-size:11px; font-weight:700; color:#64748B; text-transform:uppercase; letter-spacing:0.5px;">Fleet Security &amp; Lock</div>
               <button type="button" class="action-dropdown-item item-primary" onclick="window.pushLdapLockAllFleet()" id="btnPushLdapFleet">
-                <span>🔐</span> Push LDAP &amp; Lock 100 MFPs
+                <span></span> Push LDAP &amp; Lock 100 MFPs
               </button>
               <button type="button" class="action-dropdown-item item-warning" onclick="window.lockAllFleetPrinters(true)" id="btnLockAllFleet">
-                <span>🔒</span> Lock All HOME Screens
+                <span></span> Lock All HOME Screens
               </button>
               <button type="button" class="action-dropdown-item" onclick="window.lockAllFleetPrinters(false)" id="btnUnlockAllFleet">
-                <span>🔓</span> Unlock All HOME Screens
+                <span></span> Unlock All HOME Screens
               </button>
               <div class="action-dropdown-divider"></div>
               <div style="padding:4px 14px 4px; font-size:11px; font-weight:700; color:#64748B; text-transform:uppercase; letter-spacing:0.5px;">Directory &amp; Accounting</div>
               <button type="button" class="action-dropdown-item" onclick="navigatePage('directory')">
-                <span>🏢</span> Active Directory &amp; LDAP
+                <span></span> Active Directory &amp; LDAP
               </button>
               <button type="button" class="action-dropdown-item" onclick="window.pollFleetCopyJobs()" id="btnPollCopyFleet">
-                <span>📑</span> Poll Walk-Up Copy Jobs
+                <span></span> Poll Walk-Up Copy Jobs
               </button>
             </div>
           </div>
 
-          <button class="btn btn-secondary" onclick="loadPrinters()" title="Refresh printer list">🔄 Refresh</button>
+          <button class="btn btn-secondary" onclick="loadPrinters()" title="Refresh printer list">Refresh</button>
         </div>
       </div>
 
-      <div class="card">
-        <div style="padding:16px 20px; border-bottom:1px solid #E2E8F0; display:flex; justify-content:space-between; align-items:center;">
-          <div>
-            <strong style="font-size:14px; color:#0F172A;">Physical Release Stations (Toshiba MFPs)</strong>
-            <div style="font-size:12px; color:#64748B;">Registered hardware devices where users can authenticate with PIN and release held prints.</div>
+      <!-- Department Filter Strip & Search Bar -->
+      <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2" style="background:#FFFFFF; border:1px solid #E2E8F0; padding:8px 14px; border-radius:4px; flex-shrink:0;">
+        <div class="d-flex align-items-center gap-1 flex-wrap" id="printerDeptPillsContainer">
+          <!-- Dynamically populated with [All (6)] [Corporate (2)] [Operations (3)] [IT Admin (1)] -->
+        </div>
+        <div class="d-flex align-items-center gap-2">
+          <input type="text" id="printerSearchInput" class="form-input" placeholder="Search by name, IP, model..." style="width:230px; height:32px; padding:4px 10px; font-size:12px;" oninput="window.renderPrinters()">
+          <div class="btn-group" role="group">
+            <button type="button" class="btn btn-sm btn-outline-primary active" id="btnPrnViewGroup" onclick="window.setPrinterViewMode('grouped')" title="Categorize printers by department">Grouped</button>
+            <button type="button" class="btn btn-sm btn-outline-primary" id="btnPrnViewFlat" onclick="window.setPrinterViewMode('flat')" title="Show flat list">Flat List</button>
+            <button type="button" class="btn btn-sm btn-secondary" onclick="window.toggleAllDeptGroups('prn_', false)" title="Expand all department sections">Expand All</button>
+            <button type="button" class="btn btn-sm btn-secondary" onclick="window.toggleAllDeptGroups('prn_', true)" title="Collapse all department sections">Collapse All</button>
           </div>
         </div>
-        <div class="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>MFP Device Name</th>
-                <th>Device Code</th>
-                <th>Architecture</th>
-                <th>Network IP : Port</th>
-                <th>Location</th>
-                <th>Hardware Model</th>
-                <th>Release Role</th>
-                <th>EWB Terminal</th>
-                <th>Status</th>
-                <th style="text-align:right;">Actions</th>
-              </tr>
-            </thead>
-            <tbody id="printersTableBody">
-              <tr><td colspan="10" style="text-align:center;padding:30px;color:#6B7299;">Loading registered printers...</td></tr>
-            </tbody>
-          </table>
+      </div>
+
+      <!-- Container for Printers: Renders either categorized department cards OR flat table -->
+      <div id="printersListContainer" style="width:100%;">
+        <div class="card">
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>MFP Device Name</th>
+                  <th>Device Code</th>
+                  <th>Assigned Department</th>
+                  <th>Architecture</th>
+                  <th>Network IP : Port</th>
+                  <th>Location</th>
+                  <th>Hardware Model</th>
+                  <th>Release Role</th>
+                  <th>EWB Terminal</th>
+                  <th>Status</th>
+                  <th style="text-align:right;">Actions</th>
+                </tr>
+              </thead>
+              <tbody id="printersTableBody">
+                <tr><td colspan="11" style="text-align:center;padding:30px;color:#6B7299;">Loading registered printers...</td></tr>
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
     </div>
@@ -549,43 +656,76 @@
     <!-- =====================================================================
          PAGE 3: USER MANAGEMENT
          ===================================================================== -->
+        <!-- =====================================================================
+         PAGE 3: USER MANAGEMENT (Department Categorized Architecture)
+         ===================================================================== -->
     <div id="page-users" class="page-view" style="display:none;">
       <div class="section-header">
         <div>
           <h2>User &amp; Identity Management</h2>
-          <p>Manage employee credentials, touch terminal PINs, badge RFID IDs, and security roles.</p>
+          <p>Employee credentials, touch terminal PINs, badge RFID/NFC IDs, and department allocation.</p>
         </div>
         <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
-          <button class="btn btn-secondary" onclick="navigatePage('directory')" style="font-weight:700; color:#1D4ED8; border:1px solid #93C5FD; background:#EFF6FF; display:inline-flex; align-items:center; gap:6px;">
-            <span>🏢</span> Configure LDAP / Active Directory
-          </button>
           <button class="btn btn-primary" onclick="openAddUserModal()">+ Add New User</button>
-          <button class="btn btn-secondary" onclick="loadUsers()">Refresh</button>
+          <div class="action-dropdown-wrap">
+            <button type="button" class="btn btn-secondary btn-action-dropdown" onclick="window.toggleGenericDropdown(event, 'user-top-dropdown-menu', 'user-top-dropdown-btn')" id="user-top-dropdown-btn">
+              <span>User Operations </span>
+            </button>
+            <div class="action-dropdown-menu" id="user-top-dropdown-menu">
+              <button type="button" class="action-dropdown-item" onclick="navigatePage('directory')">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                Sync with Active Directory / LDAP
+              </button>
+              <button type="button" class="action-dropdown-item" onclick="loadUsers()">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+                Refresh User List
+              </button>
+            </div>
+          </div>
         </div>
       </div>
 
-      <div class="card">
-        <div class="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>Username</th>
-                <th>Display Name</th>
-                <th>Department</th>
-                <th>Security Role</th>
-                <th>Touch PIN</th>
-                <th>Badge / RFID ID</th>
-                <th>Print Pages</th>
-                <th>Copy Pages</th>
-                <th>Total Pages</th>
-                <th>Account Status</th>
-                <th style="text-align:right;">Actions</th>
-              </tr>
-            </thead>
-            <tbody id="usersTableBody">
-              <tr><td colspan="11" style="text-align:center;padding:30px;color:#6B7299;">Loading users...</td></tr>
-            </tbody>
-          </table>
+      <!-- Department Filter Strip & Search Bar -->
+      <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2" style="background:#FFFFFF; border:1px solid #E2E8F0; padding:8px 14px; border-radius:4px; flex-shrink:0;">
+        <div class="d-flex align-items-center gap-1 flex-wrap" id="userDeptPillsContainer">
+          <!-- Dynamically populated with [All (6)] [Corporate (3)] [Operations (1)] [IT Admin (1)] [Windows Pool (1)] -->
+        </div>
+        <div class="d-flex align-items-center gap-2">
+          <input type="text" id="userSearchInput" class="form-input" placeholder="Search by name, PIN, RFID, CC..." style="width:230px; height:32px; padding:4px 10px; font-size:12px;" oninput="window.renderUsers()">
+          <div class="btn-group" role="group">
+            <button type="button" class="btn btn-sm btn-outline-primary active" id="btnUserViewGroup" onclick="window.setUserViewMode('grouped')" title="Categorize users by department">Grouped</button>
+            <button type="button" class="btn btn-sm btn-outline-primary" id="btnUserViewFlat" onclick="window.setUserViewMode('flat')" title="Show flat list">Flat List</button>
+            <button type="button" class="btn btn-sm btn-secondary" onclick="window.toggleAllDeptGroups('user_', false)" title="Expand all department sections">Expand All</button>
+            <button type="button" class="btn btn-sm btn-secondary" onclick="window.toggleAllDeptGroups('user_', true)" title="Collapse all department sections">Collapse All</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Container for Users: Renders either categorized department cards OR flat table -->
+      <div id="usersListContainer" style="width:100%;">
+        <div class="card">
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Username</th>
+                  <th>Display Name</th>
+                  <th>Department</th>
+                  <th>Cost Center</th>
+                  <th>Security Role</th>
+                  <th>Touch PIN</th>
+                  <th>Print Pages</th>
+                  <th>Copy Pages</th>
+                  <th>Total Pages</th>
+                  <th>Account Status</th>
+                  <th style="text-align:right;">Actions</th>
+                </tr>
+              </thead>
+              <tbody id="usersTableBody">
+                <tr><td colspan="11" style="text-align:center;padding:30px;color:#6B7299;">Loading users...</td></tr>
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
     </div>
@@ -596,37 +736,37 @@
     <div id="page-directory" class="page-view" style="display:none;">
       <div class="section-header">
         <div>
-          <h2>🏢 Active Directory &amp; LDAP Management</h2>
+          <h2>Active Directory &amp; LDAP Management</h2>
           <p>Synchronize enterprise directory users, map custom Active Directory externalAttributes (1, 2, 3), and manage fleet LDAP lockdown for Toshiba MFPs.</p>
         </div>
         <div style="display:flex; gap:10px; align-items:center;">
-          <button class="btn btn-primary" onclick="saveDirectoryPageConfig()" style="font-weight:700;">💾 Save Configuration</button>
+          <button class="btn btn-primary" onclick="saveDirectoryPageConfig()" style="font-weight:700;">Save Configuration</button>
 
           <div class="action-dropdown-wrap" style="position:relative;">
             <button type="button" class="btn btn-secondary btn-action-dropdown" id="btnDirActionsDropdown" onclick="window.toggleDirectoryActionsDropdown(event)" style="font-weight:700; display:inline-flex; align-items:center; gap:6px; padding:7px 14px; font-size:12.5px;">
-              <span>⚡ Actions</span>
+              <span>Actions</span>
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
             </button>
             <div class="action-dropdown-menu" id="dirActionsDropdownMenu" style="width:260px;">
               <div style="padding:6px 14px 4px; font-size:11px; font-weight:700; color:#64748B; text-transform:uppercase; letter-spacing:0.5px;">Directory Operations</div>
               <button type="button" class="action-dropdown-item item-primary" onclick="syncActiveDirectoryFromPage()">
-                <span>🔄</span> Sync Users Now
+                <span></span> Sync Users Now
               </button>
               <button type="button" class="action-dropdown-item" onclick="testDirectoryConnectionFromPage()">
-                <span>🔌</span> Test Connection &amp; Query
+                <span></span> Test Connection &amp; Query
               </button>
               <button type="button" class="action-dropdown-item" onclick="importWindowsUsersFromPage()">
-                <span>📋</span> Scan Local Windows Users
+                <span></span> Scan Local Windows Users
               </button>
               <div class="action-dropdown-divider"></div>
               <div style="padding:4px 14px 4px; font-size:11px; font-weight:700; color:#64748B; text-transform:uppercase; letter-spacing:0.5px;">Fleet Lockdown</div>
               <button type="button" class="action-dropdown-item item-primary" onclick="window.pushLdapLockAllFleet()">
-                <span>🔐</span> Push LDAP &amp; Lock All MFPs
+                <span></span> Push LDAP &amp; Lock All MFPs
               </button>
             </div>
           </div>
 
-          <button class="btn btn-secondary" onclick="loadDirectoryPageConfig()" title="Refresh directory settings">🔄 Refresh</button>
+          <button class="btn btn-secondary" onclick="loadDirectoryPageConfig()" title="Refresh directory settings">Refresh</button>
         </div>
       </div>
 
@@ -683,7 +823,7 @@
               </div>
               <div class="form-group flex-1">
                 <label class="form-label" for="dirBindPass">Service Bind Password</label>
-                <input type="password" id="dirBindPass" class="form-input" placeholder="••••••••">
+                <input type="password" id="dirBindPass" class="form-input" placeholder="********">
               </div>
             </div>
 
@@ -703,7 +843,7 @@
         <!-- Card 2: Active Directory & External Attributes Mapping -->
         <div class="card" style="margin-bottom:0; border-left:4px solid var(--primary);">
           <div class="card-head">
-            <h2>🏷️ AD Attribute Mapping &amp; externalAttributes</h2>
+            <h2>AD Attribute Mapping &amp; externalAttributes</h2>
           </div>
           <div class="card-body-pad" style="flex-direction:column; gap:12px;">
             <p style="font-size:12px; color:#475569; margin:0; line-height:1.4;">
@@ -762,7 +902,7 @@
       <!-- Card 3: Live User Attribute Inspector -->
       <div class="card" style="margin-bottom:20px;">
         <div class="card-head">
-          <h2>🔍 Live Active Directory User Attribute Inspector</h2>
+          <h2>Live Active Directory User Attribute Inspector</h2>
         </div>
         <div class="card-body-pad" style="flex-direction:column; gap:12px;">
           <p style="font-size:12.5px; color:#475569; margin:0;">
@@ -784,7 +924,7 @@
       <!-- Card: Push LDAP to Printer (1-by-1 or Fleet) -->
       <div class="card" style="margin-bottom:20px; border-left:4px solid #2563EB;">
         <div class="card-head">
-          <h2>🏢 Push LDAP &amp; Card Lockdown to Toshiba MFPs (1-by-1 or Fleet)</h2>
+          <h2>Push LDAP &amp; Card Lockdown to Toshiba MFPs (1-by-1 or Fleet)</h2>
         </div>
         <div class="card-body-pad" style="flex-direction:column; gap:12px;">
           <p style="font-size:12.5px; color:#475569; margin:0; line-height:1.4;">
@@ -800,7 +940,7 @@
             </div>
 
             <button type="button" class="btn btn-primary" onclick="window.pushLdapToSelectedPrinterFromDirPage()" id="btnDirPushSingle" style="height:36px; align-self:flex-end; font-weight:700; background:#2563EB; border-color:#1D4ED8;">
-              🔐 Push LDAP to This Printer
+              Push LDAP to This Printer
             </button>
 
             <div style="border-left:1px solid #CBD5E1; height:36px; margin:0 8px;"></div>
@@ -808,7 +948,7 @@
             <div style="display:flex; flex-direction:column; gap:4px;">
               <label style="font-size:11.5px; font-weight:700; color:#475569; text-transform:uppercase;">Or Push to All:</label>
               <button type="button" class="btn btn-secondary" onclick="window.pushLdapLockAllFleet()" id="btnDirPushFleet" style="height:36px; font-weight:700; color:#0F172A;">
-                ⚡ Push LDAP to Entire Fleet
+                Push LDAP to Entire Fleet
               </button>
             </div>
           </div>
@@ -818,7 +958,7 @@
       <!-- Card 4: Synchronization & Fleet Deployment Console -->
       <div class="card">
         <div class="card-head">
-          <h2>📜 Synchronization &amp; Fleet Push Log Output</h2>
+          <h2>Synchronization &amp; Fleet Push Log Output</h2>
           <button class="btn btn-secondary btn-sm" onclick="document.getElementById('dirPageLogBox').textContent='Console cleared.'">Clear Console</button>
         </div>
         <div class="card-body-pad" style="flex-direction:column; gap:10px;">
@@ -885,7 +1025,7 @@
           <p>Real-time hardware copy accounting captured from Toshiba e-BRIDGE Next MFPs via TopAccess XML.</p>
         </div>
         <div style="display:flex; gap:8px;">
-          <button type="button" class="btn btn-primary" onclick="pollFleetCopyJobs()" id="btnPollCopyFleetLogs">🔄 Poll MFPs Now</button>
+          <button type="button" class="btn btn-primary" onclick="pollFleetCopyJobs()" id="btnPollCopyFleetLogs">Poll MFPs Now</button>
           <button type="button" class="btn btn-secondary" onclick="loadCopyJobs()">Refresh</button>
         </div>
       </div>
@@ -919,6 +1059,266 @@
             </tbody>
           </table>
         </div>
+      </div>
+    </div>
+    <!-- =====================================================================
+         PAGE: REPORTS & ANALYTICS (ENTERPRISE PAPERCUT MF ARCHITECTURE)
+         ===================================================================== -->
+    <div id="page-reports" class="page-view" style="display:none;">
+      
+      <!-- Top Action Bar -->
+      <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+        <div>
+          <h2 class="h5 fw-bold mb-1 text-dark" style="letter-spacing:-0.2px;">Enterprise Reports &amp; Cost Center Analytics</h2>
+          <div class="text-secondary small">Comprehensive page volume, hardware accounting, and cost allocation by Department, Cost Center, and Printer.</div>
+        </div>
+        <div class="d-flex gap-2 align-items-center flex-wrap">
+          <button type="button" class="btn btn-outline-primary btn-sm fw-semibold d-inline-flex align-items-center gap-1 shadow-sm" onclick="window.openCustomReportModal()">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></svg>
+            Custom Report Builder
+          </button>
+          <button type="button" class="btn btn-outline-secondary btn-sm fw-semibold d-inline-flex align-items-center gap-1 shadow-sm" onclick="window.printReportView()">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+            Print / Save PDF
+          </button>
+          <button type="button" class="btn btn-primary btn-sm fw-bold d-inline-flex align-items-center gap-1 shadow-sm" onclick="window.exportCurrentReportCsv()">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            Export CSV
+          </button>
+          <button type="button" class="btn btn-light btn-sm border fw-semibold d-inline-flex align-items-center gap-1 shadow-sm" onclick="window.loadReports()">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+            Refresh
+          </button>
+        </div>
+      </div>
+
+      <!-- Compact 5-Metric Strip (No excessive vertical scrolling) -->
+      <div class="row g-2 mb-3">
+        <div class="col-12 col-sm-6 col-md-4 col-lg">
+          <div class="card h-100 p-2 shadow-sm border-0 border-top border-primary border-3 bg-white">
+            <div class="text-secondary small fw-semibold text-uppercase" style="font-size:10.5px; letter-spacing:0.5px;">Total Fleet Volume</div>
+            <div class="d-flex align-items-baseline gap-2 mt-1">
+              <span id="repStatTotalVolume" class="h4 fw-bold mb-0 text-dark">-</span>
+              <span class="small text-muted">Pages</span>
+            </div>
+            <div class="text-secondary small mt-1" style="font-size:11px;">
+              Print: <span id="repStatPrintPages" class="text-primary fw-bold">-</span> | Copy: <span id="repStatCopyPages" class="text-success fw-bold">-</span>
+            </div>
+          </div>
+        </div>
+        <div class="col-12 col-sm-6 col-md-4 col-lg">
+          <div class="card h-100 p-2 shadow-sm border-0 border-top border-warning border-3 bg-white">
+            <div class="text-secondary small fw-semibold text-uppercase" style="font-size:10.5px; letter-spacing:0.5px;">Estimated Fleet Cost</div>
+            <div class="d-flex align-items-baseline gap-2 mt-1">
+              <span id="repStatTotalCost" class="h4 fw-bold mb-0 text-warning-emphasis">-</span>
+            </div>
+            <div class="text-secondary small mt-1" style="font-size:11px;">
+              Baseline: <span id="repStatPageRate" class="fw-semibold">LKR 3.00</span> / page
+            </div>
+          </div>
+        </div>
+        <div class="col-12 col-sm-6 col-md-4 col-lg">
+          <div class="card h-100 p-2 shadow-sm border-0 border-top border-info border-3 bg-white">
+            <div class="text-secondary small fw-semibold text-uppercase" style="font-size:10.5px; letter-spacing:0.5px;">Active Departments</div>
+            <div class="d-flex align-items-baseline gap-2 mt-1">
+              <span id="repStatTotalDepts" class="h4 fw-bold mb-0 text-dark">-</span>
+            </div>
+            <div class="text-secondary small mt-1 text-truncate" style="font-size:11px;">
+              Top: <span id="repStatTopDept" class="fw-bold text-dark">-</span>
+            </div>
+          </div>
+        </div>
+        <div class="col-12 col-sm-6 col-md-4 col-lg">
+          <div class="card h-100 p-2 shadow-sm border-0 border-top border-success border-3 bg-white">
+            <div class="text-secondary small fw-semibold text-uppercase" style="font-size:10.5px; letter-spacing:0.5px;">Active Cost Centers</div>
+            <div class="d-flex align-items-baseline gap-2 mt-1">
+              <span id="repStatTotalCC" class="h4 fw-bold mb-0 text-success">-</span>
+            </div>
+            <div class="text-secondary small mt-1 text-truncate" style="font-size:11px;">
+              Top: <span id="repStatTopCC" class="fw-bold text-dark">-</span>
+            </div>
+          </div>
+        </div>
+        <div class="col-12 col-sm-6 col-md-4 col-lg">
+          <div class="card h-100 p-2 shadow-sm border-0 border-top border-secondary border-3 bg-white">
+            <div class="text-secondary small fw-semibold text-uppercase" style="font-size:10.5px; letter-spacing:0.5px;">Assigned Printers</div>
+            <div class="d-flex align-items-baseline gap-2 mt-1">
+              <span id="repStatTotalPrinters" class="h4 fw-bold mb-0 text-dark">-</span>
+            </div>
+            <div class="text-secondary small mt-1 text-truncate" style="font-size:11px;">
+              Top: <span id="repStatTopPrinter" class="fw-bold text-dark">-</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Main Navigation Tabs & Multi-Filter Container -->
+      <div class="card shadow-sm border bg-white mb-3">
+        
+        <!-- Tab Navigation Bar -->
+        <div class="card-header bg-light border-bottom p-2 d-flex justify-content-between align-items-center flex-wrap gap-2">
+          <ul class="nav nav-pills gap-1" id="reportTabsList" role="tablist">
+            <li class="nav-item">
+              <button class="nav-link active btn-sm py-1 px-3 fw-bold" id="btnRepTabDepts" onclick="switchReportTab('departments')">
+                By Department
+              </button>
+            </li>
+            <li class="nav-item">
+              <button class="nav-link btn-sm py-1 px-3 fw-semibold text-secondary" id="btnRepTabCC" onclick="switchReportTab('costCenters')">
+                By Cost Center (extAttr3)
+              </button>
+            </li>
+            <li class="nav-item">
+              <button class="nav-link btn-sm py-1 px-3 fw-semibold text-secondary" id="btnRepTabPrinters" onclick="switchReportTab('printers')">
+                By Printer Device
+              </button>
+            </li>
+            <li class="nav-item">
+              <button class="nav-link btn-sm py-1 px-3 fw-semibold text-secondary" id="btnRepTabUsers" onclick="switchReportTab('users')">
+                Detailed Users
+              </button>
+            </li>
+            <li class="nav-item">
+              <button class="nav-link btn-sm py-1 px-3 fw-semibold text-secondary" id="btnRepTabTransactions" onclick="switchReportTab('transactions')">
+                Transaction Log
+              </button>
+            </li>
+          </ul>
+
+          <!-- Quick Date Range Selector -->
+          <div class="btn-group btn-group-sm" role="group">
+            <button type="button" class="btn btn-outline-secondary active py-1 px-2 fw-semibold" id="btnRangeAll" onclick="setReportDateRange('ALL')">All Time</button>
+            <button type="button" class="btn btn-outline-secondary py-1 px-2 fw-semibold" id="btnRangeToday" onclick="setReportDateRange('TODAY')">Today</button>
+            <button type="button" class="btn btn-outline-secondary py-1 px-2 fw-semibold" id="btnRange7d" onclick="setReportDateRange('7DAYS')">Last 7D</button>
+            <button type="button" class="btn btn-outline-secondary py-1 px-2 fw-semibold" id="btnRange30d" onclick="setReportDateRange('30DAYS')">Last 30D</button>
+            <button type="button" class="btn btn-outline-secondary py-1 px-2 fw-semibold" id="btnRangeCustom" onclick="toggleCustomDateInputs()">Custom Date</button>
+          </div>
+        </div>
+
+        <!-- Filter Toolbar Strip -->
+        <div class="p-2 border-bottom bg-white d-flex align-items-center gap-2 flex-wrap">
+          
+          <!-- Custom Date Range Inputs -->
+          <div id="customDateRangeBox" class="align-items-center gap-1" style="display:none;">
+            <input type="date" id="reportStartDate" class="form-control form-control-sm" style="width:130px;" onchange="applyReportFilters()">
+            <span class="text-muted small">to</span>
+            <input type="date" id="reportEndDate" class="form-control form-control-sm" style="width:130px;" onchange="applyReportFilters()">
+          </div>
+
+          <!-- Department Filter -->
+          <div class="d-flex align-items-center gap-1">
+            <span class="small text-secondary fw-semibold">Dept:</span>
+            <select id="reportDeptFilter" class="form-select form-select-sm" style="width:150px;" onchange="applyReportFilters()">
+              <option value="">All Departments</option>
+            </select>
+          </div>
+
+          <!-- Cost Center Filter -->
+          <div class="d-flex align-items-center gap-1">
+            <span class="small text-secondary fw-semibold">Cost Center:</span>
+            <select id="reportCCFilter" class="form-select form-select-sm" style="width:150px;" onchange="applyReportFilters()">
+              <option value="">All Cost Centers</option>
+            </select>
+          </div>
+
+          <!-- Printer Device Filter -->
+          <div class="d-flex align-items-center gap-1">
+            <span class="small text-secondary fw-semibold">Printer:</span>
+            <select id="reportPrinterFilter" class="form-select form-select-sm" style="width:160px;" onchange="applyReportFilters()">
+              <option value="">All Printers</option>
+            </select>
+          </div>
+
+          <!-- Search Input -->
+          <div class="d-flex align-items-center flex-grow-1" style="min-width:180px;">
+            <input type="text" id="reportSearchFilter" class="form-control form-control-sm" placeholder="Search user, department, printer..." oninput="applyReportFilters()">
+          </div>
+
+          <!-- Reset Filter Button -->
+          <button type="button" class="btn btn-outline-secondary btn-sm" onclick="resetReportFilters()" title="Reset All Filters">
+            Clear
+          </button>
+        </div>
+
+        <!-- Compact Scrollable Table Container (No excessive vertical page scrolling) -->
+        <div style="max-height: 480px; overflow-y: auto; overflow-x: auto;" class="position-relative">
+          <table class="table table-sm table-hover align-middle mb-0" id="reportsMainTable" style="font-size:12.5px;">
+            <thead class="sticky-top bg-light shadow-sm" id="reportsTableHead" style="z-index: 5; border-bottom: 2px solid #CBD5E1;">
+            </thead>
+            <tbody id="reportsTableBody">
+              <tr><td colspan="10" class="text-center py-4 text-muted">Loading report data...</td></tr>
+            </tbody>
+            <tfoot class="sticky-bottom bg-light fw-bold border-top border-2" id="reportsTableFoot" style="z-index: 4;">
+            </tfoot>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- =========================================================================
+         MODAL: CUSTOM REPORT BUILDER (PaperCut MF Style)
+         ========================================================================= -->
+    <div id="modalCustomReport" class="modal-backdrop" style="display:none;">
+      <div class="modal-box" style="max-width:560px;">
+        <div class="modal-head">
+          <h3 class="h6 mb-0 fw-bold">Custom Report Builder</h3>
+          <button type="button" class="modal-close-btn" onclick="closeCustomReportModal()">X</button>
+        </div>
+        <form onsubmit="handleGenerateCustomReport(event)">
+          <div class="modal-body p-3">
+            <div class="mb-3">
+              <label class="form-label small fw-bold">1. Select Report Focus / Grouping</label>
+              <select id="crReportType" class="form-select form-select-sm">
+                <option value="departments" selected>Department Print &amp; Copy Volume Summary</option>
+                <option value="costCenters">Cost Center (extensionAttribute3) Accounting</option>
+                <option value="printers">Printer Device Volume by Department &amp; Location</option>
+                <option value="users">User Account Printing &amp; Copying Quota</option>
+                <option value="transactions">Transaction Log (All Print &amp; Walk-up Copy Jobs)</option>
+              </select>
+            </div>
+            <div class="row g-2 mb-3">
+              <div class="col-6">
+                <label class="form-label small fw-bold">2. Department Filter</label>
+                <select id="crDeptFilter" class="form-select form-select-sm">
+                  <option value="">All Departments</option>
+                </select>
+              </div>
+              <div class="col-6">
+                <label class="form-label small fw-bold">3. Cost Center Filter</label>
+                <select id="crCCFilter" class="form-select form-select-sm">
+                  <option value="">All Cost Centers</option>
+                </select>
+              </div>
+            </div>
+            <div class="row g-2 mb-3">
+              <div class="col-6">
+                <label class="form-label small fw-bold">4. Start Date</label>
+                <input type="date" id="crStartDate" class="form-control form-control-sm">
+              </div>
+              <div class="col-6">
+                <label class="form-label small fw-bold">5. End Date</label>
+                <input type="date" id="crEndDate" class="form-control form-control-sm">
+              </div>
+            </div>
+            <div class="mb-2">
+              <label class="form-label small fw-bold">6. Export Action</label>
+              <div class="d-flex gap-2">
+                <button type="button" class="btn btn-outline-primary btn-sm flex-fill fw-semibold" onclick="handleCustomReportView()">
+                  View On Screen
+                </button>
+                <button type="button" class="btn btn-success btn-sm flex-fill fw-bold" onclick="handleCustomReportCsv()">
+                  Download CSV
+                </button>
+                <button type="button" class="btn btn-outline-secondary btn-sm flex-fill fw-semibold" onclick="handleCustomReportPrint()">
+                  Print / Save PDF
+                </button>
+              </div>
+            </div>
+          </div>
+          <div class="modal-foot p-2 border-top d-flex justify-content-end">
+            <button type="button" class="btn btn-secondary btn-sm" onclick="closeCustomReportModal()">Close</button>
+          </div>
+        </form>
       </div>
     </div>
 
@@ -968,7 +1368,7 @@
           <p>Customize corporate identity, upload enterprise logos, and configure global system preferences.</p>
         </div>
         <div>
-          <button class="btn btn-secondary" onclick="loadSettings()">🔄 Reload Settings</button>
+          <button class="btn btn-secondary" onclick="loadSettings()"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg> <span>Reload Settings</span></button>
         </div>
       </div>
 
@@ -1015,10 +1415,10 @@
             <!-- Action Buttons for Logo -->
             <div style="display: flex; gap: 10px; margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--border);">
               <button type="button" id="btnSaveLogo" class="btn btn-primary" onclick="handleSaveLogo()" disabled>
-                💾 Save Logo
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg> <span>Save Logo</span>
               </button>
               <button type="button" id="btnResetLogo" class="btn btn-secondary" onclick="handleResetLogo()" style="color: #DC2626;">
-                🗑️ Reset to Default
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg> <span>Reset to Default</span>
               </button>
             </div>
           </div>
@@ -1073,12 +1473,68 @@
 
             <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; padding-top: 14px; border-top: 1px solid var(--border);">
               <button type="submit" id="btnSaveGeneralSettings" class="btn btn-primary">
-                💾 Save General Settings
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg> <span>Save General Settings</span>
               </button>
             </div>
           </form>
         </div>
 
+      </div>
+
+      <!-- ROW 2: DIRECTORY & IDENTITY INTEGRATION STATUS (ISO 9241-110 COMPLIANT) -->
+      <div class="card" style="margin-top: 24px; border: 1px solid var(--border); box-shadow: var(--shadow-sm);">
+        <div class="card-head" style="background: var(--white); border-bottom: 1px solid var(--border); padding: 14px 20px;">
+          <div class="d-flex align-items-center gap-2">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--primary); flex-shrink:0;"><rect x="2" y="2" width="20" height="8" rx="2" ry="2"/><rect x="2" y="14" width="20" height="8" rx="2" ry="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/></svg>
+            <div>
+              <strong style="font-size: 13.5px; color: var(--text-dark);">Active Directory &amp; LDAP Integration Status</strong>
+              <div style="font-size: 11.5px; color: var(--text-muted); margin-top: 2px;">
+                Centralized user identity, department categorization, and authentication services
+              </div>
+            </div>
+          </div>
+          <div style="display:flex; gap:8px; align-items:center;">
+            <button type="button" class="btn btn-secondary btn-sm" onclick="window.triggerSettingsAdSync()" id="btnSettingsSyncAd">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+              <span>Sync Users Now</span>
+            </button>
+            <button type="button" class="btn btn-primary btn-sm" onclick="navigatePage('directory')">
+              <span>Configure Directory Services</span>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+            </button>
+          </div>
+        </div>
+
+        <div style="padding: 20px;">
+          <!-- 4-Stat Overview Row -->
+          <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 16px;">
+            <div style="background: #F8FAFC; border: 1px solid var(--border); border-radius: 6px; padding: 14px 16px;">
+              <div style="font-size: 11px; text-transform: uppercase; font-weight: 700; color: #64748B; letter-spacing: 0.5px;">Directory Domain</div>
+              <div id="settingsLdapDomainBadge" style="font-size: 15px; font-weight: 700; color: #1E40AF; margin-top: 4px;">qoa.local</div>
+            </div>
+            <div style="background: #F8FAFC; border: 1px solid var(--border); border-radius: 6px; padding: 14px 16px;">
+              <div style="font-size: 11px; text-transform: uppercase; font-weight: 700; color: #64748B; letter-spacing: 0.5px;">Integration Status</div>
+              <div id="settingsLdapStatusBadge" style="margin-top: 6px;"><span class="badge badge-online">Connected</span></div>
+            </div>
+            <div style="background: #F8FAFC; border: 1px solid var(--border); border-radius: 6px; padding: 14px 16px;">
+              <div style="font-size: 11px; text-transform: uppercase; font-weight: 700; color: #64748B; letter-spacing: 0.5px;">Active Synced Users</div>
+              <div id="settingsLdapUserCountBadge" style="font-size: 15px; font-weight: 700; color: #0F172A; margin-top: 4px;">6 Users</div>
+            </div>
+            <div style="background: #F8FAFC; border: 1px solid var(--border); border-radius: 6px; padding: 14px 16px;">
+              <div style="font-size: 11px; text-transform: uppercase; font-weight: 700; color: #64748B; letter-spacing: 0.5px;">Department Attribute</div>
+              <div id="settingsLdapDeptBadge" style="font-size: 13px; font-weight: 600; color: #0F172A; margin-top: 5px;"><code>department</code></div>
+            </div>
+          </div>
+
+          <div style="display: flex; justify-content: space-between; align-items: center; background: #F1F5F9; border-radius: 6px; padding: 10px 16px; font-size: 12px; color: #475569;">
+            <div id="settingLdapSyncStatus">
+              Active Directory LDAP source of truth is configured under <strong>Directory &amp; LDAP Management</strong>.
+            </div>
+            <div style="font-size: 11.5px; color: #64748B;">
+              Single Source of Truth &bull; ISO 9241-110 Compliant
+            </div>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -1147,6 +1603,18 @@
             <input type="number" id="printerPort" class="form-input" value="9100" required>
           </div>
           <div class="form-group flex-1">
+            <label class="form-label" for="printerDepartment">Assigned Department *</label>
+            <input type="text" id="printerDepartment" class="form-input" placeholder="e.g. Operations, Corporate, Finance, IT" list="printerDeptSuggestions" value="Operations" required>
+            <datalist id="printerDeptSuggestions">
+              <option value="Operations">
+              <option value="Corporate">
+              <option value="Finance">
+              <option value="IT Administration">
+              <option value="Engineering">
+              <option value="Human Resources">
+            </datalist>
+          </div>
+          <div class="form-group flex-1">
             <label class="form-label" for="printerLocation">Physical Location *</label>
             <input type="text" id="printerLocation" class="form-input" placeholder="e.g. Main Office - Ground Floor Print Bay" required>
           </div>
@@ -1207,13 +1675,13 @@
                 <input type="checkbox" id="printerAutoEwb" checked> Push EWB settings to device automatically
               </label>
               <button type="button" class="btn btn-sm btn-secondary" onclick="navigatePage('directory')" title="Open Active Directory / LDAP Configuration">
-                🏢 Configure LDAP
+                Configure LDAP
               </button>
               <button type="button" class="btn btn-sm btn-secondary" onclick="testEwbInModal()" id="btnModalTestEwb">
                 Test &amp; Push EWB
               </button>
               <button type="button" class="btn btn-sm btn-primary" onclick="pushLdapAndLockInModal()" id="btnModalPushLdapLock" style="background:#2563EB; border-color:#1D4ED8; font-weight:700;">
-                🔐 Push LDAP &amp; Card Lock Now
+                Push LDAP &amp; Card Lock Now
               </button>
             </div>
             <div id="modalEwbLog" class="ewb-log-box"></div>
@@ -1231,6 +1699,144 @@
 <!-- =========================================================================
      MODAL 2: ADD / EDIT USER MODAL
      ========================================================================= -->
+<!-- =========================================================================
+     MODAL: VIEW USER PROFILE & DETAILS
+     ========================================================================= -->
+<div id="viewUserModal" class="modal-backdrop" style="display:none; z-index:9998;" onclick="if(event.target===this) window.closeViewUserModal();">
+  <div class="modal-box" style="max-width:680px; border-radius:6px;">
+    <div class="modal-head" style="border-bottom:1px solid var(--border); padding:16px 20px;">
+      <div style="display:flex; align-items:center; gap:10px;">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--primary);"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+        <h3 id="viewUserModalTitle" style="font-size:16px; margin:0; font-weight:700; color:var(--text-dark);">User Profile &amp; Identity Details</h3>
+      </div>
+      <button type="button" class="modal-close-btn" onclick="window.closeViewUserModal()">X</button>
+    </div>
+
+    <div class="modal-body" style="padding:20px; max-height:calc(85vh - 120px); overflow-y:auto;">
+      <!-- Profile Header Strip -->
+      <div style="display:flex; align-items:center; gap:16px; padding:16px; background:#F8FAFC; border:1px solid var(--border); border-radius:6px; margin-bottom:18px;">
+        <div id="viewUserAvatar" style="width:54px; height:54px; border-radius:50%; background:#1D4ED8; color:#FFFFFF; display:flex; align-items:center; justify-content:center; font-size:20px; font-weight:700; flex-shrink:0;">
+          U
+        </div>
+        <div style="flex:1;">
+          <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+            <h4 id="viewUserName" style="font-size:17px; font-weight:700; color:var(--text-dark); margin:0;">Username</h4>
+            <span id="viewUserStatusBadge" class="badge badge-online">ACTIVE</span>
+            <span id="viewUserRoleBadge" class="badge" style="background:#EFF6FF; color:#1D4ED8; font-weight:700;">USER</span>
+          </div>
+          <div style="font-size:12px; color:var(--text-muted); margin-top:3px;" id="viewUserSubtitle">
+            Windows Local User
+          </div>
+        </div>
+      </div>
+
+      <!-- 2-Column Details Grid -->
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:18px;">
+        <!-- Card 1: Identification & Security Credentials -->
+        <div style="background:#FFFFFF; border:1px solid var(--border); border-radius:6px; padding:14px 16px;">
+          <div style="font-size:11.5px; font-weight:700; text-transform:uppercase; color:#64748B; letter-spacing:0.5px; margin-bottom:12px; display:flex; align-items:center; gap:6px;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+            <span>Identification &amp; RFID Tags</span>
+          </div>
+
+          <div style="display:flex; flex-direction:column; gap:10px; font-size:12.5px;">
+            <div>
+              <div style="font-size:11px; color:#64748B;">Primary RFID Badge Card ID</div>
+              <div id="viewUserBadgeId" style="font-size:13.5px; font-weight:700; color:#1D4ED8; font-family:Consolas, monospace; margin-top:2px;">None</div>
+            </div>
+            <div>
+              <div style="font-size:11px; color:#64748B;">Secondary NFC Card ID</div>
+              <div id="viewUserSecBadgeId" style="font-size:13px; font-weight:600; color:#15803D; font-family:Consolas, monospace; margin-top:2px;">None</div>
+            </div>
+            <div>
+              <div style="font-size:11px; color:#64748B;">Touch Terminal PIN Status</div>
+              <div id="viewUserPinStatus" style="margin-top:2px;"><span class="badge badge-pin-no">NOT SET</span></div>
+            </div>
+            <div>
+              <div style="font-size:11px; color:#64748B;">Assigned Department</div>
+              <div id="viewUserDept" style="font-weight:600; color:var(--text-dark); margin-top:2px;">Corporate</div>
+            </div>
+            <div>
+              <div style="font-size:11px; color:#64748B;">Cost Center / Billing Code</div>
+              <div id="viewUserCostCenter" style="font-weight:600; color:var(--text-dark); margin-top:2px;">-</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Card 2: Directory & Directory Attributes -->
+        <div style="background:#FFFFFF; border:1px solid var(--border); border-radius:6px; padding:14px 16px;">
+          <div style="font-size:11.5px; font-weight:700; text-transform:uppercase; color:#64748B; letter-spacing:0.5px; margin-bottom:12px; display:flex; align-items:center; gap:6px;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+            <span>Directory &amp; System Metadata</span>
+          </div>
+
+          <div style="display:flex; flex-direction:column; gap:10px; font-size:12.5px;">
+            <div>
+              <div style="font-size:11px; color:#64748B;">Email Address</div>
+              <div id="viewUserEmail" style="color:var(--text-dark); margin-top:2px;">-</div>
+            </div>
+            <div>
+              <div style="font-size:11px; color:#64748B;">Windows Security Identifier (SID)</div>
+              <div id="viewUserSid" style="font-family:Consolas, monospace; font-size:11px; color:#334155; word-break:break-all; margin-top:2px;">-</div>
+            </div>
+            <div>
+              <div style="font-size:11px; color:#64748B;">Authentication Source</div>
+              <div id="viewUserAuthSource" style="margin-top:2px;"><span class="badge badge-source-manual">MANUAL</span></div>
+            </div>
+            <div>
+              <div style="font-size:11px; color:#64748B;">External Directory Attributes</div>
+              <div id="viewUserExtAttrs" style="display:flex; gap:4px; flex-wrap:wrap; margin-top:4px;">
+                <span style="color:#94a3b8; font-size:11.5px;">None</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Volume & Usage Metrics Card -->
+      <div style="background:#FFFFFF; border:1px solid var(--border); border-radius:6px; padding:14px 16px;">
+        <div style="font-size:11.5px; font-weight:700; text-transform:uppercase; color:#64748B; letter-spacing:0.5px; margin-bottom:12px; display:flex; align-items:center; gap:6px;">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>
+          <span>Volume &amp; Quota Accounting</span>
+        </div>
+
+        <div style="display:grid; grid-template-columns:repeat(4, 1fr); gap:12px; text-align:center;">
+          <div style="background:#F8FAFC; border:1px solid var(--border); border-radius:4px; padding:10px 8px;">
+            <div style="font-size:11px; color:#64748B; text-transform:uppercase; font-weight:600;">Print Pages</div>
+            <div id="viewUserPrintCount" style="font-size:18px; font-weight:700; color:#1D4ED8; margin-top:4px;">0</div>
+          </div>
+          <div style="background:#F8FAFC; border:1px solid var(--border); border-radius:4px; padding:10px 8px;">
+            <div style="font-size:11px; color:#64748B; text-transform:uppercase; font-weight:600;">Copy Pages</div>
+            <div id="viewUserCopyCount" style="font-size:18px; font-weight:700; color:#15803D; margin-top:4px;">0</div>
+          </div>
+          <div style="background:#F8FAFC; border:1px solid var(--border); border-radius:4px; padding:10px 8px;">
+            <div style="font-size:11px; color:#64748B; text-transform:uppercase; font-weight:600;">Total Pages</div>
+            <div id="viewUserTotalPages" style="font-size:18px; font-weight:700; color:#0F172A; margin-top:4px;">0</div>
+          </div>
+          <div style="background:#F8FAFC; border:1px solid var(--border); border-radius:4px; padding:10px 8px;">
+            <div style="font-size:11px; color:#64748B; text-transform:uppercase; font-weight:600;">Est. Cost</div>
+            <div id="viewUserEstCost" style="font-size:16px; font-weight:700; color:#B45309; margin-top:4px;">Rs. 0.00</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal-foot" style="border-top:1px solid var(--border); padding:14px 20px; display:flex; justify-content:space-between; align-items:center;">
+      <button type="button" class="btn btn-secondary" onclick="window.closeViewUserModal()">Close</button>
+      <div style="display:flex; gap:8px;">
+        <button type="button" class="btn btn-secondary" id="btnViewUserResetPin" onclick="window.triggerResetPinFromView()">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+          <span>Reset Touch PIN</span>
+        </button>
+        <button type="button" class="btn btn-primary" id="btnViewUserEdit" onclick="window.triggerEditFromView()">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+          <span>Edit User Details</span>
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div id="userModal" class="modal-backdrop" style="display:none;">
   <div class="modal-box">
     <div class="modal-head">
@@ -1256,6 +1862,10 @@
           <div class="form-group flex-1">
             <label class="form-label" for="userDepartment">Department</label>
             <input type="text" id="userDepartment" class="form-input" placeholder="e.g. Operations, Engineering, Finance">
+          </div>
+          <div class="form-group flex-1">
+            <label class="form-label" for="userCostCenter">Cost Center (extensionAttribute3)</label>
+            <input type="text" id="userCostCenter" class="form-input" placeholder="e.g. CC-101, CORP-IT">
           </div>
           <div class="form-group flex-1">
             <label class="form-label" for="userRole">Security Role *</label>
@@ -1386,7 +1996,7 @@
         <div style="background:#F8FAFC; border:1.5px solid #CBD5E1; padding:12px 14px; margin-top:12px; margin-bottom:12px; border-radius:4px;">
           <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
             <div style="font-size:13px; font-weight:700; color:#0F172A; display:flex; align-items:center; gap:6px;">
-              <span>🔒</span> Toshiba HOME Screen Icons Lock
+              <span></span> Toshiba HOME Screen Icons Lock
             </div>
             <span id="quickEwbLockBadge" class="badge" style="background:#FEF3C7; color:#92400E; font-size:11px; font-weight:700;">Status: Unlocked</span>
           </div>
@@ -1395,13 +2005,13 @@
           </p>
           <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
             <button type="button" class="btn btn-sm btn-primary" onclick="handleQuickEwbPushLdap()" id="btnQuickEwbPushLdap" style="background:#2563EB; border-color:#1D4ED8; font-weight:700; padding:6px 14px;">
-              🏢 Push LDAP &amp; Card Lock
+              Push LDAP &amp; Card Lock
             </button>
             <button type="button" class="btn btn-sm btn-primary" onclick="handleQuickEwbLock(true)" id="btnQuickEwbLockCopy" style="background:#D97706; border-color:#B45309; font-weight:700; padding:6px 14px;">
-              🔒 Lock HOME Icons (Photo Copy)
+              Lock HOME Icons (Photo Copy)
             </button>
             <button type="button" class="btn btn-sm btn-secondary" onclick="handleQuickEwbLock(false)" id="btnQuickEwbUnlockCopy" style="font-size:11.5px; padding:6px 12px;">
-              🔓 Unlock (Allow Walk-up Copy)
+              Unlock (Allow Walk-up Copy)
             </button>
             <label style="font-size:11.5px; color:#334155; margin-left:auto; display:flex; align-items:center; gap:6px; cursor:pointer;">
               <input type="checkbox" id="quickEwbAutoLock" checked> Auto-lock on Push EWB
@@ -1428,7 +2038,7 @@
 <div id="modalCreateVirtualQueue" class="modal-backdrop" style="display:none; z-index:9999;">
   <div class="modal-box" style="max-width:560px; border-radius:4px;">
     <div class="modal-head">
-      <h3>➕ Create New Virtual Print Queue</h3>
+      <h3>+ Create New Virtual Print Queue</h3>
       <button class="modal-close-btn" onclick="window.closeCreateVirtualQueueModal()">X</button>
     </div>
     <form onsubmit="window.handleCreateVirtualQueueSubmit(event)">
@@ -1497,7 +2107,7 @@
 <div id="modalEditVirtualQueue" class="modal-backdrop" style="display:none; z-index:9999;">
   <div class="modal-box" style="max-width:560px; border-radius:4px;">
     <div class="modal-head">
-      <h3>✏️ Edit Virtual Print Queue</h3>
+      <h3>Edit Virtual Print Queue</h3>
       <button class="modal-close-btn" onclick="window.closeEditVirtualQueueModal()">X</button>
     </div>
     <form onsubmit="window.handleEditVirtualQueueSubmit(event)">
@@ -1575,14 +2185,14 @@
   <div class="modal-box notify-modal-box" id="notifyModalBox">
     <div class="modal-head" id="notifyModalHead">
       <div class="notify-head-left">
-        <span id="notifyModalHeadIcon" class="notify-head-icon">ℹ️</span>
+        <span id="notifyModalHeadIcon" class="notify-head-icon"></span>
         <h3 id="notifyModalTitle">Notification</h3>
       </div>
-      <button type="button" class="modal-close-btn" onclick="window.closeNotifyModal()" title="Close">✕</button>
+      <button type="button" class="modal-close-btn" onclick="window.closeNotifyModal()" title="Close"></button>
     </div>
     <div class="modal-body notify-modal-body">
       <div id="notifyModalBadge" class="notify-type-badge notify-badge-info">
-        <span id="notifyModalBadgeIcon">ℹ</span>
+        <span id="notifyModalBadgeIcon"></span>
       </div>
       <div class="notify-msg-wrapper">
         <p id="notifyModalMsg" class="notify-msg-text"></p>
@@ -1594,7 +2204,8 @@
   </div>
 </div>
 
-<script src="/js/admin-app.js?v=20261026_06"></script>
+<script src="/js/bootstrap.bundle.min.js"></script>
+<script src="/js/admin-app.js?v=20261026_105"></script>
 
 <!-- =========================================================================
      MODAL: ACTIVE DIRECTORY & LDAP SETTINGS MODAL
@@ -1652,7 +2263,7 @@
         <div id="dirSyncLogBox" class="ewb-log-box" style="display:block; min-height:60px; margin-top:14px;">Ready to configure Active Directory.</div>
       </div>
       <div class="modal-foot">
-        <button type="button" class="btn btn-secondary" onclick="handleSyncActiveDirectory()" id="btnExecuteAdSync" style="margin-right:auto; color:#1D4ED8; font-weight:700;">🔄 Sync AD Users Now</button>
+        <button type="button" class="btn btn-secondary" onclick="handleSyncActiveDirectory()" id="btnExecuteAdSync" style="margin-right:auto; color:#1D4ED8; font-weight:700;">Sync AD Users Now</button>
         <button type="button" class="btn btn-secondary" onclick="closeDirectoryModal()">Close</button>
         <button type="submit" class="btn btn-primary">Save Settings</button>
       </div>

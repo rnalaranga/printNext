@@ -124,6 +124,9 @@ public class PrinterService {
         if (request.adminPassword() != null && !request.adminPassword().isBlank()) {
             printer.setAdminPassword(request.adminPassword().trim());
         }
+        if (request.department() != null && !request.department().isBlank()) {
+            printer.setDepartment(request.department().trim());
+        }
 
         if (request.isActive() != null) {
             printer.setActive(request.isActive());
@@ -219,6 +222,12 @@ public class PrinterService {
         }
         if (request.adminPassword() != null && !request.adminPassword().isBlank()) {
             printer.setAdminPassword(request.adminPassword().trim());
+        }
+        if (request.department() != null && !request.department().isBlank()) {
+            printer.setDepartment(request.department().trim());
+        }
+        if (request.department() != null && !request.department().isBlank()) {
+            printer.setDepartment(request.department().trim());
         }
 
         if (Boolean.TRUE.equals(request.isDefaultHoldQueue())) {
