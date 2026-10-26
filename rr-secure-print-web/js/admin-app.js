@@ -22,6 +22,7 @@
     },
     serverTerminalUrl: 'http://192.168.1.100:8080/'
   };
+  window.state = state;
 
   /* =========================================================================
      PAGE INITIALIZATION & AUTHENTICATION
@@ -189,7 +190,7 @@
         state.printers = data || [];
         renderPrinters();
         updateSidebarPrinterInfo();
-        if (typeof window.populateDirPrintersDropdown === 'function') { window.populateDirPrintersDropdown(); }
+        try { if (typeof window.populateDirPrintersDropdown === 'function') { window.populateDirPrintersDropdown(); } } catch (e) { console.warn('Dropdown populate error:', e); }
       })
       .catch(function (err) {
         console.error('Printers error:', err);
@@ -3260,7 +3261,8 @@
     if (!sel) return;
     var currentVal = sel.value;
     sel.innerHTML = '<option value="">-- Choose a Printer --</option>';
-    (state.printers || []).forEach(function (p) {
+    var pList = (typeof state !== 'undefined' && state.printers) ? state.printers : (window.state && window.state.printers ? window.state.printers : []);
+    pList.forEach(function (p) {
       var isOld = (p.deviceGeneration === 'TOSHIBA_OLD' || (!p.deviceGeneration && p.model && (p.model.indexOf('306') !== -1 || p.model.indexOf('256') !== -1 || p.model.indexOf('356') !== -1 || p.model.indexOf('456') !== -1)));
       if (!isOld) {
         var opt = document.createElement('option');
