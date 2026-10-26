@@ -747,13 +747,13 @@ public class ActiveDirectoryService {
                     "if (-not $res) { [PSCustomObject]@{ found = $false; username = '" + cleanUser + "' } | ConvertTo-Json -Compress; exit; } " +
                     "$p = $res.Properties; " +
                     "$dict = [ordered]@{ found = $true; username = '" + cleanUser + "'; " +
-                    "displayName = if ($p.displayname) { $p.displayname[0].ToString() } else { '' }; " +
-                    "mail = if ($p.mail) { $p.mail[0].ToString() } else { '' }; " +
-                    "department = if ($p.department) { $p.department[0].ToString() } else { '' }; " +
-                    "cardAttributeValue = if ($p.Item('" + cardAttr + "')) { $p.Item('" + cardAttr + "')[0].ToString() } else { '' }; " +
-                    "externalAttr1Value = if ($p.Item('" + ext1Attr + "')) { $p.Item('" + ext1Attr + "')[0].ToString() } else { '' }; " +
-                    "externalAttr2Value = if ($p.Item('" + ext2Attr + "')) { $p.Item('" + ext2Attr + "')[0].ToString() } else { '' }; " +
-                    "externalAttr3Value = if ($p.Item('" + ext3Attr + "')) { $p.Item('" + ext3Attr + "')[0].ToString() } else { '' }; " +
+                    "displayName = if ($p.Contains('displayname')) { [string]$p.Item('displayname')[0] } else { '' }; " +
+                    "mail = if ($p.Contains('mail')) { [string]$p.Item('mail')[0] } else { '' }; " +
+                    "department = if ($p.Contains('department')) { [string]$p.Item('department')[0] } else { '' }; " +
+                    "cardAttributeValue = if ($p.Contains('" + cardAttr.toLowerCase() + "')) { [string]$p.Item('" + cardAttr.toLowerCase() + "')[0] } else { '' }; " +
+                    "externalAttr1Value = if ($p.Contains('" + ext1Attr.toLowerCase() + "')) { [string]$p.Item('" + ext1Attr.toLowerCase() + "')[0] } else { '' }; " +
+                    "externalAttr2Value = if ($p.Contains('" + ext2Attr.toLowerCase() + "')) { [string]$p.Item('" + ext2Attr.toLowerCase() + "')[0] } else { '' }; " +
+                    "externalAttr3Value = if ($p.Contains('" + ext3Attr.toLowerCase() + "')) { [string]$p.Item('" + ext3Attr.toLowerCase() + "')[0] } else { '' }; " +
                     "allAttributesCount = $p.PropertyNames.Count }; " +
                     "$dict | ConvertTo-Json -Compress";
 
@@ -804,19 +804,19 @@ public class ActiveDirectoryService {
                 "$results = @(); " +
                 "foreach ($item in $s.FindAll()) { " +
                 "  $p = $item.Properties; " +
-                "  $sam = if ($p.samaccountname) { $p.samaccountname[0] } else { '' }; " +
+                "  $sam = if ($p.Contains('samaccountname')) { [string]$p.Item('samaccountname')[0] } else { '' }; " +
                 "  if (-not $sam -or $sam.EndsWith('$')) { continue; } " +
-                "  $disp = if ($p.displayname) { $p.displayname[0] } else { $sam }; " +
-                "  $mail = if ($p.mail) { $p.mail[0] } else { '' }; " +
-                "  $dept = if ($p.department) { $p.department[0] } else { 'Corporate' }; " +
-                "  $sid = if ($p.objectsid) { (New-Object System.Security.Principal.SecurityIdentifier($p.objectsid[0], 0)).Value } else { '' }; " +
-                "  $card = if ($p.Item('" + cardAttr + "')) { $p.Item('" + cardAttr + "')[0].ToString() } else { '' }; " +
-                "  $e1 = if ($p.Item('" + ext1Attr + "')) { $p.Item('" + ext1Attr + "')[0].ToString() } else { '' }; " +
-                "  $e2 = if ($p.Item('" + ext2Attr + "')) { $p.Item('" + ext2Attr + "')[0].ToString() } else { '' }; " +
-                "  $e3 = if ($p.Item('" + ext3Attr + "')) { $p.Item('" + ext3Attr + "')[0].ToString() } else { '' }; " +
+                "  $disp = if ($p.Contains('displayname')) { [string]$p.Item('displayname')[0] } else { $sam }; " +
+                "  $mail = if ($p.Contains('mail')) { [string]$p.Item('mail')[0] } else { '' }; " +
+                "  $dept = if ($p.Contains('department')) { [string]$p.Item('department')[0] } else { 'Corporate' }; " +
+                "  $sid = if ($p.Contains('objectsid')) { (New-Object System.Security.Principal.SecurityIdentifier($p.Item('objectsid')[0], 0)).Value } else { '' }; " +
+                "  $card = if ($p.Contains('" + cardAttr.toLowerCase() + "')) { [string]$p.Item('" + cardAttr.toLowerCase() + "')[0] } else { '' }; " +
+                "  $e1 = if ($p.Contains('" + ext1Attr.toLowerCase() + "')) { [string]$p.Item('" + ext1Attr.toLowerCase() + "')[0] } else { '' }; " +
+                "  $e2 = if ($p.Contains('" + ext2Attr.toLowerCase() + "')) { [string]$p.Item('" + ext2Attr.toLowerCase() + "')[0] } else { '' }; " +
+                "  $e3 = if ($p.Contains('" + ext3Attr.toLowerCase() + "')) { [string]$p.Item('" + ext3Attr.toLowerCase() + "')[0] } else { '' }; " +
                 "  $results += [PSCustomObject]@{ samAccountName = $sam; displayName = $disp; mail = $mail; department = $dept; sid = $sid; cardId = $card; ext1 = $e1; ext2 = $e2; ext3 = $e3 }; " +
                 "} " +
-                "$results | ConvertTo-Json -Compress";
+                "@($results) | ConvertTo-Json -Compress";
 
         ProcessBuilder pb = new ProcessBuilder("powershell", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", script);
         Process process = pb.start();
