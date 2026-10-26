@@ -665,15 +665,35 @@ public class ToshibaEwbService {
                     session.client().send(searchServerReq, HttpResponse.BodyHandlers.ofString());
                 }
 
-                // Step D: Apply function-wise lockdown (Copy/Scan locked, EWB open)
+                // Step D: Apply function-wise lockdown (Copy/Scan locked, EWB open) + Native LDAP Auth + Card Auth
+                String chosenAdId = (adId != null && !adId.isBlank()) ? adId : "0";
                 String authLockXml = "<DeviceInformationModel>" +
                         "<SetValue overrideDelta='false'>" +
                         "<Payload><path>Authentication/AuthenticationSettings/openAccess</path><value>1</value></Payload>" +
                         "<Payload><path>Authentication/AuthenticationSettings/functionwiseAuthentication</path><value>true</value></Payload>" +
+                        "<Payload><path>Authentication/AuthenticationSettings/unauthorizedPrintJob</path><value>Delete</value></Payload>" +
+                        "<Payload><path>Authentication/AuthenticationSettings/allowGuestUser</path><value>false</value></Payload>" +
                         "<Payload><path>Authentication/AuthenticationSettings/AuthenticatedTarget/copy</path><value>true</value></Payload>" +
                         "<Payload><path>Authentication/AuthenticationSettings/AuthenticatedTarget/scan</path><value>true</value></Payload>" +
+                        "<Payload><path>Authentication/AuthenticationSettings/AuthenticatedTarget/fax</path><value>true</value></Payload>" +
                         "<Payload><path>Authentication/AuthenticationSettings/AuthenticatedTarget/print</path><value>false</value></Payload>" +
+                        "<Payload><path>Authentication/AuthenticationSettings/AuthenticatedTarget/list</path><value>true</value></Payload>" +
+                        "<Payload><path>Authentication/AuthenticationSettings/AuthenticatedTarget/userFunctions</path><value>true</value></Payload>" +
                         "<Payload><path>Authentication/AuthenticationSettings/AuthenticatedTarget/EWB</path><value>false</value></Payload>" +
+                        "<Payload><path>Authentication/AuthenticationSettings/AuthenticationType/authenticationName</path><value>Ldap</value></Payload>" +
+                        "<Payload><path>Authentication/AuthenticationSettings/AuthenticationType/autoRegistration</path><value>true</value></Payload>" +
+                        "<Payload><path>Authentication/AuthenticationSettings/AuthenticationType/primaryLdapID</path><value>1</value></Payload>" +
+                        "<Payload><path>Authentication/AuthenticationSettings/AuthenticationType/Ldap[@ID='1']/ldapServerID</path><value>" + chosenAdId + "</value></Payload>" +
+                        "<Payload><path>Authentication/AuthenticationSettings/AuthenticationType/Ldap[@ID='1']/isWindowsServer</path><value>true</value></Payload>" +
+                        "<Payload><path>Authentication/AuthenticationSettings/AuthenticationType/Ldap[@ID='1']/attrNameForUser</path><value>sAMAccountName</value></Payload>" +
+                        "<Payload><path>Authentication/AuthenticationSettings/CardAuthentication/allowCardAuthAlways</path><value>true</value></Payload>" +
+                        "<Payload><path>Authentication/AuthenticationSettings/CardAuthentication/autoRegistrationForCardAuth</path><value>true</value></Payload>" +
+                        "<Payload><path>Authentication/AuthenticationSettings/CardAuthentication/screenForCardAuthentication</path><value>false</value></Payload>" +
+                        "<Payload><path>Authentication/AuthenticationSettings/CardAuthentication/primaryCardServerID</path><value>1</value></Payload>" +
+                        "<Payload><path>Authentication/AuthenticationSettings/CardAuthentication/cardServerID[@ID='1']</path><value>" + chosenAdId + "</value></Payload>" +
+                        "<Payload><path>Authentication/AuthenticationSettings/CardAuthentication/isWindowsServer[@ID='1']</path><value>true</value></Payload>" +
+                        "<Payload><path>Authentication/AuthenticationSettings/CardAuthentication/attrNameForUser[@ID='1']</path><value>sAMAccountName</value></Payload>" +
+                        "<Payload><path>Authentication/AuthenticationSettings/CardAuthentication/atrNameForCardID[@ID='1']</path><value>" + escapeXml(cardAttr) + "</value></Payload>" +
                         "</SetValue>" +
                         "<Command>" +
                         "<AuthSettings><commandNode>Authentication/AuthenticationSettings</commandNode></AuthSettings>" +
@@ -692,6 +712,33 @@ public class ToshibaEwbService {
                 HttpResponse<String> authLockResp = session.client().send(authLockReq, HttpResponse.BodyHandlers.ofString());
                 String authBody = authLockResp.body() != null ? authLockResp.body() : "";
                 boolean authLockOk = authBody.contains("STATUS_OK");
+                log.info("[TOSHIBA CWS] Auth Settings with Native LDAP & Card Auth on {} -> ok={}", cleanIp, authLockOk);
+
+                if (!authLockOk) {
+                    log.warn("[TOSHIBA CWS] Full LDAP Auth Settings response on {}: {}", cleanIp, authBody);
+                    String fallbackAuthXml = "<DeviceInformationModel>" +
+                            "<SetValue overrideDelta='false'>" +
+                            "<Payload><path>Authentication/AuthenticationSettings/openAccess</path><value>1</value></Payload>" +
+                            "<Payload><path>Authentication/AuthenticationSettings/functionwiseAuthentication</path><value>true</value></Payload>" +
+                            "<Payload><path>Authentication/AuthenticationSettings/AuthenticatedTarget/copy</path><value>true</value></Payload>" +
+                            "<Payload><path>Authentication/AuthenticationSettings/AuthenticatedTarget/scan</path><value>true</value></Payload>" +
+                            "<Payload><path>Authentication/AuthenticationSettings/AuthenticatedTarget/print</path><value>false</value></Payload>" +
+                            "<Payload><path>Authentication/AuthenticationSettings/AuthenticatedTarget/EWB</path><value>false</value></Payload>" +
+                            "</SetValue>" +
+                            "<Command>" +
+                            "<AuthSettings><commandNode>Authentication/AuthenticationSettings</commandNode></AuthSettings>" +
+                            "</Command>" +
+                            "</DeviceInformationModel>";
+                    HttpRequest fallbackReq = HttpRequest.newBuilder()
+                            .uri(URI.create("http://" + cleanIp + "/contentwebserver"))
+                            .timeout(ldapTimeout)
+                            .header("Content-Type", "text/xml; charset=UTF-8")
+                            .header("csrfpId", session.sessionCookie() != null ? session.sessionCookie() : "")
+                            .header("Referer", "http://" + cleanIp + "/Administration/Security/Authentication.html")
+                            .POST(HttpRequest.BodyPublishers.ofString(fallbackAuthXml))
+                            .build();
+                    session.client().send(fallbackReq, HttpResponse.BodyHandlers.ofString());
+                }
 
                 if (dsOk) {
                     ldapStatus = "LDAP Configured (" + ldapHost + ":" + ldapPort + ", BaseDN=" + baseDn + ", AD ID=" + (adId != null ? adId : "Active") + ")";

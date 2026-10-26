@@ -1,4 +1,4 @@
-﻿/* ==========================================================================
+/* ==========================================================================
    nexPrint - Administration Console Application JS v20
    Clean Modern Architecture
    ========================================================================== */
@@ -3146,7 +3146,6 @@
     }
   } catch (e) {}
 
-})();
 
   window.pushLdapAndLockInModal = function () {
     var ip = document.getElementById('printerIp').value.trim();
@@ -3603,3 +3602,4 @@
         showToast('Scan error: ' + err.message, 'error');
       });
   };
+})();
