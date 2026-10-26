@@ -554,44 +554,149 @@ public class ToshibaEwbService {
                 String cardAttr = (dirConfig.getCardIdAttribute() != null && !dirConfig.getCardIdAttribute().isBlank())
                         ? dirConfig.getCardIdAttribute() : "employeeNumber";
 
-                String ldapSetXml = "<DeviceInformationModel>" +
+                Thread.sleep(1500);
+                Duration ldapTimeout = Duration.ofSeconds(20);
+                // Step A: Query existing DirectoryServices to check if ActiveDirectory exists and discover its ID
+                String queryDsXml = "<DeviceInformationModel><GetValue><Network><Services><DirectoryServices></DirectoryServices><LDAP></LDAP></Services></Network></GetValue></DeviceInformationModel>";
+                HttpRequest queryDsReq = HttpRequest.newBuilder()
+                        .uri(URI.create("http://" + cleanIp + "/contentwebserver"))
+                        .timeout(ldapTimeout)
+                        .header("Content-Type", "text/plain; charset=utf-8")
+                        .header("csrfpId", session.sessionCookie() != null ? session.sessionCookie() : "")
+                        .header("Referer", "http://" + cleanIp + "/Administration/Setup/Network.html")
+                        .POST(HttpRequest.BodyPublishers.ofString(queryDsXml))
+                        .build();
+
+                HttpResponse<String> queryDsResp = session.client().send(queryDsReq, HttpResponse.BodyHandlers.ofString());
+                String qBody = queryDsResp.body() != null ? queryDsResp.body() : "";
+                boolean adExists = qBody.contains("<name>ActiveDirectory</name>") || qBody.contains(">ActiveDirectory<");
+
+                // Step B: Build DirectoryService Commit XML (Network commandNode)
+                String dsNameTag = adExists ? "" : "<name>ActiveDirectory</name>";
+                String dsXml = "<DeviceInformationModel>" +
+                        "<Command>" +
+                        "<Commit>" +
+                        "<commandNode>Network</commandNode>" +
+                        "<SetValue>" +
+                        "<Network><Services><DirectoryServices>" +
+                        "<DirectoryService>" +
+                        dsNameTag +
+                        "<oldName>ActiveDirectory</oldName>" +
+                        "<ipAddress>" + escapeXml(ldapHost) + "</ipAddress>" +
+                        "<portNo>" + escapeXml(ldapPort) + "</portNo>" +
+                        "<authenticationMethod>Auto</authenticationMethod>" +
+                        "<searchBase>" + escapeXml(baseDn) + "</searchBase>" +
+                        "<userName>" + escapeXml(bindUser) + "</userName>" +
+                        (bindPass.isEmpty() ? "" : "<password>" + escapeXml(bindPass) + "</password>") +
+                        "<timeOut>5</timeOut>" +
+                        "<selectedForAuthentication>0</selectedForAuthentication>" +
+                        (adExists ? "" : "<selected>0</selected>") +
+                        "<SSLEnabled>Disable</SSLEnabled>" +
+                        "<SSLPortNo>636</SSLPortNo>" +
+                        "<givenName>givenName</givenName>" +
+                        "<sn>sn</sn>" +
+                        "<mail>mail</mail>" +
+                        "<facsimileTelephoneNumber>facsimileTelephoneNumber</facsimileTelephoneNumber>" +
+                        "<company>company</company>" +
+                        "<department>department</department>" +
+                        "<WindowsServer>true</WindowsServer>" +
+                        "<attrUserName>sAMAccountName</attrUserName>" +
+                        "<attrLdapServerName>sAMAccountName</attrLdapServerName>" +
+                        "<attrPIN>pager</attrPIN>" +
+                        "<attrCardID>" + escapeXml(cardAttr) + "</attrCardID>" +
+                        "<attrCardRevision>adminDescription</attrCardRevision>" +
+                        "<attrFromAddr>mail</attrFromAddr>" +
+                        "<attrFromName>displayName</attrFromName>" +
+                        "</DirectoryService>" +
+                        "</DirectoryServices></Services></Network>" +
+                        "</SetValue>" +
+                        "</Commit>" +
+                        "</Command>" +
+                        "</DeviceInformationModel>";
+
+                HttpRequest dsReq = HttpRequest.newBuilder()
+                        .uri(URI.create("http://" + cleanIp + "/contentwebserver"))
+                        .timeout(ldapTimeout)
+                        .header("Content-Type", "text/plain; charset=utf-8")
+                        .header("csrfpId", session.sessionCookie() != null ? session.sessionCookie() : "")
+                        .header("Referer", "http://" + cleanIp + "/Administration/Setup/setting/DirServiceProp.html")
+                        .POST(HttpRequest.BodyPublishers.ofString(dsXml))
+                        .build();
+
+                HttpResponse<String> dsResp = session.client().send(dsReq, HttpResponse.BodyHandlers.ofString());
+                String dsRespBody = dsResp.body() != null ? dsResp.body() : "";
+                boolean dsOk = dsRespBody.contains("STATUS_OK") || dsRespBody.contains("STATUS_DS_USR_ALLREADYEXISTS");
+
+                // Step C: Query to discover ActiveDirectory ID and set SearchServer in LDAP
+                String adId = null;
+                try {
+                    HttpResponse<String> qResp2 = session.client().send(queryDsReq, HttpResponse.BodyHandlers.ofString());
+                    String b2 = qResp2.body() != null ? qResp2.body() : "";
+                    Pattern p = Pattern.compile("<DirectoryService\\s+id=\"(\\d+)\"[^>]*>.*?ActiveDirectory.*?</DirectoryService>", Pattern.DOTALL);
+                    Matcher m = p.matcher(b2);
+                    if (m.find()) {
+                        adId = m.group(1);
+                    }
+                } catch (Exception ignored) {}
+
+                if (adId != null && !adId.isBlank()) {
+                    String searchServerXml = "<DeviceInformationModel>" +
+                            "<Command>" +
+                            "<Commit>" +
+                            "<commandNode>Network</commandNode>" +
+                            "<SetValue>" +
+                            "<Network><Services><LDAP>" +
+                            "<SearchServer><DirectoryServiceID>" + escapeXml(adId) + "</DirectoryServiceID></SearchServer>" +
+                            "</LDAP></Services></Network>" +
+                            "</SetValue>" +
+                            "</Commit>" +
+                            "</Command>" +
+                            "</DeviceInformationModel>";
+
+                    HttpRequest searchServerReq = HttpRequest.newBuilder()
+                            .uri(URI.create("http://" + cleanIp + "/contentwebserver"))
+                            .timeout(TIMEOUT)
+                            .header("Content-Type", "text/plain; charset=utf-8")
+                            .header("csrfpId", session.sessionCookie() != null ? session.sessionCookie() : "")
+                            .header("Referer", "http://" + cleanIp + "/Administration/Setup/Network.html")
+                            .POST(HttpRequest.BodyPublishers.ofString(searchServerXml))
+                            .build();
+
+                    session.client().send(searchServerReq, HttpResponse.BodyHandlers.ofString());
+                }
+
+                // Step D: Apply function-wise lockdown (Copy/Scan locked, EWB open)
+                String authLockXml = "<DeviceInformationModel>" +
                         "<SetValue overrideDelta='false'>" +
-                        "<Payload><path>Authentication/AuthenticationSettings/authenticationType</path><value>LDAP</value></Payload>" +
                         "<Payload><path>Authentication/AuthenticationSettings/openAccess</path><value>1</value></Payload>" +
                         "<Payload><path>Authentication/AuthenticationSettings/functionwiseAuthentication</path><value>true</value></Payload>" +
                         "<Payload><path>Authentication/AuthenticationSettings/AuthenticatedTarget/copy</path><value>true</value></Payload>" +
                         "<Payload><path>Authentication/AuthenticationSettings/AuthenticatedTarget/scan</path><value>true</value></Payload>" +
                         "<Payload><path>Authentication/AuthenticationSettings/AuthenticatedTarget/print</path><value>false</value></Payload>" +
                         "<Payload><path>Authentication/AuthenticationSettings/AuthenticatedTarget/EWB</path><value>false</value></Payload>" +
-                        "<Payload><path>DirectoryService/DirectoryServiceSettings/serverName</path><value>" + escapeXml(ldapHost) + "</value></Payload>" +
-                        "<Payload><path>DirectoryService/DirectoryServiceSettings/portNumber</path><value>" + escapeXml(ldapPort) + "</value></Payload>" +
-                        "<Payload><path>DirectoryService/DirectoryServiceSettings/searchBase</path><value>" + escapeXml(baseDn) + "</value></Payload>" +
-                        "<Payload><path>DirectoryService/DirectoryServiceSettings/userName</path><value>" + escapeXml(bindUser) + "</value></Payload>" +
-                        (bindPass.isEmpty() ? "" : "<Payload><path>DirectoryService/DirectoryServiceSettings/password</path><value>" + escapeXml(bindPass) + "</value></Payload>") +
-                        "<Payload><path>Authentication/LdapAuthenticationSettings/cardAttribute</path><value>" + escapeXml(cardAttr) + "</value></Payload>" +
-                        "<Payload><path>DirectoryService/DirectoryServiceSettings/attributeForCard</path><value>" + escapeXml(cardAttr) + "</value></Payload>" +
                         "</SetValue>" +
                         "<Command>" +
                         "<AuthSettings><commandNode>Authentication/AuthenticationSettings</commandNode></AuthSettings>" +
                         "</Command>" +
                         "</DeviceInformationModel>";
 
-                HttpRequest ldapReq = HttpRequest.newBuilder()
+                HttpRequest authLockReq = HttpRequest.newBuilder()
                         .uri(URI.create("http://" + cleanIp + "/contentwebserver"))
-                        .timeout(TIMEOUT)
+                        .timeout(ldapTimeout)
                         .header("Content-Type", "text/xml; charset=UTF-8")
                         .header("csrfpId", session.sessionCookie() != null ? session.sessionCookie() : "")
                         .header("Referer", "http://" + cleanIp + "/Administration/Security/Authentication.html")
-                        .header("Cache-Control", "no-cache")
-                        .POST(HttpRequest.BodyPublishers.ofString(ldapSetXml))
+                        .POST(HttpRequest.BodyPublishers.ofString(authLockXml))
                         .build();
 
-                HttpResponse<String> ldapResp = session.client().send(ldapReq, HttpResponse.BodyHandlers.ofString());
-                String respBody = ldapResp.body() != null ? ldapResp.body() : "";
-                if (respBody.contains("STATUS_OK") || respBody.contains("Normal")) {
-                    ldapStatus = "LDAP Configured (" + ldapHost + ":" + ldapPort + ", BaseDN=" + baseDn + ")";
+                HttpResponse<String> authLockResp = session.client().send(authLockReq, HttpResponse.BodyHandlers.ofString());
+                String authBody = authLockResp.body() != null ? authLockResp.body() : "";
+                boolean authLockOk = authBody.contains("STATUS_OK");
+
+                if (dsOk) {
+                    ldapStatus = "LDAP Configured (" + ldapHost + ":" + ldapPort + ", BaseDN=" + baseDn + ", AD ID=" + (adId != null ? adId : "Active") + ")";
                 } else {
-                    ldapStatus = "LDAP Configured";
+                    ldapStatus = "LDAP Setup: " + extractOpStatus(dsRespBody);
                 }
             } catch (Exception ex) {
                 ldapStatus = "LDAP Note: " + ex.getMessage();

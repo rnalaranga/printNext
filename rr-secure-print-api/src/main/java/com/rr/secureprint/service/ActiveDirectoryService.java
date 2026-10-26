@@ -328,8 +328,10 @@ public class ActiveDirectoryService {
         int importedCount = 0;
         int updatedCount = 0;
         List<String> userSummary = new ArrayList<>();
+        com.rr.secureprint.entity.DirectoryConfigEntity cfg = directoryConfigRepository.findById(1L).orElse(null);
+        String defaultPin = (cfg != null && cfg.getDefaultPin() != null && !cfg.getDefaultPin().isBlank()) ? cfg.getDefaultPin().trim() : "1234";
 
-        for (Map<String, String> u : winUsers) {
+ for (Map<String, String> u : winUsers) {
             String name = u.get("name");
             if (name == null || name.isBlank() || name.endsWith("$")) continue;
 
