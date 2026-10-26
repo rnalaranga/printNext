@@ -260,6 +260,9 @@ public class ActiveDirectoryService {
                 if (ext1 != null && !ext1.isBlank()) existing.setExternalAttribute1(ext1.trim());
                 if (ext2 != null && !ext2.isBlank()) existing.setExternalAttribute2(ext2.trim());
                 if (ext3 != null && !ext3.isBlank()) existing.setExternalAttribute3(ext3.trim());
+                if (existing.getPinHash() == null || existing.getPinHash().isBlank()) {
+                    existing.setPinHash(defaultPin != null && !defaultPin.isBlank() ? defaultPin.trim() : "1234");
+                }
                 if (existing.getUserSid() == null || !existing.getUserSid().startsWith("S-1-5-")) {
                     existing.setUserSid(sid);
                 }
@@ -348,6 +351,9 @@ public class ActiveDirectoryService {
                 UserEntity existing = existingOpt.get();
                 existing.setDisplayName(displayName);
                 existing.setAuthSource("WINDOWS_LOCAL");
+                if (existing.getPinHash() == null || existing.getPinHash().isBlank()) {
+                    existing.setPinHash(defaultPin != null && !defaultPin.isBlank() ? defaultPin.trim() : "1234");
+                }
                 if (existing.getUserSid() == null || !existing.getUserSid().startsWith("S-1-5-")) {
                     existing.setUserSid(sid);
                 }
