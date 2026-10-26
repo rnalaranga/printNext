@@ -1,4 +1,4 @@
-/* ==========================================================================
+﻿/* ==========================================================================
    nexPrint - Administration Console Application JS v20
    Clean Modern Architecture
    ========================================================================== */
@@ -189,6 +189,7 @@
         state.printers = data || [];
         renderPrinters();
         updateSidebarPrinterInfo();
+        if (typeof window.populateDirPrintersDropdown === 'function') { window.populateDirPrintersDropdown(); }
       })
       .catch(function (err) {
         console.error('Printers error:', err);
@@ -290,6 +291,7 @@
           '</button>' +
           '<div class="action-dropdown-menu" id="dropdown-menu-' + p.id + '">' +
             (!isOld ? '<button type="button" class="action-dropdown-item item-primary" onclick="openQuickEwbModal(' + p.id + ')"><span>⚡</span> Push EWB Settings</button>' : '') +
+            (!isOld ? '<button type="button" class="action-dropdown-item" style="color:#2563EB; font-weight:700;" onclick="window.pushLdapAndLockSinglePrinter(' + p.id + ')"><span>🏢</span> Push LDAP &amp; Card Lock</button>' : '') +
             (!isOld ? '<button type="button" class="action-dropdown-item item-warning" onclick="window.lockSinglePrinter(' + p.id + ', true)"><span>🔒</span> Lock HOME Icons (Photo Copy)</button>' : '') +
             (!isOld ? '<button type="button" class="action-dropdown-item" onclick="window.lockSinglePrinter(' + p.id + ', false)"><span>🔓</span> Unlock Walk-Up Copy</button>' : '') +
             (!isOld ? '<div class="action-dropdown-divider"></div>' : '') +
@@ -1232,6 +1234,7 @@
       })
       .then(function (cfg) {
         state.directoryConfig = cfg;
+        if (!state.printers || state.printers.length === 0) { loadPrinters(); } else { window.populateDirPrintersDropdown(); }
         var elDomain = document.getElementById('dirDomainName');
         var elLdapUrl = document.getElementById('dirLdapUrl');
         var elPin = document.getElementById('dirDefaultPin');
@@ -3221,6 +3224,98 @@
     });
   };
 
+    window.handleQuickEwbPushLdap = function () {
+    var pId = document.getElementById('quickEwbPrinterId').value;
+    if (!pId) return;
+    var ip = document.getElementById('quickEwbIp').value;
+    var logBox = document.getElementById('quickEwbLog');
+    var btn = document.getElementById('btnQuickEwbPushLdap');
+
+    if (btn) btn.disabled = true;
+    if (logBox) {
+      logBox.textContent = 'Connecting to TopAccess CWS and pushing System LDAP Settings & Card Lockdown to ' + ip + '...';
+    }
+
+    fetch('/api/admin/printers/' + pId + '/push-ldap-lock', { method: 'POST' })
+      .then(function (res) { return res.json(); })
+      .then(function (data) {
+        if (btn) btn.disabled = false;
+        if (data.success) {
+          showToast('✅ LDAP & Card Lock pushed to ' + ip + ' successfully!', 'success');
+          if (logBox) logBox.textContent = '✅ SUCCESS: ' + (data.message || 'Configured for LDAP & Card Lockdown.') + '\nConfigured At: ' + (data.configuredAt || new Date().toISOString());
+          loadPrinters();
+        } else {
+          showToast('❌ Push failed: ' + (data.message || 'Error communicating with MFP'), 'error');
+          if (logBox) logBox.textContent = '❌ FAILED: ' + (data.message || 'Unknown error');
+        }
+      })
+      .catch(function (err) {
+        if (btn) btn.disabled = false;
+        showToast('❌ Network error: ' + err.message, 'error');
+        if (logBox) logBox.textContent = '❌ ERROR: ' + err.message;
+      });
+  };
+
+  window.populateDirPrintersDropdown = function () {
+    var sel = document.getElementById('dirSinglePrinterSelect');
+    if (!sel) return;
+    var currentVal = sel.value;
+    sel.innerHTML = '<option value="">-- Choose a Printer --</option>';
+    (state.printers || []).forEach(function (p) {
+      var isOld = (p.deviceGeneration === 'TOSHIBA_OLD' || (!p.deviceGeneration && p.model && (p.model.indexOf('306') !== -1 || p.model.indexOf('256') !== -1 || p.model.indexOf('356') !== -1 || p.model.indexOf('456') !== -1)));
+      if (!isOld) {
+        var opt = document.createElement('option');
+        opt.value = p.id;
+        opt.textContent = p.name + ' (' + p.ipAddress + ')' + (p.functionsLocked ? ' [🔒 Locked]' : '');
+        sel.appendChild(opt);
+      }
+    });
+    if (currentVal) sel.value = currentVal;
+  };
+
+  window.pushLdapToSelectedPrinterFromDirPage = function () {
+    var sel = document.getElementById('dirSinglePrinterSelect');
+    if (!sel || !sel.value) {
+      showToast('Please select a printer from the dropdown first.', 'warning');
+      return;
+    }
+    var id = parseInt(sel.value, 10);
+    var p = (state.printers || []).find(function (x) { return x.id === id; });
+    var pName = p ? (p.name + ' (' + p.ipAddress + ')') : ('Printer #' + id);
+    var logBox = document.getElementById('dirPageLogBox');
+    var btn = document.getElementById('btnDirPushSingle');
+
+    if (btn) btn.disabled = true;
+    if (logBox) {
+      logBox.textContent = '[' + new Date().toLocaleTimeString() + '] Pushing LDAP settings & Card Lockdown to ' + pName + '...';
+    }
+    showToast('Pushing LDAP to ' + pName + '...', 'info');
+
+    fetch('/api/admin/printers/' + id + '/push-ldap-lock', { method: 'POST' })
+      .then(function (res) { return res.json(); })
+      .then(function (data) {
+        if (btn) btn.disabled = false;
+        if (data.success) {
+          showToast('✅ ' + (data.message || 'LDAP & Card Lock configured!'), 'success');
+          if (logBox) {
+            logBox.textContent = '[' + new Date().toLocaleTimeString() + '] ✅ SUCCESS on ' + pName + ':\n' +
+              (data.message || 'Configured for LDAP & Card Lockdown.') + '\nConfigured At: ' + (data.configuredAt || new Date().toISOString());
+          }
+          loadPrinters();
+        } else {
+          showToast('❌ Push failed: ' + (data.message || 'Unknown error'), 'error');
+          if (logBox) {
+            logBox.textContent = '[' + new Date().toLocaleTimeString() + '] ❌ FAILED on ' + pName + ':\n' + (data.message || 'Unknown error');
+          }
+        }
+      })
+      .catch(function (err) {
+        if (btn) btn.disabled = false;
+        showToast('❌ Network error: ' + err.message, 'error');
+        if (logBox) logBox.textContent = '[' + new Date().toLocaleTimeString() + '] ❌ ERROR: ' + err.message;
+      });
+  };
+
   window.pushLdapLockAllFleet = function () {
     customConfirm(
       'Push LDAP & Card Lock to All MFPs',
@@ -3258,6 +3353,7 @@
       .then(function (res) { return res.json(); })
       .then(function (cfg) {
         state.directoryConfig = cfg;
+        if (!state.printers || state.printers.length === 0) { loadPrinters(); } else { window.populateDirPrintersDropdown(); }
         var setVal = function(id, val) {
           var el = document.getElementById(id);
           if (el && val !== undefined && val !== null) el.value = val;
