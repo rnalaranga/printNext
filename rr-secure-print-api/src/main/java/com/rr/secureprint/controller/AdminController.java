@@ -11,6 +11,9 @@ import com.rr.secureprint.service.PrinterService;
 import com.rr.secureprint.service.UserService;
 import com.rr.secureprint.service.CopyTrackingService;
 import com.rr.secureprint.service.SystemSettingsService;
+import com.rr.secureprint.service.ScanService;
+import com.rr.secureprint.service.SmtpEmailService;
+import com.rr.secureprint.service.ToshibaEwbService;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -32,6 +35,9 @@ public class AdminController {
     private final ActiveDirectoryService activeDirectoryService;
     private final CopyTrackingService copyTrackingService;
     private final SystemSettingsService systemSettingsService;
+    private final ScanService scanService;
+    private final SmtpEmailService smtpEmailService;
+    private final ToshibaEwbService toshibaEwbService;
 
     public AdminController(JobService jobService,
                            AuthService authService,
@@ -40,7 +46,10 @@ public class AdminController {
                            UserService userService,
                            ActiveDirectoryService activeDirectoryService,
                            CopyTrackingService copyTrackingService,
-                           SystemSettingsService systemSettingsService) {
+                           SystemSettingsService systemSettingsService,
+                           ScanService scanService,
+                           SmtpEmailService smtpEmailService,
+                           ToshibaEwbService toshibaEwbService) {
         this.jobService = jobService;
         this.authService = authService;
         this.auditLogRepository = auditLogRepository;
@@ -49,6 +58,9 @@ public class AdminController {
         this.activeDirectoryService = activeDirectoryService;
         this.copyTrackingService = copyTrackingService;
         this.systemSettingsService = systemSettingsService;
+        this.scanService = scanService;
+        this.smtpEmailService = smtpEmailService;
+        this.toshibaEwbService = toshibaEwbService;
     }
 
     /* =========================================================================
@@ -651,5 +663,82 @@ public class AdminController {
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of("error", e.getMessage()));
         }
+    }
+
+    /* =========================================================================
+       SCAN TO EMAIL & SMTP ADMIN ENDPOINTS
+       ========================================================================= */
+
+    @GetMapping("/scans")
+    public ResponseEntity<?> getScanActivity(HttpServletRequest httpRequest) {
+        if (!isAdmin(httpRequest)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("error", "Admin privileges required."));
+        }
+        return ResponseEntity.ok(scanService.getRecentScans());
+    }
+
+    @PostMapping("/scans/test-email")
+    public ResponseEntity<?> testSmtpEmail(@RequestBody Map<String, Object> body, HttpServletRequest httpRequest) {
+        if (!isAdmin(httpRequest)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("error", "Admin privileges required."));
+        }
+
+        String host = (String) body.get("host");
+        Integer port = body.get("port") != null ? Integer.parseInt(body.get("port").toString()) : 587;
+        String user = (String) body.get("username");
+        String pass = (String) body.get("password");
+        String fromAddr = (String) body.get("fromAddress");
+        String recipient = (String) body.get("testRecipient");
+        boolean useTls = body.get("useTls") == null || Boolean.parseBoolean(body.get("useTls").toString());
+        boolean useSsl = body.get("useSsl") != null && Boolean.parseBoolean(body.get("useSsl").toString());
+
+        if (host == null || host.isBlank()) {
+            return ResponseEntity.badRequest().body(Map.of("success", false, "message", "SMTP Server Host is required."));
+        }
+        if (recipient == null || recipient.isBlank()) {
+            return ResponseEntity.badRequest().body(Map.of("success", false, "message", "Test recipient email is required."));
+        }
+        if (fromAddr == null || fromAddr.isBlank()) {
+            fromAddr = "scan@rrconstruction.lk";
+        }
+
+        var result = smtpEmailService.testSmtpConnection(host.trim(), port, user, pass, fromAddr.trim(), recipient.trim(), useTls, useSsl);
+        return ResponseEntity.ok(Map.of(
+                "success", result.success(),
+                "message", result.message()
+        ));
+    }
+
+    @PostMapping("/printers/{id}/push-smtp")
+    public ResponseEntity<?> pushSmtpToPrinter(@PathVariable("id") Long id, HttpServletRequest httpRequest) {
+        if (!isAdmin(httpRequest)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("error", "Admin privileges required."));
+        }
+
+        Optional<PrinterEntity> printerOpt = printerService.getPrinterById(id);
+        if (printerOpt.isEmpty()) {
+            return ResponseEntity.notFound().build();
+        }
+
+        PrinterEntity printer = printerOpt.get();
+        var settings = systemSettingsService.getOrCreateSettings();
+
+        String smtpHost = settings.getSmtpHost();
+        int smtpPort = settings.getSmtpPort() != null ? settings.getSmtpPort() : 587;
+        String smtpUser = settings.getSmtpUsername();
+        String smtpPass = settings.getSmtpPassword();
+        String fromAddr = settings.getSmtpFromAddress();
+        boolean useSsl = Boolean.TRUE.equals(settings.getSmtpUseSsl());
+
+        boolean ok = toshibaEwbService.configureToshibaSmtp(
+                printer.getIpAddress(), printer.getAdminUsername(), printer.getAdminPassword(),
+                smtpHost, smtpPort, smtpUser, smtpPass, fromAddr, useSsl
+        );
+
+        return ResponseEntity.ok(Map.of(
+                "success", ok,
+                "printer", printer.getName(),
+                "message", ok ? "SMTP configuration pushed to " + printer.getName() : "Failed to push SMTP to printer."
+        ));
     }
 }

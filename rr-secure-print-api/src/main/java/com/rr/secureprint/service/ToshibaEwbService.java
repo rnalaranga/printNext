@@ -39,6 +39,10 @@ public class ToshibaEwbService {
 
     private final Map<String, TopAccessSession> sessionCache = new java.util.concurrent.ConcurrentHashMap<>();
     private final Map<String, Object> printerLocks = new java.util.concurrent.ConcurrentHashMap<>();
+    private final Map<String, Boolean> currentCopyRestrictionByPrinter = new java.util.concurrent.ConcurrentHashMap<>();
+    private final Map<String, String> currentDefaultScreenByPrinter = new java.util.concurrent.ConcurrentHashMap<>();
+    private final Map<String, String> currentScanFromByPrinter = new java.util.concurrent.ConcurrentHashMap<>();
+    private final java.util.Set<String> scanOptimizedPrinters = java.util.concurrent.ConcurrentHashMap.newKeySet();
 
     private synchronized TopAccessSession getOrCreateSession(String printerIp, String username, String password) throws Exception {
         TopAccessSession existing = sessionCache.get(printerIp);
@@ -403,6 +407,12 @@ public class ToshibaEwbService {
 
         if (cleanIp.isEmpty()) return false;
 
+        Boolean currentRestricted = currentCopyRestrictionByPrinter.get(cleanIp);
+        if (currentRestricted != null && currentRestricted == restricted) {
+            log.info("[TOSHIBA CWS] setCopyRestriction on {} already restricted={}. Instant return (0ms).", cleanIp, restricted);
+            return true;
+        }
+
         Object lock = printerLocks.computeIfAbsent(cleanIp, k -> new Object());
         synchronized (lock) {
             for (int attempt = 0; attempt < 2; attempt++) {
@@ -489,6 +499,9 @@ public class ToshibaEwbService {
                     }
 
                     log.info("[TOSHIBA CWS] setCopyRestriction on {} -> restricted={} : {} (cached={})", cleanIp, restricted, ok, attempt == 0);
+                    if (ok) {
+                        currentCopyRestrictionByPrinter.put(cleanIp, restricted);
+                    }
                     return ok;
                 } catch (Exception e) {
                     sessionCache.remove(cleanIp);
@@ -548,6 +561,18 @@ public class ToshibaEwbService {
                     ldapHost = dirConfig.getLdapUrl().replaceAll("[^0-9.]", "");
                 }
 
+                // If LDAP URL points to localhost/127.0.0.1, resolve the reachable local IPv4 address
+                // so the physical Toshiba MFP can connect across the LAN.
+                if ("127.0.0.1".equals(ldapHost) || "localhost".equalsIgnoreCase(ldapHost)) {
+                    try (java.net.DatagramSocket socket = new java.net.DatagramSocket()) {
+                        socket.connect(java.net.InetAddress.getByName(cleanIp), 80);
+                        ldapHost = socket.getLocalAddress().getHostAddress();
+                    } catch (Exception e) {
+                        ldapHost = "192.168.1.100";
+                    }
+                    log.info("[TOSHIBA CWS] Resolved localhost LDAP host to LAN interface IP: {} for MFP {}", ldapHost, cleanIp);
+                }
+
                 String baseDn = dirConfig.getBaseDn() != null ? dirConfig.getBaseDn() : "";
                 String bindUser = dirConfig.getBindUser() != null ? dirConfig.getBindUser() : "";
                 String bindPass = dirConfig.getBindPassword() != null ? dirConfig.getBindPassword() : "";
@@ -584,11 +609,11 @@ public class ToshibaEwbService {
                         "<oldName>ActiveDirectory</oldName>" +
                         "<ipAddress>" + escapeXml(ldapHost) + "</ipAddress>" +
                         "<portNo>" + escapeXml(ldapPort) + "</portNo>" +
-                        "<authenticationMethod>Auto</authenticationMethod>" +
+                        "<authenticationMethod>SimpleBind</authenticationMethod>" +
                         "<searchBase>" + escapeXml(baseDn) + "</searchBase>" +
                         "<userName>" + escapeXml(bindUser) + "</userName>" +
                         (bindPass.isEmpty() ? "" : "<password>" + escapeXml(bindPass) + "</password>") +
-                        "<timeOut>5</timeOut>" +
+                        "<timeOut>2</timeOut>" +
                         "<selectedForAuthentication>1</selectedForAuthentication>" +
                         (adExists ? "" : "<selected>0</selected>") +
                         "<SSLEnabled>Disable</SSLEnabled>" +
@@ -647,31 +672,30 @@ public class ToshibaEwbService {
                 if (adId == null || adId.isBlank() || "0".equals(adId)) { adId = "1"; }
                 log.info("[TOSHIBA CWS] ActiveDirectory assigned ID on {}: {}", cleanIp, adId);
 
-                if (adId != null && !adId.isBlank()) {
-                    String searchServerXml = "<DeviceInformationModel>" +
-                            "<Command>" +
-                            "<Commit>" +
-                            "<commandNode>Network</commandNode>" +
-                            "<SetValue>" +
-                            "<Network><Services><LDAP>" +
-                            "<SearchServer><DirectoryServiceID>" + escapeXml(adId) + "</DirectoryServiceID></SearchServer>" +
-                            "</LDAP></Services></Network>" +
-                            "</SetValue>" +
-                            "</Commit>" +
-                            "</Command>" +
-                            "</DeviceInformationModel>";
+                // Set LDAP SearchServer to 0 (None / Local Address Book only) to eliminate 20-second scanner freeze
+                String searchServerXml = "<DeviceInformationModel>" +
+                        "<Command>" +
+                        "<Commit>" +
+                        "<commandNode>Network</commandNode>" +
+                        "<SetValue>" +
+                        "<Network><Services><LDAP>" +
+                        "<SearchServer><DirectoryServiceID>0</DirectoryServiceID></SearchServer>" +
+                        "</LDAP></Services></Network>" +
+                        "</SetValue>" +
+                        "</Commit>" +
+                        "</Command>" +
+                        "</DeviceInformationModel>";
 
-                    HttpRequest searchServerReq = HttpRequest.newBuilder()
-                            .uri(URI.create("http://" + cleanIp + "/contentwebserver"))
-                            .timeout(TIMEOUT)
-                            .header("Content-Type", "text/plain; charset=utf-8")
-                            .header("csrfpId", session.sessionCookie() != null ? session.sessionCookie() : "")
-                            .header("Referer", "http://" + cleanIp + "/Administration/Setup/Network.html")
-                            .POST(HttpRequest.BodyPublishers.ofString(searchServerXml))
-                            .build();
+                HttpRequest searchServerReq = HttpRequest.newBuilder()
+                        .uri(URI.create("http://" + cleanIp + "/contentwebserver"))
+                        .timeout(TIMEOUT)
+                        .header("Content-Type", "text/plain; charset=utf-8")
+                        .header("csrfpId", session.sessionCookie() != null ? session.sessionCookie() : "")
+                        .header("Referer", "http://" + cleanIp + "/Administration/Setup/Network.html")
+                        .POST(HttpRequest.BodyPublishers.ofString(searchServerXml))
+                        .build();
 
-                    session.client().send(searchServerReq, HttpResponse.BodyHandlers.ofString());
-                }
+                session.client().send(searchServerReq, HttpResponse.BodyHandlers.ofString());
 
                 // Step D: Apply function-wise lockdown (Copy/Scan locked, EWB open) + Native LDAP Auth + Card Auth
                 String chosenAdId = (adId != null && !adId.isBlank()) ? adId : "0";
@@ -794,8 +818,88 @@ public class ToshibaEwbService {
         log.info("[TOSHIBA CWS] Resetting MFP {} to clean EWB kiosk state...", cleanIp);
         boolean uiOk = setDefaultScreen(cleanIp, username, password, "EWB");
         boolean authOk = setCopyRestriction(cleanIp, username, password, true);
-        log.info("[TOSHIBA CWS] MFP {} kiosk reset complete: uiOk={}, authOk={}", cleanIp, uiOk, authOk);
+        boolean fromOk = setScanFromAddress(cleanIp, username, password, "scanner@rrconstruction.lk", "Scanner");
+        clearLdapSearchServer(cleanIp, username, password);
+        log.info("[TOSHIBA CWS] MFP {} kiosk reset complete: uiOk={}, authOk={}, fromOk={}", cleanIp, uiOk, authOk, fromOk);
         return uiOk && authOk;
+    }
+
+    /**
+     * Eliminates native Toshiba Scan screen startup freezes by optimizing:
+     * 1. Setting DNS primary to 192.168.1.100 and secondary to 8.8.8.8 with a 2-second timeout.
+     *    (Prevents 10-15s timeouts caused by 0.0.0.0 DNS).
+     * 2. Setting DirectoryService 0 (TOSHIBA eBX) IP address to 127.0.0.1 instead of 'localhost'.
+     *    (Bypasses DNS resolution entirely for local address book lookup).
+     * 3. Setting LDAP SearchServer to 0 (None / Local Address Book only).
+     * All 3 are committed in a single Network transaction and cached in-memory so it executes only once.
+     */
+    public boolean optimizeToshibaScanPerformance(String printerIp, String adminUsername, String adminPassword) {
+        String cleanIp = printerIp != null ? printerIp.trim() : "";
+        if (cleanIp.isEmpty()) return false;
+        if (scanOptimizedPrinters.contains(cleanIp)) {
+            return true;
+        }
+
+        try {
+            TopAccessSession session = getOrCreateSession(cleanIp, adminUsername, adminPassword);
+            String optXml = "<DeviceInformationModel>" +
+                    "<Command><Commit><commandNode>Network</commandNode><SetValue>" +
+                    "<Network>" +
+                    "<Protocols><DNS>" +
+                    "<primaryServer>192.168.1.100</primaryServer>" +
+                    "<secondaryServer>8.8.8.8</secondaryServer>" +
+                    "<dnsTimeoutValue>2</dnsTimeoutValue>" +
+                    "</DNS></Protocols>" +
+                    "<Services>" +
+                    "<LDAP>" +
+                    "<SearchServer><DirectoryServiceID>0</DirectoryServiceID></SearchServer>" +
+                    "<connectionTimeOut>2</connectionTimeOut>" +
+                    "</LDAP>" +
+                    "<DirectoryServices>" +
+                    "<DirectoryService permId='0' id='0'>" +
+                    "<ipAddress>127.0.0.1</ipAddress>" +
+                    "<timeOut>2</timeOut>" +
+                    "</DirectoryService>" +
+                    "<DirectoryService permId='3' id='3'>" +
+                    "<authenticationMethod>SimpleBind</authenticationMethod>" +
+                    "<timeOut>2</timeOut>" +
+                    "</DirectoryService>" +
+                    "</DirectoryServices>" +
+                    "</Services>" +
+                    "</Network>" +
+                    "</SetValue></Commit></Command>" +
+                    "</DeviceInformationModel>";
+
+            HttpRequest req = HttpRequest.newBuilder()
+                    .uri(URI.create("http://" + cleanIp + "/contentwebserver"))
+                    .timeout(TIMEOUT)
+                    .header("Content-Type", "text/plain; charset=utf-8")
+                    .header("csrfpId", session.sessionCookie() != null ? session.sessionCookie() : "")
+                    .header("Referer", "http://" + cleanIp + "/Administration/Setup/Network.html")
+                    .POST(HttpRequest.BodyPublishers.ofString(optXml))
+                    .build();
+
+            HttpResponse<String> resp = session.client().send(req, HttpResponse.BodyHandlers.ofString());
+            String respBody = resp.body() != null ? resp.body() : "";
+            boolean ok = respBody.contains("STATUS_OK") || respBody.contains("STATUS_DS_USR_ALLREADYEXISTS");
+            if (ok) {
+                scanOptimizedPrinters.add(cleanIp);
+                log.info("[TOSHIBA CWS] Optimized Scan performance (DNS 192.168.1.100, eBX 127.0.0.1, SearchServer 0) on {} -> ok=true", cleanIp);
+            } else {
+                log.warn("[TOSHIBA CWS] Failed to optimize Scan performance on {}: {}", cleanIp, respBody);
+            }
+            return ok;
+        } catch (Exception ex) {
+            log.warn("[TOSHIBA CWS] Exception optimizing Scan performance on {}: {}", cleanIp, ex.getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * Backward-compatible alias for optimizeToshibaScanPerformance.
+     */
+    public boolean clearLdapSearchServer(String printerIp, String adminUsername, String adminPassword) {
+        return optimizeToshibaScanPerformance(printerIp, adminUsername, adminPassword);
     }
 
     /**
@@ -810,6 +914,12 @@ public class ToshibaEwbService {
         String targetScreen = (screenName != null && !screenName.isBlank()) ? screenName.trim() : "Copy";
 
         if (cleanIp.isEmpty()) return false;
+
+        String currentScreen = currentDefaultScreenByPrinter.get(cleanIp);
+        if (targetScreen.equalsIgnoreCase(currentScreen)) {
+            log.info("[TOSHIBA CWS] setDefaultScreen on {} already {}. Instant return (0ms).", cleanIp, targetScreen);
+            return true;
+        }
 
         Object lock = printerLocks.computeIfAbsent(cleanIp, k -> new Object());
         synchronized (lock) {
@@ -851,6 +961,7 @@ public class ToshibaEwbService {
                     boolean ok = uiResp.statusCode() >= 200 && uiResp.statusCode() < 400 &&
                             !body.contains("STATUS_AL_CWS_UNAUTHORIZED") && !body.contains("STATUS_FAILED");
                     if (ok) {
+                        currentDefaultScreenByPrinter.put(cleanIp, targetScreen);
                         log.info("[TOSHIBA CWS] setDefaultScreen on {} to {} -> status={}, ok=true (cached={})", cleanIp, targetScreen, uiResp.statusCode(), attempt == 0);
                         return true;
                     }
@@ -990,7 +1101,9 @@ public class ToshibaEwbService {
                 "UI", "<DeviceInformationModel><GetValue><Controller><Settings><UI/></Settings></Controller></GetValue></DeviceInformationModel>",
                 "EWBSettings", "<DeviceInformationModel><GetValue><EWBSettings/></GetValue></DeviceInformationModel>",
                 "Functions", "<DeviceInformationModel><GetValue><Controller><Settings><Functions/></Settings></Controller></GetValue></DeviceInformationModel>",
-                "Panel", "<DeviceInformationModel><GetValue><Panel/></GetValue></DeviceInformationModel>"
+                "Panel", "<DeviceInformationModel><GetValue><Panel/></GetValue></DeviceInformationModel>",
+                "Network", "<DeviceInformationModel><GetValue><Network/></GetValue></DeviceInformationModel>",
+                "AdminSystemSettings", "<DeviceInformationModel><GetValue><Controller><Settings><AdminSystemSettings/></Settings></Controller></GetValue></DeviceInformationModel>"
             };
 
             for (int i = 0; i < queries.length; i += 2) {
@@ -1100,6 +1213,274 @@ public class ToshibaEwbService {
             }
         }
         return found;
+    }
+
+    /**
+     * Pushes SMTP client configuration and Scan-to-Email settings to Toshiba MFP TopAccess.
+     */
+    public boolean configureToshibaSmtp(String printerIp, String adminUsername, String adminPassword,
+                                        String smtpHost, int smtpPort, String smtpUser, String smtpPass,
+                                        String fromAddr, boolean useSsl) {
+        String cleanIp = printerIp != null ? printerIp.trim() : "";
+        if (cleanIp.isEmpty() || smtpHost == null || smtpHost.isBlank()) return false;
+
+        try {
+            TopAccessSession session = getOrCreateSession(cleanIp, adminUsername, adminPassword);
+
+            String authXml = (smtpUser != null && !smtpUser.isBlank())
+                    ? "<Authentication><desiredType>LOGIN</desiredType><userName>" + escapeXml(smtpUser) + "</userName>" +
+                      (smtpPass != null && !smtpPass.isBlank() ? "<password>" + escapeXml(smtpPass) + "</password>" : "") + "</Authentication>"
+                    : "<Authentication><desiredType>None</desiredType></Authentication>";
+
+            String smtpXml = "<DeviceInformationModel>" +
+                    "<Command><Commit><commandNode>Network</commandNode><SetValue>" +
+                    "<Network><Protocols><SMTP><Client>" +
+                    "<server>" + escapeXml(smtpHost) + "</server>" +
+                    "<portNo>" + smtpPort + "</portNo>" +
+                    authXml +
+                    "<SSLEnabled>" + (useSsl ? "Enable" : "Disable") + "</SSLEnabled>" +
+                    "</Client></SMTP></Protocols></Network>" +
+                    "</SetValue></Commit></Command></DeviceInformationModel>";
+
+            HttpRequest smtpReq = HttpRequest.newBuilder()
+                    .uri(URI.create("http://" + cleanIp + "/contentwebserver"))
+                    .timeout(TIMEOUT)
+                    .header("Content-Type", "text/xml; charset=UTF-8")
+                    .header("csrfpId", session.sessionCookie() != null ? session.sessionCookie() : "")
+                    .header("Referer", "http://" + cleanIp + "/Administration/Setup/Network.html")
+                    .POST(HttpRequest.BodyPublishers.ofString(smtpXml))
+                    .build();
+
+            HttpResponse<String> smtpResp = session.client().send(smtpReq, HttpResponse.BodyHandlers.ofString());
+
+            if (fromAddr != null && !fromAddr.isBlank()) {
+                String emailXml = "<DeviceInformationModel>" +
+                        "<Command><Set><commandNode>Controller</commandNode><SetValue>" +
+                        "<Controller><Settings><AdminSystemSettings>" +
+                        "<EMail><fromAddr>" + escapeXml(fromAddr) + "</fromAddr></EMail>" +
+                        "</AdminSystemSettings></Settings></Controller>" +
+                        "</SetValue></Set></Command></DeviceInformationModel>";
+
+                HttpRequest emailReq = HttpRequest.newBuilder()
+                        .uri(URI.create("http://" + cleanIp + "/contentwebserver"))
+                        .timeout(TIMEOUT)
+                        .header("Content-Type", "text/xml; charset=UTF-8")
+                        .header("csrfpId", session.sessionCookie() != null ? session.sessionCookie() : "")
+                        .header("Referer", "http://" + cleanIp + "/Administration/Security/Authentication.html")
+                        .POST(HttpRequest.BodyPublishers.ofString(emailXml))
+                        .build();
+
+                session.client().send(emailReq, HttpResponse.BodyHandlers.discarding());
+            }
+
+            boolean ok = smtpResp.body() != null && smtpResp.body().contains("STATUS_OK");
+            log.info("[TOSHIBA CWS] Pushed SMTP ({}:{}) to {} -> ok={}", smtpHost, smtpPort, cleanIp, ok);
+            return ok;
+        } catch (Exception ex) {
+            log.warn("[TOSHIBA CWS] Failed to push SMTP to {}: {}", cleanIp, ex.getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * Sets the default Scan-to-Email "FROM" address and sender name on Toshiba TopAccess.
+     * Prevents the native Toshiba error: "FROM address is not registered".
+     */
+    public boolean setScanFromAddress(String printerIp, String adminUsername, String adminPassword, String fromAddr, String fromName) {
+        String cleanIp = printerIp != null ? printerIp.trim() : "";
+        String username = (adminUsername != null && !adminUsername.isBlank()) ? adminUsername.trim() : "admin";
+        String password = (adminPassword != null && !adminPassword.isBlank()) ? adminPassword.trim() : "123456";
+        String cleanEmail = (fromAddr != null && !fromAddr.isBlank()) ? fromAddr.trim() : "scanner@rrconstruction.lk";
+        String cleanName = (fromName != null && !fromName.isBlank()) ? fromName.trim() : "Scanner";
+
+        if (cleanIp.isEmpty()) return false;
+
+        String targetFrom = cleanEmail + "|" + cleanName;
+        String currentFrom = currentScanFromByPrinter.get(cleanIp);
+        if (targetFrom.equalsIgnoreCase(currentFrom)) {
+            log.info("[TOSHIBA CWS] setScanFromAddress on {} already {}. Instant return (0ms).", cleanIp, targetFrom);
+            return true;
+        }
+
+        Object lock = printerLocks.computeIfAbsent(cleanIp, k -> new Object());
+        synchronized (lock) {
+            for (int attempt = 0; attempt < 2; attempt++) {
+                try {
+                    TopAccessSession session = getOrCreateSession(cleanIp, username, password);
+                    String emailXml = "<DeviceInformationModel>" +
+                            "<Command><Set><commandNode>Controller</commandNode><SetValue>" +
+                            "<Controller><Settings><AdminSystemSettings>" +
+                            "<EMail>" +
+                            "<fromAddr>" + escapeXml(cleanEmail) + "</fromAddr>" +
+                            "<fromName>" + escapeXml(cleanName) + "</fromName>" +
+                            "</EMail>" +
+                            "</AdminSystemSettings></Settings></Controller>" +
+                            "</SetValue></Set></Command></DeviceInformationModel>";
+
+                    HttpRequest emailReq = HttpRequest.newBuilder()
+                            .uri(URI.create("http://" + cleanIp + "/contentwebserver"))
+                            .timeout(TIMEOUT)
+                            .header("Content-Type", "text/xml; charset=UTF-8")
+                            .header("csrfpId", session.sessionCookie() != null ? session.sessionCookie() : "")
+                            .header("Referer", "http://" + cleanIp + "/Administration/Setup/Email.html")
+                            .POST(HttpRequest.BodyPublishers.ofString(emailXml))
+                            .build();
+
+                    HttpResponse<String> resp = session.client().send(emailReq, HttpResponse.BodyHandlers.ofString());
+                    String body = resp.body() != null ? resp.body() : "";
+                    boolean ok = resp.statusCode() >= 200 && resp.statusCode() < 400 &&
+                            !body.contains("STATUS_AL_CWS_UNAUTHORIZED") && !body.contains("STATUS_FAILED");
+                    if (ok) {
+                        currentScanFromByPrinter.put(cleanIp, targetFrom);
+                        log.info("[TOSHIBA CWS] setScanFromAddress on {} to {} ({}) -> ok=true", cleanIp, cleanEmail, cleanName);
+                        return true;
+                    }
+                    sessionCache.remove(cleanIp);
+                } catch (Exception ex) {
+                    sessionCache.remove(cleanIp);
+                    if (attempt == 1) {
+                        log.warn("[TOSHIBA CWS] setScanFromAddress on {} failed: {}", cleanIp, ex.getMessage());
+                    }
+                }
+            }
+            return false;
+        }
+    }
+
+    /**
+     * Ensures ONLY the authenticated user is registered in the Toshiba MFP's internal Address Book.
+     * Any foreign contacts or duplicates are cleaned up so that when the user opens [Address Book],
+     * they see ONLY their own corporate email as a Favorite Contact.
+     */
+    public boolean registerAddressBookContact(String printerIp, String adminUsername, String adminPassword,
+                                              String username, String displayName, String email, String department) {
+        String cleanIp = printerIp != null ? printerIp.trim() : "";
+        if (cleanIp.isEmpty() || email == null || email.isBlank()) return false;
+        String cleanUser = (username != null && !username.isBlank()) ? username.trim() : "user";
+        String firstName = (displayName != null && !displayName.isBlank()) ? displayName.trim() : cleanUser;
+        String dept = department != null ? department.trim() : "";
+        String cleanEmail = email.trim();
+
+        try {
+            TopAccessSession session = getOrCreateSession(cleanIp, adminUsername, adminPassword);
+
+            // 1. Search current contacts
+            String searchXml = "<DeviceInformationModel><Command><SearchContact><commandNode>AddressBook/ContactList/Contact</commandNode><Params><viewXpath contentType='Value'>AddressBook/View/ContactList</viewXpath><searchXpath contentType='XPath'>AddressBook/View/Search</searchXpath><pageSize contentType='Value'>-1</pageSize><directoryServiceName contentType='Value'>TOSHIBA eBX</directoryServiceName><client contentType='Value'>TopAccess</client></Params></SearchContact></Command><SetValue><AddressBook><View><Search><id>*</id><firstName></firstName><lastName></lastName><eMailAddress></eMailAddress><faxNo></faxNo><department></department><corporation></corporation></Search><ContactList curPage='0' pageSize='-1'/></View></AddressBook></SetValue></DeviceInformationModel>";
+            HttpRequest searchReq = HttpRequest.newBuilder()
+                    .uri(URI.create("http://" + cleanIp + "/contentwebserver"))
+                    .timeout(Duration.ofSeconds(5))
+                    .header("Content-Type", "text/xml; charset=UTF-8")
+                    .header("csrfpId", session.sessionCookie() != null ? session.sessionCookie() : "")
+                    .header("Referer", "http://" + cleanIp + "/Registration/AddressBook/AddrBook.html")
+                    .POST(HttpRequest.BodyPublishers.ofString(searchXml))
+                    .build();
+            session.client().send(searchReq, HttpResponse.BodyHandlers.ofString());
+
+            // 2. Fetch contact list
+            String getListXml = "<DeviceInformationModel><GetValue><AddressBook><View><ContactList/></View></AddressBook></GetValue></DeviceInformationModel>";
+            HttpRequest getListReq = HttpRequest.newBuilder()
+                    .uri(URI.create("http://" + cleanIp + "/contentwebserver"))
+                    .timeout(Duration.ofSeconds(5))
+                    .header("Content-Type", "text/xml; charset=UTF-8")
+                    .header("csrfpId", session.sessionCookie() != null ? session.sessionCookie() : "")
+                    .header("Referer", "http://" + cleanIp + "/Registration/AddressBook/AddrBook.html")
+                    .POST(HttpRequest.BodyPublishers.ofString(getListXml))
+                    .build();
+            HttpResponse<String> listResp = session.client().send(getListReq, HttpResponse.BodyHandlers.ofString());
+            String listBody = listResp.body() != null ? listResp.body() : "";
+
+            Pattern contactPattern = Pattern.compile("<Contact id=[\"'](\\d+)[\"']>([\\s\\S]*?)</Contact>");
+            Matcher m = contactPattern.matcher(listBody);
+            boolean currentUserExists = false;
+            java.util.List<String> idsToDelete = new java.util.ArrayList<>();
+
+            while (m.find()) {
+                String id = m.group(1);
+                String contactContent = m.group(2);
+                Pattern emailPattern = Pattern.compile("<eMailAddress>([^<]*)</eMailAddress>");
+                Matcher em = emailPattern.matcher(contactContent);
+                String existingEmail = em.find() ? em.group(1).trim() : "";
+
+                if (existingEmail.equalsIgnoreCase(cleanEmail) && !currentUserExists) {
+                    currentUserExists = true;
+                } else {
+                    idsToDelete.add(id);
+                }
+            }
+
+            for (String delId : idsToDelete) {
+                try {
+                    String delXml = "<DeviceInformationModel><Command><DeleteContact><commandNode>AddressBook/ContactList/Contact</commandNode><Params><viewXpath contentType='XPath'>AddressBook/View/ContactList</viewXpath><selectedContactId contentType='Value'>" + delId + "</selectedContactId><client contentType='Value'>TopAccess</client></Params></DeleteContact></Command></DeviceInformationModel>";
+                    HttpRequest delReq = HttpRequest.newBuilder()
+                            .uri(URI.create("http://" + cleanIp + "/contentwebserver"))
+                            .timeout(Duration.ofSeconds(4))
+                            .header("Content-Type", "text/xml; charset=UTF-8")
+                            .header("csrfpId", session.sessionCookie() != null ? session.sessionCookie() : "")
+                            .header("Referer", "http://" + cleanIp + "/Registration/AddressBook/AddrBook.html")
+                            .POST(HttpRequest.BodyPublishers.ofString(delXml))
+                            .build();
+                    session.client().send(delReq, HttpResponse.BodyHandlers.ofString());
+                    log.info("[TOSHIBA CWS] Purged non-matching / duplicate contact ID {} from {}", delId, cleanIp);
+                } catch (Exception ignored) {}
+            }
+
+            // 3. If current user not yet registered, create as primary Favorite contact
+            if (!currentUserExists) {
+                String contactXml = "<DeviceInformationModel>" +
+                        "<SetValue>" +
+                        "<AddressBook><View><New><Contact>" +
+                        "<MetaData>" +
+                        "<firstName>" + escapeXml(firstName) + "</firstName>" +
+                        "<furigana></furigana>" +
+                        "<lastName></lastName>" +
+                        "<faxNo></faxNo>" +
+                        "<secondFaxNo></secondFaxNo>" +
+                        "<corporation></corporation>" +
+                        "<department>" + escapeXml(dept) + "</department>" +
+                        "<keyWord>" + escapeXml(cleanUser) + "</keyWord>" +
+                        "<eMailAddress>" + escapeXml(cleanEmail) + "</eMailAddress>" +
+                        "<favoritemail>true</favoritemail>" +
+                        "<favoritefax>false</favoritefax>" +
+                        "</MetaData>" +
+                        "<FaxOptions>" +
+                        "<sid></sid><sub></sub><sep></sep><password></password><ecm>true</ecm><lineSelect>1</lineSelect><qualityTx>Standard</qualityTx><txType>G3</txType>" +
+                        "</FaxOptions>" +
+                        "</Contact></New></View></AddressBook>" +
+                        "</SetValue>" +
+                        "<Command>" +
+                        "<CreateContact>" +
+                        "<commandNode>AddressBook/ContactList</commandNode>" +
+                        "<Params>" +
+                        "<selectedContactId contentType='Value'></selectedContactId>" +
+                        "<newContactXpath contentType='XPath'>AddressBook/View/New/Contact</newContactXpath>" +
+                        "<client contentType='Value'>TopAccess</client>" +
+                        "</Params>" +
+                        "</CreateContact>" +
+                        "</Command>" +
+                        "</DeviceInformationModel>";
+
+                HttpRequest createReq = HttpRequest.newBuilder()
+                        .uri(URI.create("http://" + cleanIp + "/contentwebserver"))
+                        .timeout(Duration.ofSeconds(6))
+                        .header("Content-Type", "text/xml; charset=UTF-8")
+                        .header("csrfpId", session.sessionCookie() != null ? session.sessionCookie() : "")
+                        .header("Referer", "http://" + cleanIp + "/Registration/AddressBook/AddrBook.html")
+                        .POST(HttpRequest.BodyPublishers.ofString(contactXml))
+                        .build();
+
+                HttpResponse<String> createResp = session.client().send(createReq, HttpResponse.BodyHandlers.ofString());
+                String createBody = createResp.body() != null ? createResp.body() : "";
+                boolean ok = createBody.contains("STATUS_OK") || createBody.contains("Normal");
+                log.info("[TOSHIBA CWS] AddressBook sole contact registered for {} ({}) on {} -> ok={}", firstName, cleanEmail, cleanIp, ok);
+                return ok;
+            }
+
+            log.info("[TOSHIBA CWS] AddressBook contact for {} ({}) is already sole contact on {}", firstName, cleanEmail, cleanIp);
+            return true;
+        } catch (Exception ex) {
+            log.warn("[TOSHIBA CWS] Failed to synchronize AddressBook on {}: {}", cleanIp, ex.getMessage());
+            return false;
+        }
     }
 
     private String extractTag(Pattern pattern, String text, String defaultValue) {

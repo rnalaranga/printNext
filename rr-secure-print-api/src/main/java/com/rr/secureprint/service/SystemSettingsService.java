@@ -47,7 +47,7 @@ public class SystemSettingsService {
      * Converts entity to DTO for API responses.
      */
     public SystemSettingsDto toDto(SystemSettingsEntity entity) {
-        return new SystemSettingsDto(
+        SystemSettingsDto dto = new SystemSettingsDto(
                 entity.getOrganizationName(),
                 entity.getSystemTitle(),
                 entity.getSystemSubtitle(),
@@ -58,6 +58,17 @@ public class SystemSettingsService {
                 entity.getSupportContact(),
                 entity.getUpdatedAt()
         );
+        dto.setSmtpHost(entity.getSmtpHost());
+        dto.setSmtpPort(entity.getSmtpPort());
+        dto.setSmtpUsername(entity.getSmtpUsername());
+        dto.setSmtpPassword(entity.getSmtpPassword());
+        dto.setSmtpFromAddress(entity.getSmtpFromAddress());
+        dto.setSmtpFromName(entity.getSmtpFromName());
+        dto.setSmtpUseTls(entity.getSmtpUseTls());
+        dto.setSmtpUseSsl(entity.getSmtpUseSsl());
+        dto.setScanToEmailEnabled(entity.getScanToEmailEnabled());
+        dto.setDefaultScanSubject(entity.getDefaultScanSubject());
+        return dto;
     }
 
     /**
@@ -84,6 +95,37 @@ public class SystemSettingsService {
         }
         if (dto.getSupportContact() != null) {
             settings.setSupportContact(dto.getSupportContact().trim());
+        }
+
+        if (dto.getSmtpHost() != null) {
+            settings.setSmtpHost(dto.getSmtpHost().trim());
+        }
+        if (dto.getSmtpPort() != null && dto.getSmtpPort() > 0 && dto.getSmtpPort() <= 65535) {
+            settings.setSmtpPort(dto.getSmtpPort());
+        }
+        if (dto.getSmtpUsername() != null) {
+            settings.setSmtpUsername(dto.getSmtpUsername().trim());
+        }
+        if (dto.getSmtpPassword() != null) {
+            settings.setSmtpPassword(dto.getSmtpPassword());
+        }
+        if (dto.getSmtpFromAddress() != null && !dto.getSmtpFromAddress().isBlank()) {
+            settings.setSmtpFromAddress(dto.getSmtpFromAddress().trim());
+        }
+        if (dto.getSmtpFromName() != null) {
+            settings.setSmtpFromName(dto.getSmtpFromName().trim());
+        }
+        if (dto.getSmtpUseTls() != null) {
+            settings.setSmtpUseTls(dto.getSmtpUseTls());
+        }
+        if (dto.getSmtpUseSsl() != null) {
+            settings.setSmtpUseSsl(dto.getSmtpUseSsl());
+        }
+        if (dto.getScanToEmailEnabled() != null) {
+            settings.setScanToEmailEnabled(dto.getScanToEmailEnabled());
+        }
+        if (dto.getDefaultScanSubject() != null && !dto.getDefaultScanSubject().isBlank()) {
+            settings.setDefaultScanSubject(dto.getDefaultScanSubject().trim());
         }
 
         settings.setUpdatedAt(Instant.now());

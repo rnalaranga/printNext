@@ -50,7 +50,7 @@
 
       // Determine page from URL hash (e.g. #printers, #users, #virtual-queue)
       var hash = (window.location.hash || '').replace('#', '').toLowerCase();
-      var validPages = ['dashboard', 'virtual-queue', 'printers', 'users', 'directory', 'queue', 'copy-logs', 'reports', 'audit', 'settings'];
+      var validPages = ['dashboard', 'virtual-queue', 'printers', 'users', 'directory', 'queue', 'copy-logs', 'scan-logs', 'reports', 'audit', 'settings'];
       var targetPage = validPages.indexOf(hash) !== -1 ? hash : 'dashboard';
       window.navigatePage(targetPage);
 
@@ -140,6 +140,10 @@
       topbarTitle.textContent = 'Enterprise Reports & Analytics';
       topbarSub.textContent   = 'Department & Cost Center (extensionAttribute3) Print/Copy Accounting';
       window.loadReports();
+    } else if (pageId === 'scan-logs') {
+      topbarTitle.textContent = 'Scan to Email Activity';
+      topbarSub.textContent   = 'Document Scan-to-Email Records & Delivery Audit';
+      window.loadScanActivity();
     } else if (pageId === 'audit') {
       topbarTitle.textContent = 'Security Audit Trail';
       topbarSub.textContent   = 'Tamper-Evident Security Log & Device Release Events';
@@ -3279,6 +3283,30 @@
         if (timeoutInput) timeoutInput.value = settings.inactivityTimeoutSecs || 60;
         if (supportInput) supportInput.value = settings.supportContact || '';
 
+        // SMTP settings
+        var smtpHostInput = document.getElementById('settingSmtpHost');
+        var smtpPortInput = document.getElementById('settingSmtpPort');
+        var smtpUserInput = document.getElementById('settingSmtpUser');
+        var smtpPassInput = document.getElementById('settingSmtpPass');
+        var smtpFromInput = document.getElementById('settingSmtpFrom');
+
+        if (smtpHostInput) smtpHostInput.value = settings.smtpHost || '';
+        if (smtpPortInput) smtpPortInput.value = settings.smtpPort || 587;
+        if (smtpUserInput) smtpUserInput.value = settings.smtpUsername || '';
+        if (smtpPassInput) smtpPassInput.value = settings.smtpPassword || '';
+        if (smtpFromInput) smtpFromInput.value = settings.smtpFromAddress || 'scan@rrconstruction.lk';
+
+        var rStartTls = document.getElementById('secStartTls');
+        var rSsl = document.getElementById('secSsl');
+        var rNone = document.getElementById('secNone');
+        if (settings.smtpUseSsl && rSsl) {
+          rSsl.checked = true;
+        } else if (settings.smtpUseTls === false && rNone) {
+          rNone.checked = true;
+        } else if (rStartTls) {
+          rStartTls.checked = true;
+        }
+
         updateLogoPreviewUI(settings.logoData, settings.logoFilename);
         applyBrandingToSidebar(settings);
 
@@ -3541,6 +3569,183 @@
     .finally(function () {
       if (btnSubmit) btnSubmit.disabled = false;
     });
+  };
+
+  /* =========================================================================
+     SCAN TO EMAIL & SMTP ADMIN CONTROLLER
+     ========================================================================= */
+
+  window.handleSaveSmtpSettings = function (event) {
+    if (event) event.preventDefault();
+
+    var host = (document.getElementById('settingSmtpHost').value || '').trim();
+    var port = parseInt(document.getElementById('settingSmtpPort').value, 10) || 587;
+    var user = (document.getElementById('settingSmtpUser').value || '').trim();
+    var pass = document.getElementById('settingSmtpPass').value;
+    var fromAddr = (document.getElementById('settingSmtpFrom').value || '').trim();
+
+    var secSsl = document.getElementById('secSsl') && document.getElementById('secSsl').checked;
+    var secNone = document.getElementById('secNone') && document.getElementById('secNone').checked;
+    var useTls = !secSsl && !secNone;
+
+    fetch('/api/admin/settings', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        smtpHost: host,
+        smtpPort: port,
+        smtpUsername: user,
+        smtpPassword: pass,
+        smtpFromAddress: fromAddr || 'scan@rrconstruction.lk',
+        smtpFromName: 'RR MFP Scanner',
+        smtpUseTls: useTls,
+        smtpUseSsl: secSsl,
+        scanToEmailEnabled: true
+      })
+    })
+    .then(function (res) {
+      if (!res.ok) return res.json().then(function (e) { throw new Error(e.error || 'Server error'); });
+      return res.json();
+    })
+    .then(function (saved) {
+      showToast('Scan-to-Email & SMTP settings saved successfully!', 'success');
+    })
+    .catch(function (err) {
+      showToast('Failed to save SMTP settings: ' + err.message, 'error');
+    });
+  };
+
+  window.testSmtpConnection = function () {
+    var host = (document.getElementById('settingSmtpHost').value || '').trim();
+    var port = parseInt(document.getElementById('settingSmtpPort').value, 10) || 587;
+    var user = (document.getElementById('settingSmtpUser').value || '').trim();
+    var pass = document.getElementById('settingSmtpPass').value;
+    var fromAddr = (document.getElementById('settingSmtpFrom').value || '').trim();
+    var recipient = (document.getElementById('settingTestRecipient').value || '').trim();
+    var statusEl = document.getElementById('smtpTestStatus');
+
+    if (!host) {
+      showToast('Please enter an SMTP server host before testing.', 'error');
+      return;
+    }
+    if (!recipient) {
+      showToast('Please enter a test recipient email address.', 'error');
+      return;
+    }
+
+    var secSsl = document.getElementById('secSsl') && document.getElementById('secSsl').checked;
+    var secNone = document.getElementById('secNone') && document.getElementById('secNone').checked;
+    var useTls = !secSsl && !secNone;
+
+    if (statusEl) {
+      statusEl.textContent = 'Testing connection and sending test email...';
+      statusEl.style.color = '#1D4ED8';
+    }
+
+    fetch('/api/admin/scans/test-email', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        host: host,
+        port: port,
+        username: user,
+        password: pass,
+        fromAddress: fromAddr || 'scan@rrconstruction.lk',
+        testRecipient: recipient,
+        useTls: useTls,
+        useSsl: secSsl
+      })
+    })
+    .then(function (res) { return res.json(); })
+    .then(function (data) {
+      if (data && data.success) {
+        if (statusEl) {
+          statusEl.textContent = '✓ ' + (data.message || 'Test email delivered successfully!');
+          statusEl.style.color = '#15803D';
+        }
+        showToast('SMTP Test Passed: Test scan email delivered to ' + recipient, 'success');
+      } else {
+        if (statusEl) {
+          statusEl.textContent = '✗ ' + (data.message || 'SMTP Connection failed.');
+          statusEl.style.color = '#B91C1C';
+        }
+        showToast('SMTP Test Failed: ' + (data.message || 'Unknown error'), 'error');
+      }
+    })
+    .catch(function (err) {
+      if (statusEl) {
+        statusEl.textContent = '✗ ' + err.message;
+        statusEl.style.color = '#B91C1C';
+      }
+      showToast('SMTP Test Failed: ' + err.message, 'error');
+    });
+  };
+
+  window.pushSmtpToPrintersModal = function () {
+    fetch('/api/admin/printers')
+      .then(function (res) { return res.json(); })
+      .then(function (printers) {
+        var physical = printers.filter(function (p) {
+          return p.active && p.printerCode !== 'VIRTUAL-QUEUE';
+        });
+        if (!physical.length) {
+          showToast('No active physical printers found to push SMTP configuration.', 'warning');
+          return;
+        }
+
+        var promises = physical.map(function (p) {
+          return fetch('/api/admin/printers/' + p.id + '/push-smtp', { method: 'POST' })
+            .then(function (r) { return r.json(); });
+        });
+
+        Promise.all(promises).then(function (results) {
+          var okCount = results.filter(function (r) { return r && r.success; }).length;
+          showToast('Pushed SMTP settings to ' + okCount + ' of ' + physical.length + ' Toshiba MFPs.', 'success');
+        });
+      })
+      .catch(function (err) {
+        showToast('Error pushing SMTP to printers: ' + err.message, 'error');
+      });
+  };
+
+  window.loadScanActivity = function () {
+    var tbody = document.getElementById('scanLogsTableBody');
+    if (!tbody) return;
+
+    tbody.innerHTML = '<tr><td colspan="8" style="text-align:center; padding:30px; color:var(--text-muted);">Loading scan records...</td></tr>';
+
+    fetch('/api/admin/scans')
+      .then(function (res) { return res.json(); })
+      .then(function (scans) {
+        if (!scans || !scans.length) {
+          tbody.innerHTML = '<tr><td colspan="8" style="text-align:center; padding:40px; color:var(--text-muted);"><div style="font-size:24px; margin-bottom:8px;">📧</div><div>No Scan-to-Email activity recorded yet.</div><div style="font-size:12px; margin-top:4px;">Use the Toshiba Touchscreen Terminal to scan documents directly to recipient emails.</div></td></tr>';
+          return;
+        }
+
+        var html = '';
+        for (var i = 0; i < scans.length; i++) {
+          var s = scans[i];
+          var dateStr = s.completedAt ? new Date(s.completedAt).toLocaleString() : '-';
+          var statusBadge = s.status === 'SENT'
+            ? '<span class="badge badge-online">SENT</span>'
+            : (s.status === 'FAILED' ? '<span class="badge badge-offline">FAILED</span>' : '<span class="badge badge-pending">' + esc(s.status) + '</span>');
+
+          html += '<tr>' +
+            '<td style="white-space:nowrap; font-size:12px;">' + esc(dateStr) + '</td>' +
+            '<td><strong>' + esc(s.username) + '</strong></td>' +
+            '<td><code style="color:#1D4ED8; font-weight:700;">' + esc(s.recipientEmail) + '</code></td>' +
+            '<td>' + esc(s.fileName || s.subject || 'Document.pdf') + '</td>' +
+            '<td style="text-align:center;">' + (s.pages || 1) + '</td>' +
+            '<td><span style="font-size:11.5px; background:#F1F5F9; padding:2px 6px; border-radius:4px; font-weight:600;">' + esc(s.colorMode) + ' &bull; ' + esc(s.resolution) + '</span></td>' +
+            '<td>' + statusBadge + '</td>' +
+            '<td style="font-size:12px; color:var(--text-muted);">' + esc(s.printerName || s.printerIp) + '</td>' +
+            '</tr>';
+        }
+        tbody.innerHTML = html;
+      })
+      .catch(function (err) {
+        tbody.innerHTML = '<tr><td colspan="8" style="text-align:center; padding:30px; color:#DC2626;">Failed to load scan records: ' + esc(err.message) + '</td></tr>';
+      });
   };
 
   /* =========================================================================

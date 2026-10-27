@@ -14,6 +14,18 @@ public class SystemSettingsDto {
     private String supportContact;
     private Instant updatedAt;
 
+    // SMTP & Scan settings
+    private String smtpHost;
+    private Integer smtpPort;
+    private String smtpUsername;
+    private String smtpPassword;
+    private String smtpFromAddress;
+    private String smtpFromName;
+    private Boolean smtpUseTls;
+    private Boolean smtpUseSsl;
+    private Boolean scanToEmailEnabled;
+    private String defaultScanSubject;
+
     public SystemSettingsDto() {
     }
 
@@ -31,75 +43,60 @@ public class SystemSettingsDto {
         this.updatedAt = updatedAt;
     }
 
-    public String getOrganizationName() {
-        return organizationName;
-    }
+    public String getOrganizationName() { return organizationName; }
+    public void setOrganizationName(String organizationName) { this.organizationName = organizationName; }
 
-    public void setOrganizationName(String organizationName) {
-        this.organizationName = organizationName;
-    }
+    public String getSystemTitle() { return systemTitle; }
+    public void setSystemTitle(String systemTitle) { this.systemTitle = systemTitle; }
 
-    public String getSystemTitle() {
-        return systemTitle;
-    }
+    public String getSystemSubtitle() { return systemSubtitle; }
+    public void setSystemSubtitle(String systemSubtitle) { this.systemSubtitle = systemSubtitle; }
 
-    public void setSystemTitle(String systemTitle) {
-        this.systemTitle = systemTitle;
-    }
+    public String getLogoData() { return logoData; }
+    public void setLogoData(String logoData) { this.logoData = logoData; }
 
-    public String getSystemSubtitle() {
-        return systemSubtitle;
-    }
+    public String getLogoFilename() { return logoFilename; }
+    public void setLogoFilename(String logoFilename) { this.logoFilename = logoFilename; }
 
-    public void setSystemSubtitle(String systemSubtitle) {
-        this.systemSubtitle = systemSubtitle;
-    }
+    public String getPrimaryColor() { return primaryColor; }
+    public void setPrimaryColor(String primaryColor) { this.primaryColor = primaryColor; }
 
-    public String getLogoData() {
-        return logoData;
-    }
+    public Integer getInactivityTimeoutSecs() { return inactivityTimeoutSecs; }
+    public void setInactivityTimeoutSecs(Integer inactivityTimeoutSecs) { this.inactivityTimeoutSecs = inactivityTimeoutSecs; }
 
-    public void setLogoData(String logoData) {
-        this.logoData = logoData;
-    }
+    public String getSupportContact() { return supportContact; }
+    public void setSupportContact(String supportContact) { this.supportContact = supportContact; }
 
-    public String getLogoFilename() {
-        return logoFilename;
-    }
+    public Instant getUpdatedAt() { return updatedAt; }
+    public void setUpdatedAt(Instant updatedAt) { this.updatedAt = updatedAt; }
 
-    public void setLogoFilename(String logoFilename) {
-        this.logoFilename = logoFilename;
-    }
+    public String getSmtpHost() { return smtpHost; }
+    public void setSmtpHost(String smtpHost) { this.smtpHost = smtpHost; }
 
-    public String getPrimaryColor() {
-        return primaryColor;
-    }
+    public Integer getSmtpPort() { return smtpPort; }
+    public void setSmtpPort(Integer smtpPort) { this.smtpPort = smtpPort; }
 
-    public void setPrimaryColor(String primaryColor) {
-        this.primaryColor = primaryColor;
-    }
+    public String getSmtpUsername() { return smtpUsername; }
+    public void setSmtpUsername(String smtpUsername) { this.smtpUsername = smtpUsername; }
 
-    public Integer getInactivityTimeoutSecs() {
-        return inactivityTimeoutSecs;
-    }
+    public String getSmtpPassword() { return smtpPassword; }
+    public void setSmtpPassword(String smtpPassword) { this.smtpPassword = smtpPassword; }
 
-    public void setInactivityTimeoutSecs(Integer inactivityTimeoutSecs) {
-        this.inactivityTimeoutSecs = inactivityTimeoutSecs;
-    }
+    public String getSmtpFromAddress() { return smtpFromAddress; }
+    public void setSmtpFromAddress(String smtpFromAddress) { this.smtpFromAddress = smtpFromAddress; }
 
-    public String getSupportContact() {
-        return supportContact;
-    }
+    public String getSmtpFromName() { return smtpFromName; }
+    public void setSmtpFromName(String smtpFromName) { this.smtpFromName = smtpFromName; }
 
-    public void setSupportContact(String supportContact) {
-        this.supportContact = supportContact;
-    }
+    public Boolean getSmtpUseTls() { return smtpUseTls; }
+    public void setSmtpUseTls(Boolean smtpUseTls) { this.smtpUseTls = smtpUseTls; }
 
-    public Instant getUpdatedAt() {
-        return updatedAt;
-    }
+    public Boolean getSmtpUseSsl() { return smtpUseSsl; }
+    public void setSmtpUseSsl(Boolean smtpUseSsl) { this.smtpUseSsl = smtpUseSsl; }
 
-    public void setUpdatedAt(Instant updatedAt) {
-        this.updatedAt = updatedAt;
-    }
+    public Boolean getScanToEmailEnabled() { return scanToEmailEnabled; }
+    public void setScanToEmailEnabled(Boolean scanToEmailEnabled) { this.scanToEmailEnabled = scanToEmailEnabled; }
+
+    public String getDefaultScanSubject() { return defaultScanSubject; }
+    public void setDefaultScanSubject(String defaultScanSubject) { this.defaultScanSubject = defaultScanSubject; }
 }

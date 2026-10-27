@@ -62,6 +62,9 @@ public class UserEntity {
     @Column(name = "copy_count", nullable = false)
     private long copyCount = 0L;
 
+    @Column(name = "scan_count", nullable = false)
+    private long scanCount = 0L;
+
     @Column(name = "page_quota")
     private Integer pageQuota;
 
@@ -154,6 +157,9 @@ public class UserEntity {
 
     public long getCopyCount() { return copyCount; }
     public void setCopyCount(long copyCount) { this.copyCount = copyCount; }
+
+    public long getScanCount() { return scanCount; }
+    public void setScanCount(long scanCount) { this.scanCount = scanCount; }
 
     public long getTotalPages() { return printCount + copyCount; }
 

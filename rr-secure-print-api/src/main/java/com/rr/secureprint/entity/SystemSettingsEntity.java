@@ -34,6 +34,36 @@ public class SystemSettingsEntity {
     @Column(name = "support_contact", length = 255)
     private String supportContact = "IT Helpdesk";
 
+    @Column(name = "smtp_host", length = 255)
+    private String smtpHost;
+
+    @Column(name = "smtp_port")
+    private Integer smtpPort = 587;
+
+    @Column(name = "smtp_username", length = 128)
+    private String smtpUsername;
+
+    @Column(name = "smtp_password", length = 255)
+    private String smtpPassword;
+
+    @Column(name = "smtp_from_address", length = 255)
+    private String smtpFromAddress = "scan@rrconstruction.lk";
+
+    @Column(name = "smtp_from_name", length = 128)
+    private String smtpFromName = "RR MFP Scanner";
+
+    @Column(name = "smtp_use_tls")
+    private Boolean smtpUseTls = true;
+
+    @Column(name = "smtp_use_ssl")
+    private Boolean smtpUseSsl = false;
+
+    @Column(name = "scan_to_email_enabled")
+    private Boolean scanToEmailEnabled = true;
+
+    @Column(name = "default_scan_subject", length = 255)
+    private String defaultScanSubject = "Scanned Document from {printer}";
+
     @Column(name = "updated_at")
     private Instant updatedAt = Instant.now();
 
@@ -125,4 +155,34 @@ public class SystemSettingsEntity {
     public void setUpdatedAt(Instant updatedAt) {
         this.updatedAt = updatedAt;
     }
+
+    public String getSmtpHost() { return smtpHost; }
+    public void setSmtpHost(String smtpHost) { this.smtpHost = smtpHost; }
+
+    public Integer getSmtpPort() { return smtpPort; }
+    public void setSmtpPort(Integer smtpPort) { this.smtpPort = smtpPort; }
+
+    public String getSmtpUsername() { return smtpUsername; }
+    public void setSmtpUsername(String smtpUsername) { this.smtpUsername = smtpUsername; }
+
+    public String getSmtpPassword() { return smtpPassword; }
+    public void setSmtpPassword(String smtpPassword) { this.smtpPassword = smtpPassword; }
+
+    public String getSmtpFromAddress() { return smtpFromAddress; }
+    public void setSmtpFromAddress(String smtpFromAddress) { this.smtpFromAddress = smtpFromAddress; }
+
+    public String getSmtpFromName() { return smtpFromName; }
+    public void setSmtpFromName(String smtpFromName) { this.smtpFromName = smtpFromName; }
+
+    public Boolean getSmtpUseTls() { return smtpUseTls; }
+    public void setSmtpUseTls(Boolean smtpUseTls) { this.smtpUseTls = smtpUseTls; }
+
+    public Boolean getSmtpUseSsl() { return smtpUseSsl; }
+    public void setSmtpUseSsl(Boolean smtpUseSsl) { this.smtpUseSsl = smtpUseSsl; }
+
+    public Boolean getScanToEmailEnabled() { return scanToEmailEnabled; }
+    public void setScanToEmailEnabled(Boolean scanToEmailEnabled) { this.scanToEmailEnabled = scanToEmailEnabled; }
+
+    public String getDefaultScanSubject() { return defaultScanSubject; }
+    public void setDefaultScanSubject(String defaultScanSubject) { this.defaultScanSubject = defaultScanSubject; }
 }

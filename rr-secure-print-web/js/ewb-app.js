@@ -1,4 +1,4 @@
-﻿/* ==========================================================================
+/* ==========================================================================
    RR Secure Print - Toshiba EWB Controller v10 (STRICTLY NO ICONS)
    Pure ES5 Vanilla JS - NO Font Dependencies, NO Emojis, NO Icons
    Ultra Lightweight & Instant Render on Toshiba e-STUDIO MFP
@@ -119,6 +119,7 @@
         } else if (document.visibilityState === 'visible') {
           // Machine woke up from sleep or returned to nexPrint
           // CRITICAL: Always lock and enforce PIN on wake-up!
+          state.isNativeOperationActive = false;
           window.emergencyLockAndLogout('HARDWARE_WAKE_LOCK');
         }
       });
@@ -133,6 +134,12 @@
       window.addEventListener('blur', function () {
         if (state.isNativeOperationActive) {
           sendCopyScreenOpenedBeacon();
+        }
+      });
+      window.addEventListener('focus', function () {
+        if (!state.currentUser) {
+          state.isNativeOperationActive = false;
+          window.emergencyLockAndLogout('WINDOW_FOCUS_LOCK');
         }
       });
       window.addEventListener('online', onWakeOrReconnect);
@@ -172,8 +179,8 @@
   /* ------------------------------------------------------------------ */
   window.emergencyLockAndLogout = function (reason) {
     if (state.isNativeOperationActive &&
-        (reason === 'WINDOW_BLUR_SLEEP' || reason === 'PAGE_HIDE' || reason === 'HARDWARE_SLEEP_BUTTON')) {
-      // User is actively in native Copy / Scan mode on physical panel - do not auto-lock while panel is in use
+        (reason === 'WINDOW_BLUR_SLEEP' || reason === 'PAGE_HIDE')) {
+      // User is actively transitioning to native Copy / Scan mode on physical panel
       return;
     }
     var stationCode = (state.station && state.station.printerCode) ? state.station.printerCode : null;
@@ -383,6 +390,9 @@
           applyEwbBranding(data.branding);
         }
         state.station = data.currentStation;
+        if (!state.currentUser && !state.isNativeOperationActive) {
+          window.emergencyLockAndLogout('KIOSK_BOOT_LOCK');
+        }
         var nameEl = document.getElementById('stationNameHeader');
         var ipEl = document.getElementById('stationIpHeader');
         var selectEl = document.getElementById('stationSelect');
@@ -436,11 +446,8 @@
 
   function onWakeOrReconnect() {
     sessionRetryCount = 0;
-    if (state.currentUser) {
-      window.emergencyLockAndLogout('HARDWARE_WAKE_VERIFY');
-    } else {
-      checkCurrentSession();
-    }
+    state.isNativeOperationActive = false;
+    window.emergencyLockAndLogout('HARDWARE_WAKE_VERIFY');
   }
 
   /* ------------------------------------------------------------------ */
@@ -506,6 +513,14 @@
     badgeId = safeTrim(badgeId);
     if (!badgeId) return;
 
+    // Fail-safe: If 1-4 pure digits arrived while in PIN mode, it is a PIN entry, NOT an RFID card
+    if (state.authMode === 'PIN' && /^\d{1,4}$/.test(badgeId)) {
+      state.pinBuffer = badgeId;
+      refreshPinDisplay();
+      submitPin();
+      return;
+    }
+
     state.isBusy = true;
     showAlert('RFID / NFC Card detected (' + badgeId + '). Verifying...', 'info');
 
@@ -569,21 +584,27 @@
   }
 
   function focusCardCatcher() {
-    var authScreen = document.getElementById('screenAuth');
-    if (!authScreen) return;
-    if (authScreen.style.display === 'none' && !authScreen.classList.contains('pc-active')) return;
-    var active = document.activeElement;
-    if (active && (active.id === 'inputUsername' || active.id === 'inputPassword' || active.id === 'userUsername' || active.id === 'userPassword')) {
+    // In PIN / RFID mode, we NEVER focus any input field!
+    // Focusing an input causes Toshiba EWB (and touch browsers) to pop up the native software keyboard (SIP).
+    // Instead, we ensure all inputs are blurred so no virtual keyboard can ever appear.
+    if (state.authMode === 'PIN') {
+      var active = document.activeElement;
+      if (active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA')) {
+        try { active.blur(); } catch (err) {}
+      }
+      updateRawKeyDebug('STANDBY', null);
       return;
     }
-    var catcher = document.getElementById('pcCardCatcher');
-    if (catcher && typeof catcher.focus === 'function') {
-      try {
-        if (document.activeElement !== catcher) {
-          catcher.focus();
+
+    // In USER_PASS mode, only focus username if nothing else is focused
+    if (state.authMode === 'USER_PASS') {
+      var active = document.activeElement;
+      if (!active || (active.id !== 'inputUsername' && active.id !== 'inputPassword')) {
+        var inpUser = document.getElementById('inputUsername');
+        if (inpUser) {
+          try { inpUser.focus(); } catch (err) {}
         }
-        updateRawKeyDebug('STANDBY', null);
-      } catch (err) {}
+      }
     }
   }
   window.focusCardCatcher = focusCardCatcher;
@@ -601,12 +622,17 @@
       catcher.addEventListener('input', function () {
         var val = (catcher.value || '').trim();
         if (val) {
+          // If in PIN mode and it's pure short digits, do NOT treat as card swipe!
+          if (state.authMode === 'PIN' && /^\d{1,4}$/.test(val)) {
+            catcher.value = '';
+            return;
+          }
           updateRawKeyDebug('INPUT', { keyCode: 0, key: val });
           cardKeystrokeBuffer = val;
           if (cardDebounceTimer) clearTimeout(cardDebounceTimer);
           cardDebounceTimer = setTimeout(function () {
             var autoCardId = (catcher.value || cardKeystrokeBuffer || '').trim();
-            if (autoCardId && autoCardId.length >= 3) {
+            if (autoCardId && autoCardId.length >= 4 && !(/^\d{1,4}$/.test(autoCardId) && state.authMode === 'PIN')) {
               catcher.value = '';
               cardKeystrokeBuffer = '';
               window.loginWithCard(autoCardId);
@@ -626,33 +652,23 @@
       });
     }
 
-    // Keep catcher focused via periodic timer while on PIN/Card auth view
-    if (!window._cardFocusInterval) {
-      window._cardFocusInterval = setInterval(function () {
-        var authScreen = document.getElementById('screenAuth');
-        if (!authScreen || (authScreen.style.display === 'none' && !authScreen.classList.contains('pc-active'))) return;
-        var active = document.activeElement;
-        if (!active || (active.id !== 'inputUsername' && active.id !== 'inputPassword' && active.id !== 'userUsername' && active.id !== 'userPassword' && active.id !== 'pcCardCatcher')) {
-          focusCardCatcher();
-        }
-      }, 1000);
-    }
-
-    // Refocus on any screen touch outside buttons/inputs
+    // In PIN mode, dismiss any accidental native keyboard when screen is touched
     document.addEventListener('click', function (e) {
-      var t = e.target;
-      if (t && (t.id === 'inputUsername' || t.id === 'inputPassword' || t.tagName === 'INPUT' || t.tagName === 'BUTTON' || (t.closest && t.closest('button')))) {
-        return;
+      if (state.authMode === 'PIN') {
+        var active = document.activeElement;
+        if (active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA')) {
+          try { active.blur(); } catch (err) {}
+        }
       }
-      setTimeout(focusCardCatcher, 50);
-    });
+    }, false);
     document.addEventListener('touchstart', function (e) {
-      var t = e.target;
-      if (t && (t.id === 'inputUsername' || t.id === 'inputPassword' || t.tagName === 'INPUT' || t.tagName === 'BUTTON' || (t.closest && t.closest('button')))) {
-        return;
+      if (state.authMode === 'PIN') {
+        var active = document.activeElement;
+        if (active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA')) {
+          try { active.blur(); } catch (err) {}
+        }
       }
-      setTimeout(focusCardCatcher, 50);
-    });
+    }, false);
   }
 
   function handleCardKey(e) {
@@ -672,13 +688,48 @@
 
     var keyCode = e.keyCode || e.which;
     var key = e.key;
-    updateRawKeyDebug('KEY', e);
-
     var catcher = document.getElementById('pcCardCatcher');
 
-    // Enter or Tab triggers immediate verification
+    // 1. Backspace: delete last PIN digit when in PIN mode
+    if (keyCode === 8 || key === 'Backspace') {
+      if (state.authMode === 'PIN') {
+        if (e.preventDefault) e.preventDefault();
+        if (state.pinBuffer && state.pinBuffer.length > 0) {
+          state.pinBuffer = state.pinBuffer.slice(0, -1);
+          refreshPinDisplay();
+        }
+        if (catcher) catcher.value = '';
+        cardKeystrokeBuffer = '';
+        updateRawKeyDebug('BACKSPACE', e);
+        return;
+      }
+    }
+
+    // 2. Escape or Delete: clear PIN
+    if (keyCode === 27 || keyCode === 46 || key === 'Escape' || key === 'Delete') {
+      if (state.authMode === 'PIN') {
+        if (e.preventDefault) e.preventDefault();
+        window.handleKeypad('CLEAR');
+        if (catcher) catcher.value = '';
+        cardKeystrokeBuffer = '';
+        updateRawKeyDebug('CLEAR', e);
+        return;
+      }
+    }
+
+    // 3. Enter or Tab: submit PIN if pinBuffer has characters; otherwise verify card
     if (keyCode === 13 || keyCode === 9 || key === 'Enter' || key === 'Tab') {
       if (cardDebounceTimer) { clearTimeout(cardDebounceTimer); cardDebounceTimer = null; }
+
+      if (state.authMode === 'PIN' && state.pinBuffer && state.pinBuffer.length > 0) {
+        if (e.preventDefault) e.preventDefault();
+        if (e.stopPropagation) e.stopPropagation();
+        if (catcher) catcher.value = '';
+        cardKeystrokeBuffer = '';
+        submitPin();
+        return;
+      }
+
       var catcherVal = catcher ? (catcher.value || '').trim() : '';
       var cardId = (cardKeystrokeBuffer || catcherVal || '').replace(/[\r\n]/g, '').trim();
       cardKeystrokeBuffer = '';
@@ -693,56 +744,76 @@
       return;
     }
 
-    // Capture printable characters (Standard alphanumeric, Numpad, and Numpad without NumLock)
+    // 4. Capture printable characters (Standard alphanumeric, Numpad, and Numpad without NumLock)
     var char = '';
+    var isDigit = false;
     if (key && key.length === 1 && !e.ctrlKey && !e.metaKey) {
       char = key;
+      isDigit = (key >= '0' && key <= '9');
     } else if (keyCode >= 48 && keyCode <= 57) { // 0-9
       char = String.fromCharCode(keyCode);
-    } else if (keyCode >= 65 && keyCode <= 90) { // A-Z
-      char = String.fromCharCode(keyCode);
+      isDigit = true;
     } else if (keyCode >= 96 && keyCode <= 105) { // Numpad 0-9
       char = String.fromCharCode(keyCode - 48);
+      isDigit = true;
+    } else if (keyCode >= 65 && keyCode <= 90) { // A-Z
+      char = String.fromCharCode(keyCode);
     } else if (keyCode === 189 || keyCode === 109) { // Hyphen / dash
       char = '-';
     } else if (keyCode === 45) { // Numpad 0 (Insert when NumLock is OFF)
-      char = '0';
+      char = '0'; isDigit = true;
     } else if (keyCode === 35) { // Numpad 1 (End when NumLock is OFF)
-      char = '1';
+      char = '1'; isDigit = true;
     } else if (keyCode === 40) { // Numpad 2 (Down when NumLock is OFF)
-      char = '2';
+      char = '2'; isDigit = true;
     } else if (keyCode === 34) { // Numpad 3 (PageDown when NumLock is OFF)
-      char = '3';
+      char = '3'; isDigit = true;
     } else if (keyCode === 37) { // Numpad 4 (Left when NumLock is OFF)
-      char = '4';
+      char = '4'; isDigit = true;
     } else if (keyCode === 12) { // Numpad 5 (Clear when NumLock is OFF)
-      char = '5';
+      char = '5'; isDigit = true;
     } else if (keyCode === 39) { // Numpad 6 (Right when NumLock is OFF)
-      char = '6';
+      char = '6'; isDigit = true;
     } else if (keyCode === 36) { // Numpad 7 (Home when NumLock is OFF)
-      char = '7';
+      char = '7'; isDigit = true;
     } else if (keyCode === 38) { // Numpad 8 (Up when NumLock is OFF)
-      char = '8';
+      char = '8'; isDigit = true;
     } else if (keyCode === 33) { // Numpad 9 (PageUp when NumLock is OFF)
-      char = '9';
+      char = '9'; isDigit = true;
     }
 
     if (!char) return;
 
     var now = new Date().getTime();
-    if (now - cardLastKeyTime > 1200) {
+    var timeSinceLastKey = now - cardLastKeyTime;
+    cardLastKeyTime = now;
+
+    // Check for RFID reader burst: Hardware card readers transmit at < 45ms per character
+    var isRfidBurst = (timeSinceLastKey > 0 && timeSinceLastKey < 45);
+
+    // If user is in PIN mode and enters a digit at normal typing speed (> 45ms):
+    if (state.authMode === 'PIN' && isDigit && !isRfidBurst) {
+      if (e.preventDefault) e.preventDefault();
+      if (catcher) catcher.value = '';
+      cardKeystrokeBuffer = '';
+      window.handleKeypad(char);
+      updateRawKeyDebug('PIN_DIGIT', { keyCode: keyCode, key: char });
+      return;
+    }
+
+    // Otherwise, treat as card reader stream (RFID burst or non-digit character like BADGE-)
+    if (timeSinceLastKey > 1200) {
       cardKeystrokeBuffer = '';
     }
-    cardLastKeyTime = now;
     cardKeystrokeBuffer += char;
     updateRawKeyDebug('CHAR', { keyCode: keyCode, key: char });
 
-    // Auto-trigger without Enter if reader stops typing (350ms debounce)
     if (cardDebounceTimer) clearTimeout(cardDebounceTimer);
     cardDebounceTimer = setTimeout(function () {
       var catcherVal = catcher ? (catcher.value || '').trim() : '';
       var autoCardId = (cardKeystrokeBuffer || catcherVal || '').replace(/[\r\n]/g, '').trim();
-      if (autoCardId && autoCardId.length >= 4) {
+      // Only auto-trigger card login if length >= 4 AND not a short numeric PIN typed in PIN mode
+      if (autoCardId && autoCardId.length >= 4 && !(/^\d{1,4}$/.test(autoCardId) && state.authMode === 'PIN')) {
         cardKeystrokeBuffer = '';
         if (catcher) catcher.value = '';
         window.loginWithCard(autoCardId);
@@ -750,20 +821,24 @@
     }, 350);
   }
 
-  // Single cleanly bound listener on document & window
+  // Clean single listener binding on document or window
   if (document.addEventListener) {
     document.addEventListener('keydown', handleCardKey, false);
   } else if (window.addEventListener) {
     window.addEventListener('keydown', handleCardKey, false);
   }
-  if (window.addEventListener) {
-    window.addEventListener('keydown', handleCardKey, false);
-  }
 
   window.handleKeypad = function (val) {
     if (state.isBusy) return;
+    // Dismiss any accidental native keyboard immediately
+    var active = document.activeElement;
+    if (active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA')) {
+      try { active.blur(); } catch (e) {}
+    }
     if (val === 'CLEAR') {
       state.pinBuffer = '';
+      state.pendingCardBadgeId = null;
+      updateCardPromptUI();
     } else if (val === 'ENTER') {
       submitPin();
       return;
@@ -802,7 +877,7 @@
       printerCode: stationCode,
       printerIp: stationIp
     };
-    if (state.pendingCardBadgeId) {
+    if (state.pendingCardBadgeId && state.pendingCardBadgeId !== state.pinBuffer) {
       reqData.badgeId = state.pendingCardBadgeId;
     }
 
@@ -877,6 +952,10 @@
       if (tabUserPass) tabUserPass.className = 'pc-auth-pill';
       if (viewPin) viewPin.style.display = 'block';
       if (viewUserPass) viewUserPass.style.display = 'none';
+      var active = document.activeElement;
+      if (active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA')) {
+        try { active.blur(); } catch (err) {}
+      }
     }
   };
 
@@ -965,6 +1044,12 @@
     if (userPrintCount) userPrintCount.textContent = (user.printCount != null) ? user.printCount : '0';
     var userCopyCount = document.getElementById('userCopyCount');
     if (userCopyCount) userCopyCount.textContent = (user.copyCount != null) ? user.copyCount : '0';
+    var userScanCount = document.getElementById('userScanCount');
+    if (userScanCount) userScanCount.textContent = (user.scanCount != null) ? user.scanCount : '0';
+    var copyStationCount = document.getElementById('copyStationCount');
+    if (copyStationCount) copyStationCount.textContent = (user.copyCount != null) ? user.copyCount : '0';
+    var scanStationCount = document.getElementById('scanStationCount');
+    if (scanStationCount) scanStationCount.textContent = (user.scanCount != null) ? user.scanCount : '0';
   }
 
   function onLoginSuccess(user) {
@@ -1064,11 +1149,10 @@
 
   window.openCopyFunction = function () {
     state.isNativeOperationActive = true;
-    state.inactivitySeconds = 90;
+    state.inactivitySeconds = 30;
     updateTimerText();
 
-    var userName = (state.currentUser && (state.currentUser.displayName || state.currentUser.username)) || 'User';
-    showAlert('▶ PHOTOCOPIER READY! PRESS [CLEAR] OR [HOME] ◀', 'success');
+    showAlert('Copier ready! Press [HOME] or [CLEAR] on panel', 'success');
 
     // Trigger native unlock & CWS DefaultScreen = Copy
     unlockDeviceTarget('COPY');
@@ -1076,15 +1160,35 @@
 
   window.openScanFunction = function () {
     state.isNativeOperationActive = true;
-    state.inactivitySeconds = 90;
+    state.inactivitySeconds = 30;
     updateTimerText();
 
-    var userName = (state.currentUser && (state.currentUser.displayName || state.currentUser.username)) || 'User';
-    showAlert('▶ SCANNER READY! PRESS [CLEAR] OR [HOME] ◀', 'success');
+    showAlert('Scanner ready! Press [HOME] or [CLEAR] on panel', 'success');
 
     // Trigger native unlock & CWS DefaultScreen = Scan
     unlockDeviceTarget('SCAN');
+    window.showScanScreen();
+    updateScanStationUI();
+    if (typeof window.initScanStation === 'function') {
+      window.initScanStation();
+    }
   };
+
+  function updateScanStationUI() {
+    var scUser = document.getElementById('scanStationUser');
+    if (scUser) {
+      scUser.textContent = (state.currentUser && (state.currentUser.displayName || state.currentUser.username)) || 'User';
+    }
+    var scCount = document.getElementById('scanStationCount');
+    if (scCount) {
+      scCount.textContent = (state.currentUser && state.currentUser.scanCount != null) ? state.currentUser.scanCount : '0';
+    }
+    var scTime = document.getElementById('scanStationTime');
+    if (scTime) {
+      scTime.textContent = state.inactivitySeconds + 's remaining';
+    }
+  }
+  window.updateScanStationUI = updateScanStationUI;
 
   window.openDeviceHome = function () {
     state.isNativeOperationActive = true;
@@ -1113,17 +1217,26 @@
     // Immediate attempt on local browser environment
     triggerToshibaNativeHook(mode);
 
+    var now = Date.now();
+    if (state.lastUnlockMode === mode && (now - (state.lastUnlockTime || 0) < 15000)) {
+      showAlert(modeLabel + ' ready! Press [HOME] or [CLEAR] on panel', 'success');
+      return;
+    }
+    state.lastUnlockMode = mode;
+    state.lastUnlockTime = now;
+
     try {
       apiRequest('POST', '/api/station/device-functions', {
         printerCode: stationCode,
         printerIp: stationIp,
         mode: mode,
+        username: (state.currentUser && (state.currentUser.username || '')) || '',
         switchScreen: 'true'
       }, function (status, data) {
         if (status === 200) {
-          showAlert('▶ ' + modeLabel.toUpperCase() + ' READY! PRESS [CLEAR] OR [HOME] ◀', 'success');
+          showAlert(modeLabel + ' ready! Press [HOME] or [CLEAR] on panel', 'success');
         } else {
-          showAlert('▶ ' + modeLabel.toUpperCase() + ' READY! PRESS [CLEAR] OR [HOME] ◀', 'info');
+          showAlert(modeLabel + ' ready! Press [HOME] or [CLEAR] on panel', 'info');
         }
       });
     } catch (e) {
@@ -1247,6 +1360,213 @@
   /* =========================================================================
      Photocopy & Scan Walk-Up Station Handlers
      ========================================================================= */
+
+  var scanState = {
+    colorMode: 'COLOR',
+    resolution: '300DPI',
+    fileFormat: 'PDF',
+    duplex: 'SIMPLEX',
+    isScanning: false
+  };
+
+  window.initScanStation = function () {
+    var userName = (state.currentUser && (state.currentUser.displayName || state.currentUser.username)) || 'User';
+    var userEmail = (state.currentUser && state.currentUser.email) || '';
+    if (!userEmail && state.currentUser && state.currentUser.username) {
+      userEmail = state.currentUser.username + '@rrconstruction.lk';
+    }
+
+    var elLdapEmail = document.getElementById('scanLdapEmailDisplay');
+    if (elLdapEmail) elLdapEmail.textContent = userEmail;
+
+    var elUser = document.getElementById('scanStationUser');
+    if (elUser) elUser.textContent = userName;
+
+    var elCount = document.getElementById('scanStationCount');
+    if (elCount) elCount.textContent = (state.currentUser && state.currentUser.scanCount) || 0;
+
+    var elRecipient = document.getElementById('scanInputRecipient');
+    if (elRecipient) elRecipient.value = userEmail;
+
+    var elSubject = document.getElementById('scanInputSubject');
+    if (elSubject) {
+      var d = new Date();
+      var dateStr = d.getFullYear() + '' +
+        (d.getMonth() + 1 < 10 ? '0' : '') + (d.getMonth() + 1) + '' +
+        (d.getDate() < 10 ? '0' : '') + d.getDate() + '_' +
+        (d.getHours() < 10 ? '0' : '') + d.getHours() + '' +
+        (d.getMinutes() < 10 ? '0' : '') + d.getMinutes();
+      elSubject.value = 'Scan_' + ((state.currentUser && state.currentUser.username) || 'Document') + '_' + dateStr;
+    }
+
+    window.resetScanForm();
+  };
+
+  window.setScanColorMode = function (mode) {
+    scanState.colorMode = mode;
+    ['btnColorModeColor', 'btnColorModeGray', 'btnColorModeMono'].forEach(function (id) {
+      var b = document.getElementById(id);
+      if (b) b.className = 'scan-pill-btn';
+    });
+    var activeId = mode === 'GRAYSCALE' ? 'btnColorModeGray' : (mode === 'MONO' ? 'btnColorModeMono' : 'btnColorModeColor');
+    var actEl = document.getElementById(activeId);
+    if (actEl) actEl.className = 'scan-pill-btn active';
+  };
+
+  window.setScanResolution = function (res) {
+    scanState.resolution = res;
+    ['btnRes200', 'btnRes300', 'btnRes600'].forEach(function (id) {
+      var b = document.getElementById(id);
+      if (b) b.className = 'scan-pill-btn';
+    });
+    var activeId = res === '200DPI' ? 'btnRes200' : (res === '600DPI' ? 'btnRes600' : 'btnRes300');
+    var actEl = document.getElementById(activeId);
+    if (actEl) actEl.className = 'scan-pill-btn active';
+  };
+
+  window.setScanFormat = function (fmt) {
+    scanState.fileFormat = fmt;
+    ['btnFmtPdf', 'btnFmtTiff', 'btnFmtJpeg'].forEach(function (id) {
+      var b = document.getElementById(id);
+      if (b) b.className = 'scan-pill-btn';
+    });
+    var activeId = fmt === 'TIFF' ? 'btnFmtTiff' : (fmt === 'JPEG' ? 'btnFmtJpeg' : 'btnFmtPdf');
+    var actEl = document.getElementById(activeId);
+    if (actEl) actEl.className = 'scan-pill-btn active';
+  };
+
+  window.setScanDuplex = function (dup) {
+    scanState.duplex = dup;
+    ['btnDuplexSimplex', 'btnDuplexDuplex'].forEach(function (id) {
+      var b = document.getElementById(id);
+      if (b) b.className = 'scan-pill-btn';
+    });
+    var activeId = dup === 'DUPLEX' ? 'btnDuplexDuplex' : 'btnDuplexSimplex';
+    var actEl = document.getElementById(activeId);
+    if (actEl) actEl.className = 'scan-pill-btn active';
+  };
+
+  window.applyScanPreset = function (preset) {
+    if (preset === 'COLOR_300') {
+      window.setScanColorMode('COLOR');
+      window.setScanResolution('300DPI');
+      window.setScanFormat('PDF');
+    } else if (preset === 'MONO_300') {
+      window.setScanColorMode('MONO');
+      window.setScanResolution('300DPI');
+      window.setScanFormat('PDF');
+    } else if (preset === 'PHOTO_600') {
+      window.setScanColorMode('COLOR');
+      window.setScanResolution('600DPI');
+      window.setScanFormat('PDF');
+    }
+  };
+
+  window.executeScanToEmail = function () {
+    if (scanState.isScanning) return;
+
+    var recipient = (state.currentUser && state.currentUser.email) ? state.currentUser.email.trim() : '';
+    if (!recipient) {
+      var recipientInput = document.getElementById('scanInputRecipient');
+      recipient = recipientInput ? recipientInput.value.trim() : '';
+    }
+    if (!recipient && state.currentUser && state.currentUser.username) {
+      recipient = state.currentUser.username + '@rrconstruction.local';
+    }
+
+    var subjectInput = document.getElementById('scanInputSubject');
+    var subject = subjectInput ? subjectInput.value.trim() : 'Scanned Document';
+
+    var stationCode = (state.station && state.station.printerCode) ? state.station.printerCode : null;
+    var stationIp = (state.station && state.station.ipAddress) ? state.station.ipAddress : null;
+
+    scanState.isScanning = true;
+    state.inactivitySeconds = 120;
+
+    var formView = document.getElementById('scanFormView');
+    var progView = document.getElementById('scanProgressView');
+    var succView = document.getElementById('scanSuccessView');
+
+    if (formView) formView.style.display = 'none';
+    if (succView) succView.style.display = 'none';
+    if (progView) progView.style.display = 'block';
+
+    var progText = document.getElementById('scanProgressStatusText');
+    if (progText) progText.textContent = 'Scanning from Toshiba RADF / Glass...';
+
+    // Step animation feedback for touch user
+    setTimeout(function () {
+      if (scanState.isScanning && progText) {
+        progText.textContent = 'Encoding PDF and connecting to SMTP relay...';
+      }
+    }, 1200);
+
+    apiRequest('POST', '/api/scan/email', {
+      printerCode: stationCode,
+      printerIp: stationIp,
+      recipientEmail: recipient,
+      subject: subject,
+      fileName: subject.replace(/[^a-zA-Z0-9_-]/g, '_') + '.pdf',
+      pages: 1,
+      colorMode: scanState.colorMode,
+      resolution: scanState.resolution,
+      fileFormat: scanState.fileFormat,
+      duplex: scanState.duplex
+    }, function (status, data) {
+      scanState.isScanning = false;
+
+      if (status === 200 && data && data.success) {
+        if (progView) progView.style.display = 'none';
+        if (succView) succView.style.display = 'block';
+
+        var elRecip = document.getElementById('scanSuccessRecipient');
+        if (elRecip) elRecip.textContent = recipient;
+
+        var elFile = document.getElementById('scanSuccessFileName');
+        if (elFile && data.job) elFile.textContent = (data.job.fileName || subject + '.pdf') + ' (' + scanState.colorMode + ', ' + scanState.resolution + ')';
+
+        // Update local user scan counter
+        if (state.currentUser) {
+          state.currentUser.scanCount = (state.currentUser.scanCount || 0) + 1;
+          var elCount = document.getElementById('scanStationCount');
+          if (elCount) elCount.textContent = state.currentUser.scanCount;
+        }
+
+        showAlert('✓ Scan sent successfully to ' + recipient, 'success');
+      } else {
+        if (progView) progView.style.display = 'none';
+        if (formView) formView.style.display = 'block';
+        var errMsg = (data && data.message) || 'Failed to dispatch scan to email.';
+        showAlert('Scan Error: ' + errMsg, 'error');
+      }
+    });
+  };
+
+  window.toggleScanEmailForm = function () {
+    var formView = document.getElementById('scanFormView');
+    if (!formView) return;
+    if (formView.style.display === 'none' || !formView.style.display) {
+      formView.style.display = 'block';
+    } else {
+      formView.style.display = 'none';
+    }
+  };
+
+  window.resetScanForm = function () {
+    scanState.isScanning = false;
+    var formView = document.getElementById('scanFormView');
+    var progView = document.getElementById('scanProgressView');
+    var succView = document.getElementById('scanSuccessView');
+
+    if (progView) progView.style.display = 'none';
+    if (succView) succView.style.display = 'none';
+    if (formView) formView.style.display = 'block';
+  };
+
+  window.triggerToshibaScanNative = function () {
+    showAlert('Scanner ready! Press [HOME] or [CLEAR] on panel', 'success');
+    unlockDeviceTarget('SCAN');
+  };
   window.triggerNativeCopyDirect = function (mode) {
     unlockDeviceTarget(mode || 'COPY');
   };
@@ -1572,14 +1892,30 @@
   /* ------------------------------------------------------------------ */
   /* Alert Banners                                                      */
   /* ------------------------------------------------------------------ */
+  var alertDismissTimer = null;
   function showAlert(msg, type) {
     if (!alertBox) return;
+    if (alertDismissTimer) {
+      clearTimeout(alertDismissTimer);
+      alertDismissTimer = null;
+    }
     alertBox.className = 'pc-alert-strip pc-alert-' + (type || 'info');
     alertBox.textContent = msg;
+
+    // Auto-hide alert after 3.5 seconds so it doesn't linger or cover controls
+    if (type !== 'error') {
+      alertDismissTimer = setTimeout(function () {
+        hideAlert();
+      }, 3500);
+    }
   }
 
   function hideAlert() {
     if (!alertBox) return;
+    if (alertDismissTimer) {
+      clearTimeout(alertDismissTimer);
+      alertDismissTimer = null;
+    }
     alertBox.className = 'pc-alert-strip';
     alertBox.textContent = '';
   }

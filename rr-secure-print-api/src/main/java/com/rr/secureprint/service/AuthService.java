@@ -59,7 +59,8 @@ public class AuthService {
         boolean isCardSelfAssociation = false;
 
         // 1. PaperCut Self-Association: User tapped an unregistered badge and provided PIN or credentials to link it
-        if (request.hasBadge() && (request.hasPin() || request.hasCredentials())) {
+        boolean isGenuineSelfAssocBadge = request.hasBadge() && (!request.hasPin() || !request.pin().trim().equalsIgnoreCase(request.badgeId().trim()));
+        if (isGenuineSelfAssocBadge && (request.hasPin() || request.hasCredentials())) {
             if (request.hasCredentials()) {
                 userOpt = activeDirectoryService.authenticate(request.username(), request.password());
             } else {
@@ -128,18 +129,21 @@ public class AuthService {
             auditService.logEvent("LOGIN_SUCCESS", user.getUserSid(), user.getUsername(), null, null, clientIp,
                     "Authenticated via " + (isCardSelfAssociation ? "CARD_SELF_ASSOCIATION" : request.hasBadge() ? "RFID_CARD" : request.hasPin() ? "PIN" : "CREDENTIALS"), "SUCCESS");
 
-            // Register terminal session for attribution
-            copyTrackingService.registerActiveTerminalUser(clientIp, user.getUsername());
-            if (request.printerIp() != null && !request.printerIp().isBlank()) {
-                copyTrackingService.registerActiveTerminalUser(request.printerIp(), user.getUsername());
-            }
+            // Register terminal session for attribution (deduplicating target IPs to prevent redundant background tasks)
+            java.util.Set<String> distinctIps = new java.util.LinkedHashSet<>();
+            if (clientIp != null && !clientIp.isBlank()) distinctIps.add(clientIp.trim());
+            if (request.printerIp() != null && !request.printerIp().isBlank()) distinctIps.add(request.printerIp().trim());
             if (request.printerCode() != null && !request.printerCode().isBlank()) {
                 printerRepository.findByPrinterCode(request.printerCode().trim().toUpperCase())
-                        .ifPresent(p -> copyTrackingService.registerActiveTerminalUser(p.getIpAddress(), user.getUsername()));
+                        .ifPresent(p -> distinctIps.add(p.getIpAddress()));
+            }
+            for (String targetIp : distinctIps) {
+                copyTrackingService.registerActiveTerminalUser(targetIp, user.getUsername());
             }
 
             return AuthResponse.success(user.getUsername(), user.getDisplayName(), user.getUserSid(),
-                    user.getDepartment(), user.getRole(), user.getPrintCount(), user.getCopyCount());
+                    user.getDepartment(), user.getRole(), user.getPrintCount(), user.getCopyCount(),
+                    user.getScanCount(), user.getEmail());
         } else {
             recordFailedAttempt(clientIp);
             auditService.logEvent("LOGIN_FAILED", null, request.username(), null, null, clientIp,
@@ -186,7 +190,9 @@ public class AuthService {
         if (session != null) {
             Object obj = session.getAttribute(SESSION_USER_KEY);
             if (obj instanceof UserEntity user) {
-                return Optional.of(user);
+                return (user.getId() != null)
+                        ? userRepository.findById(user.getId()).or(() -> Optional.of(user))
+                        : Optional.of(user);
             }
         }
         return Optional.empty();

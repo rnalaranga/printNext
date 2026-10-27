@@ -54,7 +54,9 @@ public class AuthController {
                     user.getDepartment(),
                     user.getRole(),
                     user.getPrintCount(),
-                    user.getCopyCount()
+                    user.getCopyCount(),
+                    user.getScanCount(),
+                    user.getEmail()
             ));
         }
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();

@@ -183,6 +183,12 @@
       </span>
       <span class="sidebar-label">Photocopy Logs</span>
     </a>
+    <a class="sidebar-item" data-page="scan-logs" data-tooltip="Scan Activity Logs" onclick="navigatePage('scan-logs')">
+      <span class="sidebar-icon">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+      </span>
+      <span class="sidebar-label">Scan Activity Logs</span>
+    </a>
     <a class="sidebar-item" data-page="reports" data-tooltip="Reports &amp; Analytics" onclick="navigatePage('reports')">
       <span class="sidebar-icon">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
@@ -1534,6 +1540,127 @@
               Single Source of Truth &bull; ISO 9241-110 Compliant
             </div>
           </div>
+        </div>
+      </div>
+
+      <!-- ROW 3: SCAN-TO-EMAIL & SMTP CONFIGURATION -->
+      <div class="card" style="margin-top: 24px; border: 1px solid var(--border); box-shadow: var(--shadow-sm); border-top: 4px solid #16A34A;">
+        <div class="card-head" style="background: var(--white); border-bottom: 1px solid var(--border); padding: 14px 20px;">
+          <div class="d-flex align-items-center gap-2">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#16A34A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+            <div>
+              <strong style="font-size: 13.5px; color: var(--text-dark);">Scan to Email &amp; SMTP Relay Configuration</strong>
+              <div style="font-size: 11.5px; color: var(--text-muted); margin-top: 2px;">
+                Configure corporate outbound email server for delivering scanned documents from Toshiba MFPs
+              </div>
+            </div>
+          </div>
+          <div style="display:flex; gap:8px; align-items:center;">
+            <button type="button" class="btn btn-secondary btn-sm" onclick="window.pushSmtpToPrintersModal()">
+              <span>Push SMTP to Toshiba MFPs</span>
+            </button>
+          </div>
+        </div>
+
+        <div style="padding: 20px;">
+          <form id="smtpSettingsForm" onsubmit="window.handleSaveSmtpSettings(event)">
+            <div style="display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 16px; margin-bottom: 16px;">
+              <div class="form-group">
+                <label class="form-label" for="settingSmtpHost">SMTP Server Host</label>
+                <input type="text" id="settingSmtpHost" class="form-input" placeholder="e.g. smtp.office365.com or 192.168.1.5">
+                <div class="form-hint">Corporate mail server or Microsoft 365 / Google Workspace relay</div>
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="settingSmtpPort">SMTP Port</label>
+                <input type="number" id="settingSmtpPort" class="form-input" placeholder="587" value="587">
+                <div class="form-hint">587 (STARTTLS), 465 (SSL), or 25</div>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Encryption Protocol</label>
+                <div style="margin-top: 8px; display:flex; gap: 12px; font-size:13px;">
+                  <label><input type="radio" name="smtpSecurity" id="secStartTls" value="STARTTLS" checked> STARTTLS</label>
+                  <label><input type="radio" name="smtpSecurity" id="secSsl" value="SSL"> SSL/TLS</label>
+                  <label><input type="radio" name="smtpSecurity" id="secNone" value="NONE"> None</label>
+                </div>
+              </div>
+            </div>
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr 1.5fr; gap: 16px; margin-bottom: 16px;">
+              <div class="form-group">
+                <label class="form-label" for="settingSmtpUser">SMTP Username</label>
+                <input type="text" id="settingSmtpUser" class="form-input" placeholder="e.g. scanner@rrconstruction.lk">
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="settingSmtpPass">SMTP Password</label>
+                <input type="password" id="settingSmtpPass" class="form-input" placeholder="App password or relay secret">
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="settingSmtpFrom">Default Sender Email (From:)</label>
+                <input type="email" id="settingSmtpFrom" class="form-input" placeholder="scan@rrconstruction.lk" value="scan@rrconstruction.lk">
+              </div>
+            </div>
+
+            <!-- Test SMTP Connection Strip -->
+            <div style="background: #F8FAFC; border: 1px solid var(--border); border-radius: 6px; padding: 14px 16px; margin-bottom: 16px;">
+              <div style="font-weight: 700; font-size: 12.5px; color: #1E293B; margin-bottom: 8px;">
+                Verify SMTP Relay Delivery:
+              </div>
+              <div style="display: flex; gap: 10px; align-items: center;">
+                <input type="email" id="settingTestRecipient" class="form-input" style="max-width: 340px;" placeholder="Enter test recipient email...">
+                <button type="button" class="btn btn-secondary btn-sm" onclick="window.testSmtpConnection()">
+                  &#9993; Send Test Scan Email
+                </button>
+                <span id="smtpTestStatus" style="font-size: 12.5px; margin-left: 10px;"></span>
+              </div>
+            </div>
+
+            <div style="display: flex; justify-content: flex-end; gap: 10px; padding-top: 14px; border-top: 1px solid var(--border);">
+              <button type="submit" class="btn btn-primary">
+                <span>Save Email &amp; Scan Settings</span>
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <!-- =====================================================================
+         PAGE: SCAN ACTIVITY LOGS
+         ===================================================================== -->
+    <div id="page-scan-logs" class="page-view" style="display:none;">
+      <div class="section-header">
+        <div>
+          <h2>Scan to Email Activity</h2>
+          <p>Real-time audit trail of documents scanned and dispatched to recipient inboxes from Toshiba MFPs.</p>
+        </div>
+        <div style="display: flex; gap: 10px;">
+          <button class="btn btn-secondary" onclick="window.loadScanActivity()"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg> <span>Refresh</span></button>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Date / Time</th>
+                <th>User Account</th>
+                <th>Recipient Email</th>
+                <th>Document Name</th>
+                <th>Pages</th>
+                <th>Color / Quality</th>
+                <th>Status</th>
+                <th>Device / IP</th>
+              </tr>
+            </thead>
+            <tbody id="scanLogsTableBody">
+              <tr>
+                <td colspan="8" style="text-align:center; padding:30px; color:var(--text-muted);">
+                  Loading scan records...
+                </td>
+              </tr>
+            </tbody>
+          </table>
         </div>
       </div>
     </div>
