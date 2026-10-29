@@ -118,8 +118,10 @@ public class SmtpEmailService {
         Socket socket;
         if (useSsl) {
             SSLSocketFactory ssf = (SSLSocketFactory) SSLSocketFactory.getDefault();
-            socket = ssf.createSocket();
-            socket.connect(new InetSocketAddress(host, port), TIMEOUT_MS);
+            SSLSocket sslSocket = (SSLSocket) ssf.createSocket();
+            sslSocket.connect(new InetSocketAddress(host, port), TIMEOUT_MS);
+            sslSocket.startHandshake();
+            socket = sslSocket;
         } else {
             socket = new Socket();
             socket.connect(new InetSocketAddress(host, port), TIMEOUT_MS);
@@ -248,13 +250,7 @@ public class SmtpEmailService {
     }
 
     private static void expectReply(BufferedReader reader, int expectedCode) throws IOException {
-        String line = reader.readLine();
-        if (line == null) {
-            throw new IOException("Unexpected EOF while expecting SMTP code " + expectedCode);
-        }
-        if (!line.startsWith(String.valueOf(expectedCode))) {
-            throw new IOException("SMTP command failed: " + line);
-        }
+        readMultilineReply(reader, expectedCode);
     }
 
     private static String readMultilineReply(BufferedReader reader, int expectedCode) throws IOException {

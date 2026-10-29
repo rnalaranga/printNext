@@ -51,6 +51,24 @@ public class ReportController {
         return ResponseEntity.ok(reportService.getUserReports(department, costCenter, search));
     }
 
+    @GetMapping("/scans")
+    public ResponseEntity<List<ReportService.ScanReportDto>> getScanReports(
+            @RequestParam(value = "department", required = false) String department,
+            @RequestParam(value = "costCenter", required = false) String costCenter,
+            @RequestParam(value = "printer", required = false) String printer,
+            @RequestParam(value = "startDate", required = false) String startDate,
+            @RequestParam(value = "endDate", required = false) String endDate,
+            @RequestParam(value = "search", required = false) String search) {
+        return ResponseEntity.ok(reportService.getScanReports(department, costCenter, printer, startDate, endDate, search));
+    }
+
+    @GetMapping("/esg")
+    public ResponseEntity<ReportService.EsgReportDto> getEsgReport(
+            @RequestParam(value = "startDate", required = false) String startDate,
+            @RequestParam(value = "endDate", required = false) String endDate) {
+        return ResponseEntity.ok(reportService.getEsgReport(startDate, endDate));
+    }
+
     @GetMapping("/transactions")
     public ResponseEntity<List<ReportService.TransactionReportDto>> getTransactionReports(
             @RequestParam(value = "type", required = false) String type,

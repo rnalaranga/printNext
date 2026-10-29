@@ -8,7 +8,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>nexPrint - Administration Console</title>
   <link rel="stylesheet" href="/css/bootstrap.min.css">
-  <link rel="stylesheet" href="/css/admin.css?v=20261026_105">
+  <link rel="stylesheet" href="/css/admin.css?v=20261026_108">
   <script>
     /* Instant Pre-Render Theme & Sidebar State (100% Offline, Zero FOUC) */
     (function () {
@@ -159,6 +159,13 @@
       </span>
       <span class="sidebar-label">Printer Devices</span>
     </a>
+    <a class="sidebar-item" data-page="monitoring" data-tooltip="Printer Telemetry Monitoring" onclick="navigatePage('monitoring')">
+      <span class="sidebar-icon">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/><circle cx="7" cy="8" r="1.5" fill="currentColor"/><circle cx="12" cy="8" r="1.5" fill="currentColor"/><circle cx="17" cy="8" r="1.5" fill="currentColor"/><circle cx="7" cy="12" r="1.5" fill="currentColor"/><circle cx="12" cy="12" r="1.5" fill="currentColor"/><circle cx="17" cy="12" r="1.5" fill="currentColor"/></svg>
+      </span>
+      <span class="sidebar-label">Printer Monitoring</span>
+      <span id="sidebarMonitoringBadge" style="margin-left:auto; background:#ECFDF5; color:#059669; font-size:10px; font-weight:800; padding:1px 6px; border-radius:10px; border:1px solid #A7F3D0;">LIVE</span>
+    </a>
     <a class="sidebar-item" data-page="users" data-tooltip="User Management" onclick="navigatePage('users')">
       <span class="sidebar-icon">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
@@ -259,6 +266,22 @@
       </div>
     </div>
     <div class="nav-links">
+      <div class="action-dropdown-wrap" style="position:relative;">
+        <button type="button" class="btn btn-primary btn-action-dropdown" onclick="window.toggleGenericDropdown(event, 'topbarQuickActionsMenu', 'topbarQuickActionsBtn', 230, 240)" id="topbarQuickActionsBtn" style="font-weight:700; display:inline-flex; align-items:center; gap:6px; padding:6px 14px; font-size:12px;">
+          <span>+ Quick Actions ▾</span>
+        </button>
+        <div class="action-dropdown-menu" id="topbarQuickActionsMenu" style="width:230px;">
+          <div style="padding:4px 12px 4px; font-size:10px; font-weight:800; color:#64748B; text-transform:uppercase; letter-spacing:0.5px;">Add New</div>
+          <button type="button" class="action-dropdown-item item-primary" onclick="openAddPrinterModal()"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg> Register New Printer</button>
+          <button type="button" class="action-dropdown-item" onclick="openAddUserModal()"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg> Add New User</button>
+          <button type="button" class="action-dropdown-item" onclick="window.openCreateVirtualQueueModal()"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg> Create Virtual Queue</button>
+          <div class="action-dropdown-divider"></div>
+          <div style="padding:4px 12px 4px; font-size:10px; font-weight:800; color:#64748B; text-transform:uppercase; letter-spacing:0.5px;">Administration</div>
+          <button type="button" class="action-dropdown-item" onclick="window.syncLdapUsersWithLoading()"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="8" rx="2" ry="2"/><rect x="2" y="14" width="20" height="8" rx="2" ry="2"/></svg> Sync Active Directory / LDAP</button>
+          <button type="button" class="action-dropdown-item" onclick="navigatePage('queue')"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg> View Print Queue</button>
+          <button type="button" class="action-dropdown-item" onclick="navigatePage('settings')"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg> System Settings</button>
+        </div>
+      </div>
       <button type="button" class="theme-toggle-btn shadow-sm" id="themeToggleBtn" onclick="window.toggleAppTheme()" title="Switch Light / Dark Theme">
         <span id="themeToggleIcon" style="display:inline-flex; align-items:center;"></span>
         <span id="themeToggleText">Dark Mode</span>
@@ -301,25 +324,14 @@
         </div>
       </div>
 
-      <!-- Quick Shortcuts -->
-      <div class="card" style="margin-bottom:20px;">
-        <div class="card-head">
-          <h2>Administrative Quick Actions</h2>
-        </div>
-        <div class="card-body-pad">
-          <button class="btn btn-primary" onclick="openAddPrinterModal()">+ Add New Printer</button>
-          <button class="btn btn-secondary" onclick="navigatePage('directory')" style="font-weight:600;">Configure LDAP / Active Directory</button>
-          <button class="btn btn-primary" onclick="openAddUserModal()">+ Add New User</button>
-          <button class="btn btn-secondary" onclick="navigatePage('queue')">View Held Print Queue</button>
-          <button class="btn btn-secondary" onclick="navigatePage('audit')">View Security Logs</button>
-        </div>
-      </div>
-
       <!-- Recent Jobs Snippet -->
-      <div class="card">
+      <div class="card table-card">
         <div class="card-head">
           <h2>Recent Print Activity</h2>
-          <button class="btn btn-secondary btn-sm" onclick="navigatePage('queue')">View All Jobs</button>
+          <div style="display:flex; gap:8px;">
+            <button class="btn btn-secondary btn-sm" onclick="loadJobs()">Refresh Activity</button>
+            <button class="btn btn-primary btn-sm" onclick="navigatePage('queue')">View All Jobs &rarr;</button>
+          </div>
         </div>
         <div class="table-wrap">
           <table>
@@ -570,9 +582,167 @@
     </div>
 
     <!-- =====================================================================
-         PAGE 3: PRINTER MANAGEMENT
+         PAGE: PRINTER HARDWARE MONITORING (LIVE RFC 3805 SNMP TELEMETRY)
          ===================================================================== -->
-        <!-- =====================================================================
+    <div id="page-monitoring" class="page-view" style="display:none;">
+      <div class="noc-wall-container">
+
+        <!-- Crisp Light Enterprise Header Bar -->
+        <div class="noc-header-bar">
+          <div class="noc-brand-badge">
+            <div class="noc-radar-icon">
+              <div class="noc-radar-dot"></div>
+            </div>
+            <div>
+              <div class="noc-header-title">
+                Printer Hardware Monitoring
+                <span id="nocActiveCountBadge" style="font-size:11px; font-weight:800; background:#ECFDF5; color:#059669; border:1px solid #A7F3D0; padding:2px 8px; border-radius:20px; letter-spacing:0.5px;">Live Telemetry</span>
+              </div>
+              <div class="noc-header-sub">
+                <span>RFC 3805 SNMP Telemetry</span>
+                <span>•</span>
+                <span id="nocStatusSub">Real-Time Active Hardware Polling</span>
+                <span>•</span>
+                <span id="nocCountdownBadge" style="color:#2563EB; font-family:'JetBrains Mono',monospace; font-weight:700;">Polls in 15s</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Digital HUD Clock & Controls -->
+          <div class="noc-hud-clock-wrap">
+            <div>
+              <div class="noc-digital-clock" id="nocLiveClock">12:00:00</div>
+              <div class="noc-digital-date" id="nocLiveDate">OCTOBER 29, 2026</div>
+            </div>
+
+            <div style="display:flex; align-items:center; gap:8px;">
+              <button type="button" class="noc-ctrl-btn" id="btnNocRefresh" onclick="window.refreshNocFleet(true)" title="Force Immediate SNMP Hardware Poll">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+                <span>Poll Now</span>
+              </button>
+
+              <button type="button" class="noc-ctrl-btn active" id="btnNocViewMatrix" onclick="window.switchNocView('matrix')" title="Compact Matrix View">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+                <span>Matrix View</span>
+              </button>
+
+              <button type="button" class="noc-ctrl-btn" id="btnNocViewCards" onclick="window.switchNocView('cards')" title="Detailed Visual Equipment Cards">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>
+                <span>Cards View</span>
+              </button>
+
+              <button type="button" class="noc-ctrl-btn noc-ctrl-btn-tv" id="btnNocToggleTv" onclick="window.toggleNocTvMode()" title="Toggle Fullscreen TV / Wallboard Display (ESC to exit)">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
+                <span id="btnNocTvText">TV Wall Mode</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- KPI Telemetry Tiles (Short Words & Symbols) -->
+        <div class="noc-kpi-row">
+          <div class="noc-kpi-card kpi-total">
+            <div>
+              <div class="noc-kpi-label">TOTAL</div>
+              <div class="noc-kpi-val" id="nocKpiTotal">--</div>
+              <div class="noc-kpi-desc">Hardware</div>
+            </div>
+            <div style="color:#3B82F6; opacity:0.9;">
+              <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+            </div>
+          </div>
+
+          <div class="noc-kpi-card kpi-ready" onclick="window.filterNocStatus('READY')" style="cursor:pointer;" title="Filter Ready">
+            <div>
+              <div class="noc-kpi-label">READY</div>
+              <div class="noc-kpi-val" id="nocKpiReady" style="color:#059669;">--</div>
+              <div class="noc-kpi-desc">Idle</div>
+            </div>
+            <div style="color:#10B981; opacity:0.9;">
+              <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+            </div>
+          </div>
+
+          <div class="noc-kpi-card kpi-printing" onclick="window.filterNocStatus('PRINTING')" style="cursor:pointer;" title="Filter Printing">
+            <div>
+              <div class="noc-kpi-label" style="color:#7C3AED;">PRINT</div>
+              <div class="noc-kpi-val" id="nocKpiPrinting" style="color:#7C3AED;">--</div>
+              <div class="noc-kpi-desc">In-Flight</div>
+            </div>
+            <div style="color:#8B5CF6; opacity:0.9;">
+              <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+            </div>
+          </div>
+
+          <div class="noc-kpi-card kpi-warning" onclick="window.filterNocStatus('WARNING')" style="cursor:pointer;" title="Filter Warnings">
+            <div>
+              <div class="noc-kpi-label">WARN</div>
+              <div class="noc-kpi-val" id="nocKpiWarning" style="color:#D97706;">--</div>
+              <div class="noc-kpi-desc">Paper / Toner</div>
+            </div>
+            <div style="color:#F59E0B; opacity:0.9;">
+              <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+            </div>
+          </div>
+
+          <div class="noc-kpi-card kpi-error" onclick="window.filterNocStatus('ERROR')" style="cursor:pointer;" title="Filter Errors">
+            <div>
+              <div class="noc-kpi-label">ERR / OFF</div>
+              <div class="noc-kpi-val" id="nocKpiError" style="color:#DC2626;">--</div>
+              <div class="noc-kpi-desc">Action Req.</div>
+            </div>
+            <div style="color:#EF4444; opacity:0.9;">
+              <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+            </div>
+          </div>
+
+          <div class="noc-kpi-card kpi-volume">
+            <div>
+              <div class="noc-kpi-label">CLICKS</div>
+              <div class="noc-kpi-val" id="nocKpiVolume" style="font-size:20px; color:#0284C7;">--</div>
+              <div class="noc-kpi-desc">Total Pages</div>
+            </div>
+            <div style="color:#0284C7; opacity:0.9;">
+              <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+            </div>
+          </div>
+        </div>
+
+        <!-- Filter & Search Toolbar (Concise Labels & Icons) -->
+        <div class="noc-toolbar">
+          <div class="noc-filter-pills">
+            <button type="button" class="noc-pill active" id="pillNocAll" onclick="window.filterNocStatus('ALL')">ALL</button>
+            <button type="button" class="noc-pill pill-ready" id="pillNocReady" onclick="window.filterNocStatus('READY')"><span class="noc-bulb normal" style="margin-right:4px;"></span>READY</button>
+            <button type="button" class="noc-pill pill-printing" id="pillNocPrinting" onclick="window.filterNocStatus('PRINTING')"><span class="noc-bulb printing" style="margin-right:4px;"></span>PRINT</button>
+            <button type="button" class="noc-pill pill-warning" id="pillNocWarning" onclick="window.filterNocStatus('WARNING')"><span class="noc-bulb warning" style="margin-right:4px;"></span>WARN</button>
+            <button type="button" class="noc-pill pill-error" id="pillNocError" onclick="window.filterNocStatus('ERROR')"><span class="noc-bulb error" style="margin-right:4px;"></span>ERR</button>
+          </div>
+
+          <div style="display:flex; align-items:center; gap:8px;">
+            <select id="nocFloorFilter" class="form-select" onchange="window.filterNocFloor(this.value)" style="padding:6px 10px; font-size:12px; font-weight:700; border-radius:8px; background:#FFFFFF; border:1px solid #CBD5E1; color:#0F172A; width:130px;">
+              <option value="ALL">📍 All</option>
+            </select>
+
+            <div style="position:relative; width:180px;">
+              <input type="text" id="nocSearchInput" onkeyup="window.searchNocFleet(this.value)" placeholder="🔍 Search..." class="form-input" style="padding:6px 12px 6px 10px; font-size:12px; border-radius:8px; background:#FFFFFF; border:1px solid #CBD5E1; color:#0F172A; width:100%;">
+            </div>
+          </div>
+        </div>
+
+        <!-- Matrix Container -->
+        <div id="nocMatrixContainer" class="noc-matrix-grid">
+          <!-- Populated dynamically by admin-app.js -->
+        </div>
+
+        <!-- Visual Equipment Cards Container -->
+        <div id="nocCardsContainer" class="noc-cards-grid" style="display:none;">
+          <!-- Populated dynamically by admin-app.js -->
+        </div>
+
+      </div>
+    </div>
+
+    <!-- =====================================================================
          PAGE 3: PRINTER MANAGEMENT (Department Categorized Architecture)
          ===================================================================== -->
     <div id="page-printers" class="page-view" style="display:none;">
@@ -678,13 +848,21 @@
               <span>User Operations </span>
             </button>
             <div class="action-dropdown-menu" id="user-top-dropdown-menu">
-              <button type="button" class="action-dropdown-item" onclick="navigatePage('directory')">
+              <button type="button" class="action-dropdown-item item-primary" onclick="window.syncLdapUsersWithLoading()">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
                 Sync with Active Directory / LDAP
+              </button>
+              <button type="button" class="action-dropdown-item" onclick="handleImportWindowsUsers()">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="8" height="8"/><rect x="13" y="3" width="8" height="8"/><rect x="3" y="13" width="8" height="8"/><rect x="13" y="13" width="8" height="8"/></svg>
+                Import Windows Local Users
               </button>
               <button type="button" class="action-dropdown-item" onclick="loadUsers()">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
                 Refresh User List
+              </button>
+              <button type="button" class="action-dropdown-item" onclick="navigatePage('directory')">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+                Configure LDAP Settings
               </button>
             </div>
           </div>
@@ -722,13 +900,14 @@
                   <th>Touch PIN</th>
                   <th>Print Pages</th>
                   <th>Copy Pages</th>
+                  <th>Scan Docs</th>
                   <th>Total Pages</th>
                   <th>Account Status</th>
                   <th style="text-align:right;">Actions</th>
                 </tr>
               </thead>
               <tbody id="usersTableBody">
-                <tr><td colspan="11" style="text-align:center;padding:30px;color:#6B7299;">Loading users...</td></tr>
+                <tr><td colspan="12" style="text-align:center;padding:30px;color:#6B7299;">Loading users...</td></tr>
               </tbody>
             </table>
           </div>
@@ -984,7 +1163,7 @@
           <h2>Global Print Queue</h2>
           <p>Secure held print jobs awaiting release at multifunction printer touchscreens.</p>
         </div>
-        <div style="display:flex; gap:8px;">
+        <div style="display:flex; gap:8px; align-items:center;">
           <select id="queueStatusFilter" class="form-input" style="width:160px; height:34px; padding:4px 8px;" onchange="renderJobs()">
             <option value="ALL">All Statuses</option>
             <option value="HELD" selected>Held (Active)</option>
@@ -992,11 +1171,23 @@
             <option value="CANCELLED">Cancelled</option>
             <option value="EXPIRED">Expired</option>
           </select>
-          <button class="btn btn-secondary" onclick="loadJobs()">Refresh Queue</button>
+          <div class="action-dropdown-wrap" style="position:relative;">
+            <button type="button" class="btn btn-secondary btn-action-dropdown" onclick="window.toggleGenericDropdown(event, 'queue-top-dropdown-menu', 'queue-top-dropdown-btn', 210, 140)" id="queue-top-dropdown-btn" style="font-weight:700;">
+              <span>Queue Actions ▾</span>
+            </button>
+            <div class="action-dropdown-menu" id="queue-top-dropdown-menu" style="width:210px;">
+              <button type="button" class="action-dropdown-item" onclick="loadJobs()">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg> Refresh Queue
+              </button>
+              <button type="button" class="action-dropdown-item item-primary" onclick="navigatePage('virtual-queue')">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg> Virtual Queues Pool
+              </button>
+            </div>
+          </div>
         </div>
       </div>
 
-      <div class="card">
+      <div class="card table-card">
         <div class="table-wrap">
           <table>
             <thead>
@@ -1030,13 +1221,25 @@
           <h2>Walk-Up Photocopy Logs</h2>
           <p>Real-time hardware copy accounting captured from Toshiba e-BRIDGE Next MFPs via TopAccess XML.</p>
         </div>
-        <div style="display:flex; gap:8px;">
+        <div style="display:flex; gap:8px; align-items:center;">
           <button type="button" class="btn btn-primary" onclick="pollFleetCopyJobs()" id="btnPollCopyFleetLogs">Poll MFPs Now</button>
-          <button type="button" class="btn btn-secondary" onclick="loadCopyJobs()">Refresh</button>
+          <div class="action-dropdown-wrap" style="position:relative;">
+            <button type="button" class="btn btn-secondary btn-action-dropdown" onclick="window.toggleGenericDropdown(event, 'copy-log-dropdown-menu', 'copy-log-dropdown-btn', 210, 140)" id="copy-log-dropdown-btn" style="font-weight:700;">
+              <span>Log Actions ▾</span>
+            </button>
+            <div class="action-dropdown-menu" id="copy-log-dropdown-menu" style="width:210px;">
+              <button type="button" class="action-dropdown-item" onclick="loadCopyJobs()">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg> Refresh Logs
+              </button>
+              <button type="button" class="action-dropdown-item item-primary" onclick="pollFleetCopyJobs()">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg> Poll Walk-Up MFPs
+              </button>
+            </div>
+          </div>
         </div>
       </div>
 
-      <div class="card">
+      <div class="card table-card">
         <div style="padding:16px 20px; border-bottom:1px solid #E2E8F0; display:flex; justify-content:space-between; align-items:center;">
           <div>
             <strong style="font-size:14px; color:#0F172A;">Recent Photocopy Activity (Top 50 Jobs)</strong>
@@ -1108,7 +1311,7 @@
               <span class="small text-muted">Pages</span>
             </div>
             <div class="text-secondary small mt-1" style="font-size:11px;">
-              Print: <span id="repStatPrintPages" class="text-primary fw-bold">-</span> | Copy: <span id="repStatCopyPages" class="text-success fw-bold">-</span>
+              Print: <span id="repStatPrintPages" class="text-primary fw-bold">-</span> | Copy: <span id="repStatCopyPages" class="text-success fw-bold">-</span> | Scan: <span id="repStatScanPages" class="fw-bold" style="color:#4F46E5;">-</span>
             </div>
           </div>
         </div>
@@ -1182,6 +1385,16 @@
             <li class="nav-item">
               <button class="nav-link btn-sm py-1 px-3 fw-semibold text-secondary" id="btnRepTabUsers" onclick="switchReportTab('users')">
                 Detailed Users
+              </button>
+            </li>
+            <li class="nav-item">
+              <button class="nav-link btn-sm py-1 px-3 fw-semibold text-secondary" id="btnRepTabScans" onclick="switchReportTab('scans')">
+                <span class="badge border me-1" style="background:#EEF2FF; color:#4F46E5; border-color:#C7D2FE !important; font-size:10px;">SCAN</span>Scan to Email
+              </button>
+            </li>
+            <li class="nav-item">
+              <button class="nav-link btn-sm py-1 px-3 fw-semibold text-secondary" id="btnRepTabEsg" onclick="switchReportTab('esg')">
+                <span class="badge bg-success-subtle text-success border border-success-subtle me-1" style="font-size:10px;">ESG</span>Green Impact
               </button>
             </li>
             <li class="nav-item">
@@ -1275,11 +1488,13 @@
             <div class="mb-3">
               <label class="form-label small fw-bold">1. Select Report Focus / Grouping</label>
               <select id="crReportType" class="form-select form-select-sm">
-                <option value="departments" selected>Department Print &amp; Copy Volume Summary</option>
-                <option value="costCenters">Cost Center (extensionAttribute3) Accounting</option>
-                <option value="printers">Printer Device Volume by Department &amp; Location</option>
-                <option value="users">User Account Printing &amp; Copying Quota</option>
-                <option value="transactions">Transaction Log (All Print &amp; Walk-up Copy Jobs)</option>
+                <option value="departments" selected>Department Print, Copy &amp; Scan Volume Summary</option>
+                <option value="costCenters">Cost Center (extensionAttribute3) Expense Allocation</option>
+                <option value="printers">Printer Device Utilization &amp; Load</option>
+                <option value="users">User Account Volume &amp; Quota Usage</option>
+                <option value="scans">Scan to Email &amp; Digital Capture Audit</option>
+                <option value="esg">Environmental &amp; ESG Green Impact Report</option>
+                <option value="transactions">Full Transaction Log (All Print, Copy &amp; Scan)</option>
               </select>
             </div>
             <div class="row g-2 mb-3">
@@ -1342,7 +1557,7 @@
         </div>
       </div>
 
-      <div class="card">
+      <div class="card table-card">
         <div class="table-wrap">
           <table>
             <thead>
@@ -1638,7 +1853,7 @@
         </div>
       </div>
 
-      <div class="card">
+      <div class="card table-card">
         <div class="table-wrap">
           <table>
             <thead>
@@ -1927,22 +2142,26 @@
           <span>Volume &amp; Quota Accounting</span>
         </div>
 
-        <div style="display:grid; grid-template-columns:repeat(4, 1fr); gap:12px; text-align:center;">
-          <div style="background:#F8FAFC; border:1px solid var(--border); border-radius:4px; padding:10px 8px;">
+        <div style="display:grid; grid-template-columns:repeat(5, 1fr); gap:10px; text-align:center;">
+          <div style="background:#F8FAFC; border:1px solid var(--border); border-radius:4px; padding:10px 6px;">
             <div style="font-size:11px; color:#64748B; text-transform:uppercase; font-weight:600;">Print Pages</div>
-            <div id="viewUserPrintCount" style="font-size:18px; font-weight:700; color:#1D4ED8; margin-top:4px;">0</div>
+            <div id="viewUserPrintCount" style="font-size:17px; font-weight:700; color:#1D4ED8; margin-top:4px;">0</div>
           </div>
-          <div style="background:#F8FAFC; border:1px solid var(--border); border-radius:4px; padding:10px 8px;">
+          <div style="background:#F8FAFC; border:1px solid var(--border); border-radius:4px; padding:10px 6px;">
             <div style="font-size:11px; color:#64748B; text-transform:uppercase; font-weight:600;">Copy Pages</div>
-            <div id="viewUserCopyCount" style="font-size:18px; font-weight:700; color:#15803D; margin-top:4px;">0</div>
+            <div id="viewUserCopyCount" style="font-size:17px; font-weight:700; color:#15803D; margin-top:4px;">0</div>
           </div>
-          <div style="background:#F8FAFC; border:1px solid var(--border); border-radius:4px; padding:10px 8px;">
+          <div style="background:#F8FAFC; border:1px solid var(--border); border-radius:4px; padding:10px 6px;">
+            <div style="font-size:11px; color:#64748B; text-transform:uppercase; font-weight:600;">Scan Docs</div>
+            <div id="viewUserScanCount" style="font-size:17px; font-weight:700; color:#4F46E5; margin-top:4px;">0</div>
+          </div>
+          <div style="background:#F8FAFC; border:1px solid var(--border); border-radius:4px; padding:10px 6px;">
             <div style="font-size:11px; color:#64748B; text-transform:uppercase; font-weight:600;">Total Pages</div>
-            <div id="viewUserTotalPages" style="font-size:18px; font-weight:700; color:#0F172A; margin-top:4px;">0</div>
+            <div id="viewUserTotalPages" style="font-size:17px; font-weight:700; color:#0F172A; margin-top:4px;">0</div>
           </div>
-          <div style="background:#F8FAFC; border:1px solid var(--border); border-radius:4px; padding:10px 8px;">
+          <div style="background:#F8FAFC; border:1px solid var(--border); border-radius:4px; padding:10px 6px;">
             <div style="font-size:11px; color:#64748B; text-transform:uppercase; font-weight:600;">Est. Cost</div>
-            <div id="viewUserEstCost" style="font-size:16px; font-weight:700; color:#B45309; margin-top:4px;">Rs. 0.00</div>
+            <div id="viewUserEstCost" style="font-size:15px; font-weight:700; color:#B45309; margin-top:4px;">Rs. 0.00</div>
           </div>
         </div>
       </div>
@@ -2332,11 +2551,44 @@
 </div>
 
 <script src="/js/bootstrap.bundle.min.js"></script>
-<script src="/js/admin-app.js?v=20261026_105"></script>
+<script src="/js/admin-app.js?v=20261026_107"></script>
 
 <!-- =========================================================================
      MODAL: ACTIVE DIRECTORY & LDAP SETTINGS MODAL
      ========================================================================= -->
+<!-- =========================================================================
+     MODAL: LDAP / ACTIVE DIRECTORY SYNCHRONIZATION LOADING OVERLAY
+     ========================================================================= -->
+<div id="modalLdapLoading" class="modal-backdrop" style="display:none; z-index:999999;">
+  <div class="modal-box" style="max-width:440px; text-align:center; padding:32px 28px; border-radius:12px; box-shadow:0 20px 45px rgba(15,23,42,0.3); background:#FFFFFF; border:1.5px solid #CBD5E1;">
+    <!-- Animated Spinner / Syncer Graphic -->
+    <div style="position:relative; width:64px; height:64px; margin:0 auto 18px auto;">
+      <div class="ldap-sync-spinner"></div>
+      <div style="position:absolute; top:0; left:0; width:64px; height:64px; display:flex; align-items:center; justify-content:center;">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#2563EB" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+          <circle cx="9" cy="7" r="4"></circle>
+          <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+          <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+        </svg>
+      </div>
+    </div>
+    
+    <h3 id="ldapLoadingTitle" style="font-size:16.5px; font-weight:800; color:#0F172A; margin-bottom:8px; letter-spacing:-0.2px;">Synchronizing Active Directory / LDAP</h3>
+    <p id="ldapLoadingDesc" style="font-size:12.5px; color:#64748B; margin-bottom:18px; line-height:1.5;">
+      Querying Domain Controller, synchronizing employee accounts, and mapping external attributes...
+    </p>
+
+    <!-- Animated indeterminate progress bar -->
+    <div style="width:100%; height:6px; background:#E2E8F0; border-radius:4px; overflow:hidden; position:relative; margin-bottom:14px;">
+      <div class="ldap-progress-bar"></div>
+    </div>
+
+    <div id="ldapLoadingStatusText" style="font-size:11.5px; font-weight:700; color:#2563EB; display:inline-block; background:#EFF6FF; padding:4px 14px; border-radius:20px; border:1px solid #BFDBFE;">
+      Connecting to LDAP Domain Controller...
+    </div>
+  </div>
+</div>
 <div id="modalDirectorySync" class="modal-backdrop" style="display:none;">
   <div class="modal-box" style="max-width:620px;">
     <div class="modal-head">
@@ -2395,6 +2647,107 @@
         <button type="submit" class="btn btn-primary">Save Settings</button>
       </div>
     </form>
+  </div>
+</div>
+
+<!-- =========================================================================
+     MODAL: DETAILED SNMP DEVICE DIAGNOSTICS (LIGHT MODE)
+     ========================================================================= -->
+<div id="modalNocDeviceDetail" class="modal-backdrop" style="display:none; z-index:99999;">
+  <div class="modal-box" style="max-width:720px; background:#FFFFFF; border:1px solid #CBD5E1; color:#0F172A; border-radius:12px; box-shadow:0 20px 45px rgba(0,0,0,0.15);">
+    <div class="modal-head" style="background:#F8FAFC; border-bottom:1px solid #E2E8F0; padding:16px 20px;">
+      <div style="display:flex; align-items:center; gap:16px;">
+        <img src="img/toshiba-mfp.png" alt="Toshiba MFP" style="width:76px; height:76px; object-fit:contain; border-radius:10px; border:1px solid #E2E8F0; padding:4px; background:#FFFFFF; box-shadow:0 4px 10px rgba(0,0,0,0.06);">
+        <div>
+          <div style="display:flex; align-items:center; gap:8px;">
+            <div id="nocModalStatusDot" style="width:10px; height:10px; border-radius:50%; background:#10B981; box-shadow:0 0 8px #10B981;"></div>
+            <h3 id="nocModalTitle" style="color:#0F172A; font-size:16px; margin:0; font-weight:800;">PCT-0001 - Toshiba e-STUDIO 2518A</h3>
+            <span id="nocModalLiveStateBadge" style="font-size:11px; padding:2px 8px; border-radius:12px; font-weight:800; text-transform:uppercase; background:#DCFCE7; color:#15803D;">IDLE</span>
+          </div>
+          <div id="nocModalSub" style="font-size:11.5px; color:#64748B; margin-top:2px;">Floor 1 • Finance &amp; Accounts • 192.168.1.15</div>
+        </div>
+      </div>
+      <button type="button" class="modal-close-btn" onclick="window.closeNocDeviceModal()" style="color:#64748B;">&times;</button>
+    </div>
+
+    <div class="modal-body" style="padding:20px; max-height:calc(85vh - 120px); overflow-y:auto; background:#FFFFFF;">
+      <!-- Key Device Metrics Grid (Short Words & Symbols) -->
+      <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(105px, 1fr)); gap:8px; margin-bottom:14px;">
+        <div style="background:#F8FAFC; border:1px solid #E2E8F0; border-radius:8px; padding:8px 10px;">
+          <div style="font-size:9.5px; color:#64748B; text-transform:uppercase; font-weight:700;">ENGINE</div>
+          <div id="nocModalEngineState" style="font-size:12.5px; font-weight:800; color:#0284C7; font-family:'JetBrains Mono',monospace; margin-top:2px;">IDLE</div>
+        </div>
+        <div style="background:#F8FAFC; border:1px solid #E2E8F0; border-radius:8px; padding:8px 10px;">
+          <div style="font-size:9.5px; color:#64748B; text-transform:uppercase; font-weight:700;">PRINTING</div>
+          <div id="nocModalIsPrinting" style="font-size:12.5px; font-weight:800; color:#059669; font-family:'JetBrains Mono',monospace; margin-top:2px;">NO</div>
+        </div>
+        <div style="background:#F8FAFC; border:1px solid #E2E8F0; border-radius:8px; padding:8px 10px;">
+          <div style="font-size:9.5px; color:#64748B; text-transform:uppercase; font-weight:700;">WASTE</div>
+          <div id="nocModalWasteBox" style="font-size:12.5px; font-weight:800; color:#059669; font-family:'JetBrains Mono',monospace; margin-top:2px;">OK</div>
+        </div>
+        <div style="background:#F8FAFC; border:1px solid #E2E8F0; border-radius:8px; padding:8px 10px;">
+          <div style="font-size:9.5px; color:#64748B; text-transform:uppercase; font-weight:700;">CLICKS</div>
+          <div id="nocModalLifeCount" style="font-size:12.5px; font-weight:800; color:#7C3AED; font-family:'JetBrains Mono',monospace; margin-top:2px;">--</div>
+        </div>
+        <div style="background:#F8FAFC; border:1px solid #E2E8F0; border-radius:8px; padding:8px 10px;">
+          <div style="font-size:9.5px; color:#64748B; text-transform:uppercase; font-weight:700;">PING</div>
+          <div id="nocModalPing" style="font-size:12.5px; font-weight:800; color:#475569; font-family:'JetBrains Mono',monospace; margin-top:2px;">--</div>
+        </div>
+      </div>
+
+      <!-- Active Alerts Section with RFC 3805 Error Codes -->
+      <div id="nocModalAlertSection" style="margin-bottom:14px; display:none;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+          <div style="font-size:10.5px; font-weight:800; color:#DC2626; text-transform:uppercase; letter-spacing:0.5px;">⚠️ ACTIVE ALERTS</div>
+          <span id="nocModalAlertCountBadge" style="font-size:10px; padding:2px 8px; border-radius:10px; background:#FEE2E2; color:#DC2626; font-weight:800;">Alert</span>
+        </div>
+        <div id="nocModalDetectedErrorsBar" style="margin-bottom:6px; padding:6px 10px; background:#FEF2F2; border:1px solid #FECACA; border-radius:6px; font-size:11px; color:#991B1B; font-weight:700; display:none;"></div>
+        <div id="nocModalAlertList" style="display:flex; flex-direction:column; gap:6px;"></div>
+      </div>
+
+      <!-- Toner Consumables -->
+      <div style="margin-bottom:14px;">
+        <div style="font-size:10.5px; font-weight:800; color:#475569; text-transform:uppercase; margin-bottom:6px; letter-spacing:0.5px;">🧪 TONER LEVELS</div>
+        <div id="nocModalTonerList" style="display:flex; flex-direction:column; gap:6px;"></div>
+      </div>
+
+      <!-- Paper Trays -->
+      <div style="margin-bottom:14px;">
+        <div style="font-size:10.5px; font-weight:800; color:#475569; text-transform:uppercase; margin-bottom:6px; letter-spacing:0.5px;">📄 PAPER TRAYS</div>
+        <div id="nocModalTrayList" style="display:grid; grid-template-columns:repeat(2, 1fr); gap:6px;"></div>
+      </div>
+
+      <!-- Technical Telemetry Details -->
+      <div style="background:#F8FAFC; border:1px solid #E2E8F0; border-radius:8px; padding:10px 12px; font-family:'JetBrains Mono',monospace; font-size:10.5px; color:#475569;">
+        <div style="display:flex; justify-content:space-between; margin-bottom:3px;">
+          <span>IP:</span>
+          <span id="nocModalIp" style="color:#0F172A; font-weight:700;">--</span>
+        </div>
+        <div style="display:flex; justify-content:space-between; margin-bottom:3px;">
+          <span>Uptime:</span>
+          <span id="nocModalUptime" style="color:#0F172A; font-weight:700;">--</span>
+        </div>
+        <div style="display:flex; justify-content:space-between; margin-bottom:3px;">
+          <span>MIB:</span>
+          <span style="color:#059669; font-weight:700;">RFC 3805 + 2790</span>
+        </div>
+        <div style="display:flex; justify-content:space-between; margin-bottom:3px;">
+          <span>Device:</span>
+          <span id="nocModalHardwareType" style="color:#2563EB; font-weight:700;">Toshiba e-BRIDGE</span>
+        </div>
+        <div style="display:flex; justify-content:space-between;">
+          <span>Polled:</span>
+          <span id="nocModalLastPolled" style="color:#0F172A; font-weight:700;">--</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal-foot" style="background:#F8FAFC; border-top:1px solid #E2E8F0; padding:10px 20px; display:flex; justify-content:space-between;">
+      <a id="btnNocOpenWebUi" href="#" target="_blank" class="btn btn-secondary" style="font-size:11.5px; text-decoration:none; display:inline-flex; align-items:center; gap:6px;">
+        <span>🌐 MFP Web ↗</span>
+      </a>
+      <button type="button" class="btn btn-secondary" onclick="window.closeNocDeviceModal()">Close</button>
+    </div>
   </div>
 </div>
 

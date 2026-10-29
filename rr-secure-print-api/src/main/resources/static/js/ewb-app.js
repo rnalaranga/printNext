@@ -119,6 +119,7 @@
         } else if (document.visibilityState === 'visible') {
           // Machine woke up from sleep or returned to nexPrint
           // CRITICAL: Always lock and enforce PIN on wake-up!
+          state.isNativeOperationActive = false;
           window.emergencyLockAndLogout('HARDWARE_WAKE_LOCK');
         }
       });
@@ -133,6 +134,12 @@
       window.addEventListener('blur', function () {
         if (state.isNativeOperationActive) {
           sendCopyScreenOpenedBeacon();
+        }
+      });
+      window.addEventListener('focus', function () {
+        if (!state.currentUser) {
+          state.isNativeOperationActive = false;
+          window.emergencyLockAndLogout('WINDOW_FOCUS_LOCK');
         }
       });
       window.addEventListener('online', onWakeOrReconnect);
@@ -172,8 +179,8 @@
   /* ------------------------------------------------------------------ */
   window.emergencyLockAndLogout = function (reason) {
     if (state.isNativeOperationActive &&
-        (reason === 'WINDOW_BLUR_SLEEP' || reason === 'PAGE_HIDE' || reason === 'HARDWARE_SLEEP_BUTTON')) {
-      // User is actively in native Copy / Scan mode on physical panel - do not auto-lock while panel is in use
+        (reason === 'WINDOW_BLUR_SLEEP' || reason === 'PAGE_HIDE')) {
+      // User is actively transitioning to native Copy / Scan mode on physical panel
       return;
     }
     var stationCode = (state.station && state.station.printerCode) ? state.station.printerCode : null;
@@ -383,6 +390,9 @@
           applyEwbBranding(data.branding);
         }
         state.station = data.currentStation;
+        if (!state.currentUser && !state.isNativeOperationActive) {
+          window.emergencyLockAndLogout('KIOSK_BOOT_LOCK');
+        }
         var nameEl = document.getElementById('stationNameHeader');
         var ipEl = document.getElementById('stationIpHeader');
         var selectEl = document.getElementById('stationSelect');
@@ -436,11 +446,8 @@
 
   function onWakeOrReconnect() {
     sessionRetryCount = 0;
-    if (state.currentUser) {
-      window.emergencyLockAndLogout('HARDWARE_WAKE_VERIFY');
-    } else {
-      checkCurrentSession();
-    }
+    state.isNativeOperationActive = false;
+    window.emergencyLockAndLogout('HARDWARE_WAKE_VERIFY');
   }
 
   /* ------------------------------------------------------------------ */
@@ -1142,7 +1149,7 @@
 
   window.openCopyFunction = function () {
     state.isNativeOperationActive = true;
-    state.inactivitySeconds = 45;
+    state.inactivitySeconds = 30;
     updateTimerText();
 
     showAlert('Copier ready! Press [HOME] or [CLEAR] on panel', 'success');
@@ -1153,7 +1160,7 @@
 
   window.openScanFunction = function () {
     state.isNativeOperationActive = true;
-    state.inactivitySeconds = 45;
+    state.inactivitySeconds = 30;
     updateTimerText();
 
     showAlert('Scanner ready! Press [HOME] or [CLEAR] on panel', 'success');

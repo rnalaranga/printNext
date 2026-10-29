@@ -39,6 +39,11 @@
             <artifactId>spring-boot-starter-actuator</artifactId>
         </dependency>
 
+        <dependency>
+            <groupId>org.eclipse.angus</groupId>
+            <artifactId>jakarta.mail</artifactId>
+        </dependency>
+
         <!-- Database Drivers & Migrations -->
         <dependency>
             <groupId>org.postgresql</groupId>

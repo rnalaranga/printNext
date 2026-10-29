@@ -14,6 +14,7 @@ import com.rr.secureprint.service.SystemSettingsService;
 import com.rr.secureprint.service.ScanService;
 import com.rr.secureprint.service.SmtpEmailService;
 import com.rr.secureprint.service.ToshibaEwbService;
+import com.rr.secureprint.service.SnmpMonitoringService;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -38,6 +39,7 @@ public class AdminController {
     private final ScanService scanService;
     private final SmtpEmailService smtpEmailService;
     private final ToshibaEwbService toshibaEwbService;
+    private final SnmpMonitoringService snmpMonitoringService;
 
     public AdminController(JobService jobService,
                            AuthService authService,
@@ -49,7 +51,8 @@ public class AdminController {
                            SystemSettingsService systemSettingsService,
                            ScanService scanService,
                            SmtpEmailService smtpEmailService,
-                           ToshibaEwbService toshibaEwbService) {
+                           ToshibaEwbService toshibaEwbService,
+                           SnmpMonitoringService snmpMonitoringService) {
         this.jobService = jobService;
         this.authService = authService;
         this.auditLogRepository = auditLogRepository;
@@ -61,6 +64,7 @@ public class AdminController {
         this.scanService = scanService;
         this.smtpEmailService = smtpEmailService;
         this.toshibaEwbService = toshibaEwbService;
+        this.snmpMonitoringService = snmpMonitoringService;
     }
 
     /* =========================================================================
@@ -710,7 +714,9 @@ public class AdminController {
     }
 
     @PostMapping("/printers/{id}/push-smtp")
-    public ResponseEntity<?> pushSmtpToPrinter(@PathVariable("id") Long id, HttpServletRequest httpRequest) {
+    public ResponseEntity<?> pushSmtpToPrinter(@PathVariable("id") Long id,
+                                               @RequestParam(value = "relay", defaultValue = "true") boolean relay,
+                                               HttpServletRequest httpRequest) {
         if (!isAdmin(httpRequest)) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("error", "Admin privileges required."));
         }
@@ -723,22 +729,54 @@ public class AdminController {
         PrinterEntity printer = printerOpt.get();
         var settings = systemSettingsService.getOrCreateSettings();
 
-        String smtpHost = settings.getSmtpHost();
-        int smtpPort = settings.getSmtpPort() != null ? settings.getSmtpPort() : 587;
-        String smtpUser = settings.getSmtpUsername();
-        String smtpPass = settings.getSmtpPassword();
-        String fromAddr = settings.getSmtpFromAddress();
-        boolean useSsl = Boolean.TRUE.equals(settings.getSmtpUseSsl());
+        // In Method 1 (Relay Mode), route printer scans to printNext Server (192.168.1.100:25)
+        // printNext captures, archives in data/scans/, and relays via qoa.lk:465
+        String smtpHost = relay ? "192.168.1.100" : settings.getSmtpHost();
+        int smtpPort = relay ? 25 : (settings.getSmtpPort() != null ? settings.getSmtpPort() : 587);
+        String smtpUser = relay ? null : settings.getSmtpUsername();
+        String smtpPass = relay ? null : settings.getSmtpPassword();
+        String fromAddr = settings.getSmtpFromAddress() != null ? settings.getSmtpFromAddress() : "nexprint@qoa.lk";
+        boolean useSsl = !relay && Boolean.TRUE.equals(settings.getSmtpUseSsl());
 
         boolean ok = toshibaEwbService.configureToshibaSmtp(
                 printer.getIpAddress(), printer.getAdminUsername(), printer.getAdminPassword(),
                 smtpHost, smtpPort, smtpUser, smtpPass, fromAddr, useSsl
         );
 
+        String modeDesc = relay ? "Server Relay (192.168.1.100:25 -> qoa.lk:465)" : "Direct MFP (" + smtpHost + ")";
         return ResponseEntity.ok(Map.of(
                 "success", ok,
                 "printer", printer.getName(),
-                "message", ok ? "SMTP configuration pushed to " + printer.getName() : "Failed to push SMTP to printer."
+                "mode", modeDesc,
+                "message", ok ? "SMTP configuration (" + modeDesc + ") pushed to " + printer.getName() : "Failed to push SMTP to printer."
         ));
+    }
+
+    /* =========================================================================
+       PRINTER MONITORING & REAL-TIME HARDWARE TELEMETRY
+       ========================================================================= */
+
+    @GetMapping("/printers/monitoring")
+    public ResponseEntity<FleetMonitoringSummaryDto> getFleetMonitoring(
+            @RequestParam(value = "refresh", defaultValue = "false") boolean refresh,
+            HttpServletRequest httpRequest) {
+        return ResponseEntity.ok(snmpMonitoringService.getFleetMonitoring(refresh, 0));
+    }
+
+    @PostMapping("/printers/monitoring/refresh")
+    public ResponseEntity<FleetMonitoringSummaryDto> refreshFleetMonitoring(
+            HttpServletRequest httpRequest) {
+        return ResponseEntity.ok(snmpMonitoringService.getFleetMonitoring(true, 0));
+    }
+
+    @GetMapping("/printers/monitoring/{id}")
+    public ResponseEntity<PrinterMonitoringDto> getSinglePrinterMonitoring(
+            @PathVariable("id") Long id,
+            HttpServletRequest httpRequest) {
+        PrinterMonitoringDto dto = snmpMonitoringService.getSinglePrinterMonitoring(id);
+        if (dto == null) {
+            return ResponseEntity.notFound().build();
+        }
+        return ResponseEntity.ok(dto);
     }
 }

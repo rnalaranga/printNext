@@ -3,10 +3,12 @@ package com.rr.secureprint.service;
 import com.rr.secureprint.entity.CopyJobEntity;
 import com.rr.secureprint.entity.PrinterEntity;
 import com.rr.secureprint.entity.PrintJob;
+import com.rr.secureprint.entity.ScanJobEntity;
 import com.rr.secureprint.entity.UserEntity;
 import com.rr.secureprint.repository.CopyJobRepository;
 import com.rr.secureprint.repository.PrinterRepository;
 import com.rr.secureprint.repository.PrintJobRepository;
+import com.rr.secureprint.repository.ScanJobRepository;
 import com.rr.secureprint.repository.UserRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -32,20 +34,24 @@ public class ReportService {
     private final PrintJobRepository printJobRepository;
     private final CopyJobRepository copyJobRepository;
     private final PrinterRepository printerRepository;
+    private final ScanJobRepository scanJobRepository;
 
     public ReportService(UserRepository userRepository,
                          PrintJobRepository printJobRepository,
                          CopyJobRepository copyJobRepository,
-                         PrinterRepository printerRepository) {
+                         PrinterRepository printerRepository,
+                         ScanJobRepository scanJobRepository) {
         this.userRepository = userRepository;
         this.printJobRepository = printJobRepository;
         this.copyJobRepository = copyJobRepository;
         this.printerRepository = printerRepository;
+        this.scanJobRepository = scanJobRepository;
     }
 
     public record ReportSummaryDto(
             long totalPrintPages,
             long totalCopyPages,
+            long totalScanCount,
             long totalVolumePages,
             double totalEstimatedCostLkr,
             long totalUsers,
@@ -112,6 +118,7 @@ public class ReportService {
             String badgeId,
             long printPages,
             long copyPages,
+            long scanPages,
             long totalPages,
             double estimatedCostLkr,
             boolean isActive
@@ -135,12 +142,50 @@ public class ReportService {
             String status
     ) {}
 
+    public record ScanReportDto(
+            Long id,
+            String timestamp,
+            String username,
+            String displayName,
+            String department,
+            String costCenter,
+            String printerName,
+            String printerIp,
+            String recipientEmail,
+            String fileName,
+            int pages,
+            String colorMode,
+            String status
+    ) {}
+
+    public record EsgReportDto(
+            long totalPagesPrinted,
+            long duplexPagesSaved,
+            long digitalScansProcessed,
+            double treesConsumed,
+            double treesSaved,
+            double carbonKgEmitted,
+            double carbonKgSaved,
+            double energyKwhConsumed,
+            double duplexSavingPercentage,
+            List<DepartmentEsgDto> departmentBreakdown
+    ) {}
+
+    public record DepartmentEsgDto(
+            String department,
+            long pagesPrinted,
+            long scansProcessed,
+            double treesConsumed,
+            double carbonKgEmitted
+    ) {}
+
     public ReportSummaryDto getSummary() {
         List<UserEntity> users = userRepository.findAll();
         List<PrinterEntity> printers = printerRepository.findAll();
 
         long totalPrint = users.stream().mapToLong(UserEntity::getPrintCount).sum();
         long totalCopy = users.stream().mapToLong(UserEntity::getCopyCount).sum();
+        long totalScan = users.stream().mapToLong(UserEntity::getScanCount).sum();
         long totalVolume = totalPrint + totalCopy;
         double totalCost = roundCost(totalVolume * DEFAULT_PAGE_RATE_LKR);
 
@@ -196,6 +241,7 @@ public class ReportService {
         return new ReportSummaryDto(
                 totalPrint,
                 totalCopy,
+                totalScan,
                 totalVolume,
                 totalCost,
                 users.size(),
@@ -517,8 +563,156 @@ public class ReportService {
             }
         }
 
+        // 3. Process Scan to Email Jobs
+        if (typeFilter == null || typeFilter.isBlank() || "ALL".equalsIgnoreCase(typeFilter) || "SCAN".equalsIgnoreCase(typeFilter)) {
+            List<ScanJobEntity> scanJobs = scanJobRepository.findAll();
+            for (ScanJobEntity s : scanJobs) {
+                Instant time = s.getCompletedAt() != null ? s.getCompletedAt() : s.getCreatedAt();
+                if (startInstant != null && time.isBefore(startInstant)) continue;
+                if (endInstant != null && time.isAfter(endInstant)) continue;
+
+                UserEntity u = s.getUser();
+                String dept = u != null && u.getDepartment() != null ? u.getDepartment() : "Operations";
+                String cc = u != null && u.getExternalAttribute3() != null ? u.getExternalAttribute3() : "General";
+                String printerName = s.getPrinterName() != null ? s.getPrinterName() : (s.getPrinter() != null ? s.getPrinter().getName() : "Toshiba MFP");
+                String printerIp = s.getPrinterIp() != null ? s.getPrinterIp() : (s.getPrinter() != null ? s.getPrinter().getIpAddress() : "");
+
+                if (departmentFilter != null && !departmentFilter.isBlank() && !"ALL".equalsIgnoreCase(departmentFilter) && !dept.equalsIgnoreCase(departmentFilter.trim())) continue;
+                if (costCenterFilter != null && !costCenterFilter.isBlank() && !"ALL".equalsIgnoreCase(costCenterFilter) && !cc.equalsIgnoreCase(costCenterFilter.trim())) continue;
+                if (printerFilter != null && !printerFilter.isBlank() && !"ALL".equalsIgnoreCase(printerFilter) && !printerName.equalsIgnoreCase(printerFilter.trim()) && !printerIp.equalsIgnoreCase(printerFilter.trim())) continue;
+
+                if (search != null && !search.isBlank()) {
+                    String q = search.toLowerCase().trim();
+                    boolean mUser = s.getUsername() != null && s.getUsername().toLowerCase().contains(q);
+                    boolean mDept = dept.toLowerCase().contains(q);
+                    boolean mCc = cc.toLowerCase().contains(q);
+                    boolean mPrinter = printerName.toLowerCase().contains(q);
+                    boolean mFile = s.getFileName() != null && s.getFileName().toLowerCase().contains(q);
+                    if (!mUser && !mDept && !mCc && !mPrinter && !mFile) continue;
+                }
+
+                list.add(new TransactionReportDto(
+                        "SCAN-" + (s.getId() != null ? s.getId() : "LOG"),
+                        DISPLAY_DATE_FMT.format(time),
+                        "SCAN",
+                        s.getUsername(),
+                        u != null ? u.getDisplayName() : s.getUsername(),
+                        dept,
+                        cc,
+                        printerName,
+                        printerIp,
+                        "Scan to Email -> " + s.getRecipientEmail() + " (" + (s.getFileName() != null ? s.getFileName() : "Document.pdf") + ")",
+                        s.getPages(),
+                        "COLOR".equalsIgnoreCase(s.getColorMode()) ? s.getPages() : 0,
+                        "COLOR".equalsIgnoreCase(s.getColorMode()) ? 0 : s.getPages(),
+                        0.0,
+                        s.getStatus() != null ? s.getStatus() : "SENT"
+                ));
+            }
+        }
+
         list.sort((a, b) -> b.timestamp().compareTo(a.timestamp()));
         return list;
+    }
+
+    public List<ScanReportDto> getScanReports(String departmentFilter, String costCenterFilter,
+                                             String printerFilter, String startDate, String endDate, String search) {
+        Instant startInstant = parseStartInstant(startDate);
+        Instant endInstant = parseEndInstant(endDate);
+
+        List<ScanJobEntity> scans = scanJobRepository.findAll();
+        List<ScanReportDto> list = new ArrayList<>();
+
+        for (ScanJobEntity s : scans) {
+            Instant time = s.getCompletedAt() != null ? s.getCompletedAt() : s.getCreatedAt();
+            if (startInstant != null && time.isBefore(startInstant)) continue;
+            if (endInstant != null && time.isAfter(endInstant)) continue;
+
+            UserEntity u = s.getUser();
+            String dept = u != null && u.getDepartment() != null ? u.getDepartment() : "Operations";
+            String cc = u != null && u.getExternalAttribute3() != null ? u.getExternalAttribute3() : "General";
+            String prnName = s.getPrinterName() != null ? s.getPrinterName() : (s.getPrinter() != null ? s.getPrinter().getName() : "Toshiba MFP");
+            String prnIp = s.getPrinterIp() != null ? s.getPrinterIp() : (s.getPrinter() != null ? s.getPrinter().getIpAddress() : "");
+
+            if (departmentFilter != null && !departmentFilter.isBlank() && !"ALL".equalsIgnoreCase(departmentFilter) && !dept.equalsIgnoreCase(departmentFilter.trim())) continue;
+            if (costCenterFilter != null && !costCenterFilter.isBlank() && !"ALL".equalsIgnoreCase(costCenterFilter) && !cc.equalsIgnoreCase(costCenterFilter.trim())) continue;
+            if (printerFilter != null && !printerFilter.isBlank() && !"ALL".equalsIgnoreCase(printerFilter) && !prnName.equalsIgnoreCase(printerFilter.trim()) && !prnIp.equalsIgnoreCase(printerFilter.trim())) continue;
+
+            if (search != null && !search.isBlank()) {
+                String q = search.toLowerCase().trim();
+                boolean mUser = s.getUsername() != null && s.getUsername().toLowerCase().contains(q);
+                boolean mEmail = s.getRecipientEmail() != null && s.getRecipientEmail().toLowerCase().contains(q);
+                boolean mFile = s.getFileName() != null && s.getFileName().toLowerCase().contains(q);
+                boolean mDept = dept.toLowerCase().contains(q);
+                boolean mCc = cc.toLowerCase().contains(q);
+                boolean mPrn = prnName.toLowerCase().contains(q);
+                if (!mUser && !mEmail && !mFile && !mDept && !mCc && !mPrn) continue;
+            }
+
+            list.add(new ScanReportDto(
+                    s.getId(),
+                    DISPLAY_DATE_FMT.format(time),
+                    s.getUsername(),
+                    u != null ? u.getDisplayName() : s.getUsername(),
+                    dept,
+                    cc,
+                    prnName,
+                    prnIp,
+                    s.getRecipientEmail(),
+                    s.getFileName() != null ? s.getFileName() : "Document.pdf",
+                    s.getPages(),
+                    s.getColorMode() != null ? s.getColorMode() : "COLOR",
+                    s.getStatus() != null ? s.getStatus() : "SENT"
+            ));
+        }
+
+        list.sort((a, b) -> b.timestamp().compareTo(a.timestamp()));
+        return list;
+    }
+
+    public EsgReportDto getEsgReport(String startDate, String endDate) {
+        List<UserEntity> users = userRepository.findAll();
+        long totalPrinted = users.stream().mapToLong(UserEntity::getTotalPages).sum();
+        long totalScans = users.stream().mapToLong(UserEntity::getScanCount).sum();
+
+        long duplexSaved = Math.round(totalPrinted * 0.20); 
+
+        double treesConsumed = BigDecimal.valueOf(totalPrinted / 8333.0).setScale(3, RoundingMode.HALF_UP).doubleValue();
+        double treesSaved = BigDecimal.valueOf((duplexSaved + (totalScans * 1.5)) / 8333.0).setScale(3, RoundingMode.HALF_UP).doubleValue();
+
+        double carbonEmitted = BigDecimal.valueOf(totalPrinted * 0.0045).setScale(2, RoundingMode.HALF_UP).doubleValue();
+        double carbonSaved = BigDecimal.valueOf((duplexSaved + (totalScans * 1.5)) * 0.0045).setScale(2, RoundingMode.HALF_UP).doubleValue();
+
+        double energyKwh = BigDecimal.valueOf(totalPrinted * 0.026).setScale(2, RoundingMode.HALF_UP).doubleValue();
+        double duplexPct = totalPrinted > 0 ? ((double) duplexSaved / totalPrinted) * 100.0 : 0.0;
+
+        Map<String, List<UserEntity>> deptMap = users.stream()
+                .collect(Collectors.groupingBy(u -> u.getDepartment() != null && !u.getDepartment().isBlank() ? u.getDepartment().trim() : "Operations"));
+
+        List<DepartmentEsgDto> deptList = new ArrayList<>();
+        for (Map.Entry<String, List<UserEntity>> entry : deptMap.entrySet()) {
+            long pPages = entry.getValue().stream().mapToLong(UserEntity::getTotalPages).sum();
+            long sPages = entry.getValue().stream().mapToLong(UserEntity::getScanCount).sum();
+            double deptTrees = BigDecimal.valueOf(pPages / 8333.0).setScale(3, RoundingMode.HALF_UP).doubleValue();
+            double deptCarbon = BigDecimal.valueOf(pPages * 0.0045).setScale(2, RoundingMode.HALF_UP).doubleValue();
+
+            deptList.add(new DepartmentEsgDto(entry.getKey(), pPages, sPages, deptTrees, deptCarbon));
+        }
+
+        deptList.sort((a, b) -> Long.compare(b.pagesPrinted(), a.pagesPrinted()));
+
+        return new EsgReportDto(
+                totalPrinted,
+                duplexSaved,
+                totalScans,
+                treesConsumed,
+                treesSaved,
+                carbonEmitted,
+                carbonSaved,
+                energyKwh,
+                roundCost(duplexPct),
+                deptList
+        );
     }
 
     public String generateCsv(String reportType, String departmentFilter, String costCenterFilter,
@@ -558,7 +752,7 @@ public class ReportService {
                         .append(String.format(Locale.US, "%.1f%%", p.percentOfTotal())).append("\n");
             }
         } else if ("users".equalsIgnoreCase(reportType)) {
-            csv.append("Username,Display Name,Department,Cost Center,Badge ID / Card ID,Print Pages,Copy Pages,Total Volume (Pages),Estimated Cost (LKR),Status\n");
+            csv.append("Username,Display Name,Department,Cost Center,Badge ID / Card ID,Print Pages,Copy Pages,Scan Docs,Total Volume (Pages),Estimated Cost (LKR),Status\n");
             List<UserSummaryDto> list = getUserReports(departmentFilter, costCenterFilter, null);
             for (UserSummaryDto u : list) {
                 csv.append(escapeCsv(u.username())).append(",")
@@ -568,6 +762,7 @@ public class ReportService {
                         .append(escapeCsv(u.badgeId() != null ? u.badgeId() : "")).append(",")
                         .append(u.printPages()).append(",")
                         .append(u.copyPages()).append(",")
+                        .append(u.scanPages()).append(",")
                         .append(u.totalPages()).append(",")
                         .append(String.format(Locale.US, "%.2f", u.estimatedCostLkr())).append(",")
                         .append(u.isActive() ? "ACTIVE" : "DISABLED").append("\n");
@@ -591,6 +786,34 @@ public class ReportService {
                         .append(t.monoPages()).append(",")
                         .append(String.format(Locale.US, "%.2f", t.estimatedCostLkr())).append(",")
                         .append(escapeCsv(t.status())).append("\n");
+            }
+        } else if ("scans".equalsIgnoreCase(reportType)) {
+            csv.append("Scan ID,Date Time,Username,Display Name,Department,Cost Center,MFP Printer,Printer IP,Recipient Email,Document File,Pages,Color Mode,Delivery Status\n");
+            List<ScanReportDto> list = getScanReports(departmentFilter, costCenterFilter, printerFilter, startDate, endDate, null);
+            for (ScanReportDto s : list) {
+                csv.append(s.id()).append(",")
+                        .append(escapeCsv(s.timestamp())).append(",")
+                        .append(escapeCsv(s.username())).append(",")
+                        .append(escapeCsv(s.displayName())).append(",")
+                        .append(escapeCsv(s.department())).append(",")
+                        .append(escapeCsv(s.costCenter())).append(",")
+                        .append(escapeCsv(s.printerName())).append(",")
+                        .append(escapeCsv(s.printerIp())).append(",")
+                        .append(escapeCsv(s.recipientEmail())).append(",")
+                        .append(escapeCsv(s.fileName())).append(",")
+                        .append(s.pages()).append(",")
+                        .append(escapeCsv(s.colorMode())).append(",")
+                        .append(escapeCsv(s.status())).append("\n");
+            }
+        } else if ("esg".equalsIgnoreCase(reportType)) {
+            csv.append("Department,Pages Printed,Digital Scans,Trees Consumed,CO2 Emitted (kg)\n");
+            EsgReportDto esg = getEsgReport(startDate, endDate);
+            for (DepartmentEsgDto d : esg.departmentBreakdown()) {
+                csv.append(escapeCsv(d.department())).append(",")
+                        .append(d.pagesPrinted()).append(",")
+                        .append(d.scansProcessed()).append(",")
+                        .append(String.format(Locale.US, "%.3f", d.treesConsumed())).append(",")
+                        .append(String.format(Locale.US, "%.2f", d.carbonKgEmitted())).append("\n");
             }
         } else {
             // Default: Department report
@@ -627,6 +850,7 @@ public class ReportService {
                 u.getBadgeId(),
                 u.getPrintCount(),
                 u.getCopyCount(),
+                u.getScanCount(),
                 u.getTotalPages(),
                 cost,
                 u.isActive()

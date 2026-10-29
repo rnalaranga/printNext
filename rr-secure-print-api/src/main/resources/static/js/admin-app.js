@@ -50,7 +50,7 @@
 
       // Determine page from URL hash (e.g. #printers, #users, #virtual-queue)
       var hash = (window.location.hash || '').replace('#', '').toLowerCase();
-      var validPages = ['dashboard', 'virtual-queue', 'printers', 'users', 'directory', 'queue', 'copy-logs', 'scan-logs', 'reports', 'audit', 'settings'];
+      var validPages = ['dashboard', 'virtual-queue', 'printers', 'monitoring', 'users', 'directory', 'queue', 'copy-logs', 'scan-logs', 'reports', 'audit', 'settings'];
       var targetPage = validPages.indexOf(hash) !== -1 ? hash : 'dashboard';
       window.navigatePage(targetPage);
 
@@ -119,6 +119,12 @@
       topbarTitle.textContent = 'Physical Printer Device Management';
       topbarSub.textContent   = 'Toshiba Multifunction Printers & Network Port 9100 Terminals';
       loadPrinters();
+    } else if (pageId === 'monitoring') {
+      topbarTitle.textContent = 'Printer Hardware Monitoring';
+      topbarSub.textContent   = 'Real-Time RFC 3805 SNMP Telemetry • Active Hardware Fleet';
+      if (typeof window.initNocMonitoring === 'function') {
+        window.initNocMonitoring();
+      }
     } else if (pageId === 'directory') {
       topbarTitle.textContent = 'Active Directory & LDAP Management';
       topbarSub.textContent   = 'Enterprise Directory Synchronization, Attribute Mapping & Toshiba Fleet LDAP Lockdown';
@@ -1243,6 +1249,7 @@
 
     var printPages = (u.printCount != null) ? u.printCount : 0;
     var copyPages = (u.copyCount != null) ? u.copyCount : 0;
+    var scanPages = (u.scanCount != null) ? u.scanCount : 0;
     var totalPages = printPages + copyPages;
 
     var cardHtml = '';
@@ -1295,6 +1302,7 @@
       '<td>' + pinBadge + '</td>' +
       '<td><span class="badge" style="background:#EFF6FF; color:#1D4ED8; font-weight:700; border:1px solid #BFDBFE;">PRINT: ' + printPages + '</span></td>' +
       '<td><span class="badge" style="background:#F0FDF4; color:#15803D; font-weight:700; border:1px solid #BBF7D0;">COPY: ' + copyPages + '</span></td>' +
+      '<td><span class="badge" style="background:#EEF2FF; color:#4F46E5; font-weight:700; border:1px solid #C7D2FE;">SCAN: ' + scanPages + '</span></td>' +
       '<td><strong style="color:var(--text-dark); font-size:13px;">' + totalPages + '</strong></td>' +
       '<td>' + statusBadge + '</td>' +
       '<td style="text-align:right; white-space:nowrap; position:relative;">' + userDropdown + '</td>' +
@@ -1373,6 +1381,7 @@
                   '<th>Touch PIN</th>' +
                   '<th>Print Pages</th>' +
                   '<th>Copy Pages</th>' +
+                  '<th>Scan Docs</th>' +
                   '<th>Total Pages</th>' +
                   '<th>Account Status</th>' +
                   '<th style="text-align:right;">Actions</th>' +
@@ -1404,11 +1413,12 @@
       var grpDept = groupKeys[g];
       var list = grouped[grpDept];
       
-      var grpPrint = 0, grpCopy = 0;
+      var grpPrint = 0, grpCopy = 0, grpScan = 0;
       var ccs = {};
       for (var uIdx = 0; uIdx < list.length; uIdx++) {
         grpPrint += (list[uIdx].printCount || 0);
         grpCopy += (list[uIdx].copyCount || 0);
+        grpScan += (list[uIdx].scanCount || 0);
         if (list[uIdx].costCenter) ccs[list[uIdx].costCenter] = true;
       }
       var grpTotal = grpPrint + grpCopy;
@@ -1428,7 +1438,7 @@
             '</div>' +
             '<div class="d-flex align-items-center gap-3">' +
               '<div class="text-secondary small fw-semibold">' +
-                'Volume: <span class="text-primary fw-bold">' + grpPrint + ' Print</span> | <span class="text-success fw-bold">' + grpCopy + ' Copy</span> &bull; Total: <strong>' + grpTotal + ' Pages</strong>' +
+                'Volume: <span class="text-primary fw-bold">' + grpPrint + ' Print</span> | <span class="text-success fw-bold">' + grpCopy + ' Copy</span> | <span class="fw-bold" style="color:#4F46E5;">' + grpScan + ' Scan</span> &bull; Total Paper: <strong>' + grpTotal + ' Pages</strong>' +
               '</div>' +
               '<span class="text-muted small" style="font-size:11px; user-select:none;">(click to collapse)</span>' +
             '</div>' +
@@ -1444,6 +1454,7 @@
                   '<th>Touch PIN</th>' +
                   '<th>Print Pages</th>' +
                   '<th>Copy Pages</th>' +
+                  '<th>Scan Docs</th>' +
                   '<th>Total Pages</th>' +
                   '<th>Account Status</th>' +
                   '<th style="text-align:right;">Actions</th>' +
@@ -1797,42 +1808,7 @@
   };
 
   window.handleSyncActiveDirectory = function () {
-    var btnExec = document.getElementById('btnExecuteAdSync');
-    var btnQuick = document.getElementById('btnQuickSyncAd');
-    var logBox = document.getElementById('dirSyncLogBox');
-
-    if (btnExec) btnExec.disabled = true;
-    if (btnQuick) btnQuick.disabled = true;
-    if (logBox) logBox.textContent = 'Connecting to Active Directory domain controller and synchronizing accounts...';
-
-    showToast('Synchronizing Active Directory accounts...', 'info');
-
-    fetch('/api/admin/directory/sync-ad', { method: 'POST' })
-      .then(function (res) { return res.json(); })
-      .then(function (res) {
-        if (btnExec) btnExec.disabled = false;
-        if (btnQuick) btnQuick.disabled = false;
-
-        if (res.success) {
-          var details = 'SUCCESS: ' + res.message + '\n' +
-            'Imported: ' + res.importedCount + ' | Updated: ' + res.updatedCount +
-            ' | Total in AD: ' + res.totalFoundCount + ' | Duration: ' + res.durationMs + 'ms';
-          if (logBox) logBox.textContent = details;
-          showToast('Active Directory sync completed! ' + res.importedCount + ' imported, ' + res.updatedCount + ' updated.', 'success');
-          loadUsers();
-          loadDirectoryConfig();
-          loadStats();
-        } else {
-          if (logBox) logBox.textContent = 'SYNC FAILED: ' + res.message + (res.error ? '\nDetails: ' + res.error : '');
-          showToast('AD Sync failed: ' + res.message, 'error');
-        }
-      })
-      .catch(function (err) {
-        if (btnExec) btnExec.disabled = false;
-        if (btnQuick) btnQuick.disabled = false;
-        if (logBox) logBox.textContent = 'NETWORK ERROR: ' + err.message;
-        showToast('Failed to sync AD users: ' + err.message, 'error');
-      });
+    window.syncLdapUsersWithLoading();
   };
 
   window.handleImportWindowsUsers = function () {
@@ -4152,22 +4128,7 @@
   };
 
   window.syncActiveDirectoryFromPage = function () {
-    var logBox = document.getElementById('dirPageLogBox');
-    if (logBox) logBox.textContent = '[' + new Date().toLocaleTimeString() + '] Synchronizing Active Directory users with externalAttributes...';
-    fetch('/api/admin/directory/sync-ad', { method: 'POST' })
-      .then(function (res) { return res.json(); })
-      .then(function (res) {
-        if (logBox) {
-          logBox.textContent = '[' + new Date().toLocaleTimeString() + '] ' + res.message + '\nImported: ' + res.importedCount + ' | Updated: ' + res.updatedCount;
-        }
-        showToast('AD Sync complete! ' + res.importedCount + ' imported, ' + res.updatedCount + ' updated.', 'success');
-        loadUsers();
-        loadDirectoryPageConfig();
-      })
-      .catch(function (err) {
-        if (logBox) logBox.textContent = '[' + new Date().toLocaleTimeString() + '] AD Sync Error: ' + err.message;
-        showToast('Sync error: ' + err.message, 'error');
-      });
+    window.syncLdapUsersWithLoading();
   };
 
   window.previewAdUserAttributes = function () {
@@ -4315,6 +4276,8 @@
     costCenters: [],
     printers: [],
     users: [],
+    scans: [],
+    esg: null,
     transactions: []
   };
 
@@ -4332,6 +4295,7 @@
         var totalVol = summary.totalVolumePages || 0;
         var printPages = summary.totalPrintPages || 0;
         var copyPages = summary.totalCopyPages || 0;
+        var scanPages = summary.totalScanCount || 0;
         var totalCost = (summary.totalEstimatedCostLkr != null) ? summary.totalEstimatedCostLkr : (summary.totalCost != null ? summary.totalCost : (totalVol * 3.00));
         var depts = summary.totalDepartments || 0;
         var topDept = summary.topDepartment || 'None';
@@ -4347,6 +4311,7 @@
         el = document.getElementById('repStatTotalVolume'); if (el) el.textContent = totalVol.toLocaleString();
         el = document.getElementById('repStatPrintPages'); if (el) el.textContent = printPages.toLocaleString();
         el = document.getElementById('repStatCopyPages'); if (el) el.textContent = copyPages.toLocaleString();
+        el = document.getElementById('repStatScanPages'); if (el) el.textContent = scanPages.toLocaleString();
         el = document.getElementById('repStatTotalCost'); if (el) el.textContent = 'LKR ' + totalCost.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2});
         el = document.getElementById('repStatPageRate'); if (el) el.textContent = 'LKR 3.00';
         el = document.getElementById('repStatTotalDepts'); if (el) el.textContent = depts;
@@ -4369,19 +4334,23 @@
     if (state.reports.endDate) qParams += 'endDate=' + encodeURIComponent(state.reports.endDate) + '&';
     if (state.reports.filterSearch) qParams += 'search=' + encodeURIComponent(state.reports.filterSearch) + '&';
 
-    // 3. Fetch Departments, Cost Centers, Printers, Users, and Transactions concurrently
+    // 3. Fetch Departments, Cost Centers, Printers, Users, Scans, ESG, and Transactions concurrently
     Promise.all([
       fetch('/api/admin/reports/departments').then(function (r) { return r.json(); }),
       fetch('/api/admin/reports/cost-centers').then(function (r) { return r.json(); }),
       fetch('/api/admin/reports/printers').then(function (r) { return r.json(); }),
       fetch('/api/admin/reports/users').then(function (r) { return r.json(); }),
-      fetch('/api/admin/reports/transactions' + qParams).then(function (r) { return r.json(); })
+      fetch('/api/admin/reports/transactions' + qParams).then(function (r) { return r.json(); }),
+      fetch('/api/admin/reports/scans' + qParams).then(function (r) { return r.json(); }),
+      fetch('/api/admin/reports/esg' + qParams).then(function (r) { return r.json(); })
     ]).then(function (results) {
       state.reports.departments = Array.isArray(results[0]) ? results[0] : [results[0]];
       state.reports.costCenters = Array.isArray(results[1]) ? results[1] : [results[1]];
       state.reports.printers = Array.isArray(results[2]) ? results[2] : [results[2]];
       state.reports.users = Array.isArray(results[3]) ? results[3] : [results[3]];
       state.reports.transactions = Array.isArray(results[4]) ? results[4] : [results[4]];
+      state.reports.scans = Array.isArray(results[5]) ? results[5] : [results[5]];
+      state.reports.esg = results[6] || null;
 
       populateReportDropdowns();
       window.renderReports();
@@ -4442,12 +4411,14 @@
   window.switchReportTab = function (tab) {
     state.reports.activeTab = tab;
 
-    var tabs = ['departments', 'costCenters', 'printers', 'users', 'transactions'];
+    var tabs = ['departments', 'costCenters', 'printers', 'users', 'scans', 'esg', 'transactions'];
     var btnMap = {
       departments: 'btnRepTabDepts',
       costCenters: 'btnRepTabCC',
       printers: 'btnRepTabPrinters',
       users: 'btnRepTabUsers',
+      scans: 'btnRepTabScans',
+      esg: 'btnRepTabEsg',
       transactions: 'btnRepTabTransactions'
     };
 
@@ -4848,15 +4819,16 @@
       thead.innerHTML =
         '<tr>' +
           '<th style="width:130px;">Username</th>' +
-          '<th style="width:160px;">Display Name</th>' +
-          '<th style="width:130px;">Department</th>' +
-          '<th style="width:140px;">Cost Center</th>' +
-          '<th style="width:140px;">Badge ID</th>' +
-          '<th style="text-align:right; width:95px;">Print Pages</th>' +
-          '<th style="text-align:right; width:95px;">Copy Pages</th>' +
-          '<th style="text-align:right; width:95px;">Total Pages</th>' +
-          '<th style="text-align:right; width:115px;">Estimated Cost</th>' +
-          '<th style="width:85px;">Status</th>' +
+          '<th style="width:150px;">Display Name</th>' +
+          '<th style="width:120px;">Department</th>' +
+          '<th style="width:130px;">Cost Center</th>' +
+          '<th style="width:130px;">Badge ID</th>' +
+          '<th style="text-align:right; width:90px;">Print Pages</th>' +
+          '<th style="text-align:right; width:90px;">Copy Pages</th>' +
+          '<th style="text-align:right; width:90px;">Scan Docs</th>' +
+          '<th style="text-align:right; width:90px;">Total Pages</th>' +
+          '<th style="text-align:right; width:110px;">Estimated Cost</th>' +
+          '<th style="width:80px;">Status</th>' +
         '</tr>';
 
       var users = state.reports.users.filter(function (u) {
@@ -4871,21 +4843,23 @@
       });
 
       if (users.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="10" class="text-center py-4 text-muted">No user accounts match your current filters.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="11" class="text-center py-4 text-muted">No user accounts match your current filters.</td></tr>';
         tfoot.innerHTML = '';
         return;
       }
 
-      var totUPrints = 0, totUCopies = 0, totUVol = 0, totUCost = 0;
+      var totUPrints = 0, totUCopies = 0, totUScans = 0, totUVol = 0, totUCost = 0;
       var uRowsHtml = '';
       users.forEach(function (u) {
         var pPages = u.printPages || 0;
         var cPages = u.copyPages || 0;
+        var sPages = u.scanPages || 0;
         var tPages = (u.totalPages != null) ? u.totalPages : (pPages + cPages);
         var cost = (u.estimatedCostLkr != null) ? u.estimatedCostLkr : (tPages * 3.00);
 
         totUPrints += pPages;
         totUCopies += cPages;
+        totUScans += sPages;
         totUVol += tPages;
         totUCost += cost;
 
@@ -4910,6 +4884,7 @@
             '<td>' + badgeIdText + '</td>' +
             '<td class="text-end"><span class="badge bg-primary-subtle text-primary border border-primary-subtle">PRINT: ' + pPages.toLocaleString() + '</span></td>' +
             '<td class="text-end"><span class="badge bg-success-subtle text-success border border-success-subtle">COPY: ' + cPages.toLocaleString() + '</span></td>' +
+            '<td class="text-end"><span class="badge border" style="background:#EEF2FF; color:#4F46E5; border-color:#C7D2FE !important;">SCAN: ' + sPages.toLocaleString() + '</span></td>' +
             '<td class="text-end fw-bold text-dark">' + tPages.toLocaleString() + '</td>' +
             '<td class="text-end fw-bold text-warning-emphasis">Rs. ' + cost.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2}) + '</td>' +
             '<td>' + statusBadge + '</td>' +
@@ -4922,9 +4897,149 @@
           '<td colspan="5">Total (' + users.length + ' Directory Users)</td>' +
           '<td class="text-end">PRINT: ' + totUPrints.toLocaleString() + '</td>' +
           '<td class="text-end">COPY: ' + totUCopies.toLocaleString() + '</td>' +
+          '<td class="text-end" style="color:#4F46E5;">SCAN: ' + totUScans.toLocaleString() + '</td>' +
           '<td class="text-end fw-bold text-dark">' + totUVol.toLocaleString() + ' Pages</td>' +
           '<td class="text-end fw-bold text-warning-emphasis">Rs. ' + totUCost.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2}) + '</td>' +
           '<td>-</td>' +
+        '</tr>';
+
+    // -----------------------------------------------------------------------
+    // TAB 5: SCAN TO EMAIL & DIGITAL CAPTURE AUDIT
+    // -----------------------------------------------------------------------
+    } else if (tab === 'scans') {
+      thead.innerHTML =
+        '<tr>' +
+          '<th style="width:145px;">Date / Time</th>' +
+          '<th style="width:110px;">User</th>' +
+          '<th style="width:120px;">Department</th>' +
+          '<th style="width:120px;">Cost Center</th>' +
+          '<th>Source MFP</th>' +
+          '<th>Recipient Email</th>' +
+          '<th>Attached Document</th>' +
+          '<th style="text-align:right; width:75px;">Pages</th>' +
+          '<th style="width:85px;">Mode</th>' +
+          '<th style="width:85px;">Delivery</th>' +
+        '</tr>';
+
+      var scans = (state.reports.scans || []).filter(function (s) {
+        if (!s) return false;
+        if (fDept && s.department !== fDept) return false;
+        if (fCC && s.costCenter !== fCC) return false;
+        if (fPrn && s.printerName !== fPrn && s.printerIp !== fPrn) return false;
+        if (fSearch) {
+          var text = ((s.username || '') + ' ' + (s.displayName || '') + ' ' + (s.recipientEmail || '') + ' ' + (s.fileName || '') + ' ' + (s.department || '') + ' ' + (s.printerName || '')).toLowerCase();
+          if (text.indexOf(fSearch) === -1) return false;
+        }
+        return true;
+      });
+
+      if (scans.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="10" class="text-center py-4 text-muted">No scan records match your current filters.</td></tr>';
+        tfoot.innerHTML = '';
+        return;
+      }
+
+      var totScansCount = scans.length;
+      var totScanPages = 0;
+      var sRowsHtml = '';
+
+      scans.forEach(function (s) {
+        var p = s.pages || 1;
+        totScanPages += p;
+
+        var statusBadge = (s.status === 'SENT' || s.status === 'DELIVERED')
+          ? '<span class="badge bg-success-subtle text-success border border-success-subtle">DELIVERED</span>'
+          : '<span class="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle">' + esc(s.status || 'PROCESSED') + '</span>';
+
+        sRowsHtml +=
+          '<tr>' +
+            '<td class="small text-secondary" style="font-family:monospace; font-size:11px;">' + esc(s.timestamp) + '</td>' +
+            '<td><strong class="text-dark">' + esc(s.displayName || s.username) + '</strong></td>' +
+            '<td><span class="badge bg-primary-subtle text-primary border border-primary-subtle">' + esc(s.department || 'Operations') + '</span></td>' +
+            '<td><span class="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle">' + esc(s.costCenter || 'General') + '</span></td>' +
+            '<td><strong class="text-dark">' + esc(s.printerName) + '</strong> <span class="small text-muted">(' + esc(s.printerIp) + ')</span></td>' +
+            '<td><span class="text-primary fw-semibold"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="me-1"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>' + esc(s.recipientEmail) + '</span></td>' +
+            '<td><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="me-1 text-danger"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg><span class="fw-medium text-dark">' + esc(s.fileName) + '</span></td>' +
+            '<td class="text-end fw-bold text-dark">' + p + '</td>' +
+            '<td><span class="badge border" style="background:#EEF2FF; color:#4F46E5;">' + esc(s.colorMode || 'COLOR') + '</span></td>' +
+            '<td>' + statusBadge + '</td>' +
+          '</tr>';
+      });
+
+      tbody.innerHTML = sRowsHtml;
+      tfoot.innerHTML =
+        '<tr class="bg-light">' +
+          '<td colspan="7">Total (' + totScansCount + ' Scanned Documents Dispatched)</td>' +
+          '<td class="text-end fw-bold" style="color:#4F46E5;">' + totScanPages + ' Pages</td>' +
+          '<td colspan="2">-</td>' +
+        '</tr>';
+
+    // -----------------------------------------------------------------------
+    // TAB 6: ESG & ENVIRONMENTAL GREEN IMPACT
+    // -----------------------------------------------------------------------
+    } else if (tab === 'esg') {
+      var esg = state.reports.esg || {
+        totalPagesPrinted: 0,
+        duplexPagesSaved: 0,
+        digitalScansProcessed: 0,
+        treesConsumed: 0,
+        treesSaved: 0,
+        carbonKgEmitted: 0,
+        carbonKgSaved: 0,
+        energyKwhConsumed: 0,
+        duplexSavingPercentage: 0,
+        departmentBreakdown: []
+      };
+
+      thead.innerHTML =
+        '<tr>' +
+          '<th>Department</th>' +
+          '<th style="text-align:right;">Pages Printed</th>' +
+          '<th style="text-align:right;">Digital Scans</th>' +
+          '<th style="text-align:right;">Trees Consumed</th>' +
+          '<th style="text-align:right;">CO₂ Footprint (kg)</th>' +
+          '<th style="text-align:right;">Sustainability Rating</th>' +
+        '</tr>';
+
+      var deptsEsg = (esg.departmentBreakdown || []).filter(function (d) {
+        if (!d) return false;
+        if (fDept && d.department !== fDept) return false;
+        if (fSearch && (d.department || '').toLowerCase().indexOf(fSearch) === -1) return false;
+        return true;
+      });
+
+      if (deptsEsg.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" class="text-center py-4 text-muted">No ESG records match your current filters.</td></tr>';
+        tfoot.innerHTML = '';
+        return;
+      }
+
+      var esgRowsHtml = '';
+      deptsEsg.forEach(function (d) {
+        var scoreBadge = (d.scansProcessed >= d.pagesPrinted)
+          ? '<span class="badge bg-success-subtle text-success border border-success-subtle">EXCELLENT (A+)</span>'
+          : (d.scansProcessed > 0 ? '<span class="badge bg-primary-subtle text-primary border border-primary-subtle">GOOD (B)</span>' : '<span class="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle">PAPER HEAVY</span>');
+
+        esgRowsHtml +=
+          '<tr>' +
+            '<td><strong class="text-dark">' + esc(d.department) + '</strong></td>' +
+            '<td class="text-end fw-semibold text-dark">' + (d.pagesPrinted || 0).toLocaleString() + '</td>' +
+            '<td class="text-end fw-bold" style="color:#4F46E5;">' + (d.scansProcessed || 0).toLocaleString() + '</td>' +
+            '<td class="text-end text-danger fw-semibold">' + (d.treesConsumed || 0).toFixed(3) + ' trees</td>' +
+            '<td class="text-end text-warning-emphasis fw-bold">' + (d.carbonKgEmitted || 0).toFixed(2) + ' kg CO₂</td>' +
+            '<td class="text-end">' + scoreBadge + '</td>' +
+          '</tr>';
+      });
+
+      tbody.innerHTML = esgRowsHtml;
+      tfoot.innerHTML =
+        '<tr class="bg-success-subtle text-success-emphasis border-top border-2">' +
+          '<td>Fleet ESG Totals</td>' +
+          '<td class="text-end fw-bold">' + (esg.totalPagesPrinted || 0).toLocaleString() + ' Pages</td>' +
+          '<td class="text-end fw-bold" style="color:#4F46E5;">' + (esg.digitalScansProcessed || 0).toLocaleString() + ' Scans</td>' +
+          '<td class="text-end fw-bold text-danger">' + (esg.treesConsumed || 0).toFixed(3) + ' Trees</td>' +
+          '<td class="text-end fw-bold text-warning-emphasis">' + (esg.carbonKgEmitted || 0).toFixed(2) + ' kg CO₂</td>' +
+          '<td class="text-end fw-bold text-success">Trees Saved: +' + (esg.treesSaved || 0).toFixed(3) + '</td>' +
         '</tr>';
 
     // -----------------------------------------------------------------------
@@ -5021,6 +5136,8 @@
     if (tab === 'costCenters') csvType = 'cost-centers';
     if (tab === 'printers') csvType = 'printers';
     if (tab === 'users') csvType = 'users';
+    if (tab === 'scans') csvType = 'scans';
+    if (tab === 'esg') csvType = 'esg';
     if (tab === 'transactions') csvType = 'transactions';
 
     var dept = encodeURIComponent(state.reports.filterDept || '');
@@ -5207,6 +5324,7 @@
     // Volume & Accounting
     var printP = u.printCount || 0;
     var copyP = u.copyCount || 0;
+    var scanP = u.scanCount || 0;
     var totalP = printP + copyP;
     var estCost = (totalP * 3.0).toFixed(2); // LKR 3.00 standard rate
 
@@ -5215,6 +5333,9 @@
 
     var copyCountEl = document.getElementById('viewUserCopyCount');
     if (copyCountEl) copyCountEl.textContent = copyP;
+
+    var scanCountEl = document.getElementById('viewUserScanCount');
+    if (scanCountEl) scanCountEl.textContent = scanP;
 
     var totalPagesEl = document.getElementById('viewUserTotalPages');
     if (totalPagesEl) totalPagesEl.textContent = totalP + ' Pages';
@@ -5246,4 +5367,812 @@
     window.closeViewUserModal();
     window.openEditUserModal(uid);
   };
+
+
+  /* =========================================================================
+     GLOBAL LDAP / ACTIVE DIRECTORY SYNCHRONIZATION WITH LOADING SCREEN
+     ========================================================================= */
+  window.syncLdapUsersWithLoading = function () {
+    // Dismiss any open dropdowns
+    var openDropdowns = document.querySelectorAll('.action-dropdown-menu.show');
+    for (var i = 0; i < openDropdowns.length; i++) {
+      openDropdowns[i].classList.remove('show');
+    }
+
+    var modal = document.getElementById('modalLdapLoading');
+    var titleEl = document.getElementById('ldapLoadingTitle');
+    var descEl = document.getElementById('ldapLoadingDesc');
+    var statusEl = document.getElementById('ldapLoadingStatusText');
+
+    if (titleEl) titleEl.textContent = 'Synchronizing Active Directory / LDAP';
+    if (descEl) descEl.textContent = 'Querying Domain Controller, synchronizing employee accounts, and mapping external attributes...';
+    if (statusEl) statusEl.textContent = 'Connecting to LDAP Domain Controller...';
+
+    if (modal) {
+      modal.style.display = 'flex';
+    }
+
+    var logBoxDir = document.getElementById('dirPageLogBox');
+    var logBoxModal = document.getElementById('dirSyncLogBox');
+    var logMsg = '[' + new Date().toLocaleTimeString() + '] Initiating Active Directory / LDAP synchronization...';
+    if (logBoxDir) logBoxDir.textContent = logMsg;
+    if (logBoxModal) logBoxModal.textContent = logMsg;
+
+    var startTime = Date.now();
+    var isTimedOut = false;
+    var timer = setTimeout(function () {
+      isTimedOut = true;
+      if (modal) modal.style.display = 'none';
+      showToast('LDAP sync took longer than expected. Please check Domain Controller connection.', 'warning');
+    }, 25000);
+
+    fetch('/api/admin/directory/sync-ad', { method: 'POST' })
+      .then(function (res) {
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        return res.json();
+      })
+      .then(function (res) {
+        if (isTimedOut) return;
+        clearTimeout(timer);
+
+        var elapsed = Date.now() - startTime;
+        var delay = Math.max(0, 750 - elapsed);
+
+        setTimeout(function () {
+          if (modal) modal.style.display = 'none';
+
+          if (res.success) {
+            var msg = 'LDAP Sync Complete! ' + (res.importedCount || 0) + ' imported, ' + (res.updatedCount || 0) + ' updated (Found ' + (res.totalFoundCount || 0) + ' accounts in directory).';
+            showToast(msg, 'success');
+
+            var detailLog = '[' + new Date().toLocaleTimeString() + '] ' + res.message + '\nImported: ' + (res.importedCount || 0) + ' | Updated: ' + (res.updatedCount || 0);
+            if (logBoxDir) logBoxDir.textContent = detailLog;
+            if (logBoxModal) logBoxModal.textContent = detailLog;
+
+            if (typeof loadUsers === 'function') loadUsers();
+            if (typeof loadDirectoryPageConfig === 'function') loadDirectoryPageConfig();
+            if (typeof loadDirectoryConfig === 'function') loadDirectoryConfig();
+            if (typeof loadStats === 'function') loadStats();
+            if (typeof loadLdapDeptSettings === 'function') loadLdapDeptSettings();
+          } else {
+            showToast('LDAP Sync failed: ' + (res.message || 'Unknown error'), 'error');
+            var errLog = '[' + new Date().toLocaleTimeString() + '] AD Sync Error: ' + res.message;
+            if (logBoxDir) logBoxDir.textContent = errLog;
+            if (logBoxModal) logBoxModal.textContent = errLog;
+          }
+        }, delay);
+      })
+      .catch(function (err) {
+        if (isTimedOut) return;
+        clearTimeout(timer);
+
+        var elapsed = Date.now() - startTime;
+        var delay = Math.max(0, 600 - elapsed);
+
+        setTimeout(function () {
+          if (modal) modal.style.display = 'none';
+          showToast('Failed to sync LDAP users: ' + err.message, 'error');
+          var netErrLog = '[' + new Date().toLocaleTimeString() + '] AD Sync Error: ' + err.message;
+          if (logBoxDir) logBoxDir.textContent = netErrLog;
+          if (logBoxModal) logBoxModal.textContent = netErrLog;
+        }, delay);
+      });
+  };
+
+
+  /* =========================================================================
+     FLEET PRINTER MONITORING CONTROLLER (REAL HARDWARE & CRISP LIGHT THEME)
+     Real-Time RFC 3805 SNMP Telemetry Engine
+     ========================================================================= */
+
+  var nocState = {
+    fleetData: null,
+    printers: [],
+    activeView: 'matrix', // 'matrix' or 'cards'
+    filterStatus: 'ALL',
+    filterFloor: 'ALL',
+    searchQuery: '',
+    countdownSecs: 15,
+    pollTimer: null,
+    clockTimer: null,
+    isInitialized: false,
+    isTvMode: false,
+    selectedPrinter: null
+  };
+
+  window.initNocMonitoring = function () {
+    startNocClock();
+    startNocPollingCountdown();
+    window.refreshNocFleet(false);
+  };
+
+  function startNocClock() {
+    if (nocState.clockTimer) return;
+    updateNocClockDisplay();
+    nocState.clockTimer = setInterval(updateNocClockDisplay, 1000);
+  }
+
+  function updateNocClockDisplay() {
+    var clockEl = document.getElementById('nocLiveClock');
+    var dateEl  = document.getElementById('nocLiveDate');
+    if (!clockEl) return;
+
+    var now = new Date();
+    var h = String(now.getHours()).padStart(2, '0');
+    var m = String(now.getMinutes()).padStart(2, '0');
+    var s = String(now.getSeconds()).padStart(2, '0');
+    clockEl.textContent = h + ':' + m + ':' + s;
+
+    if (dateEl) {
+      var options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
+      dateEl.textContent = now.toLocaleDateString('en-US', options).toUpperCase();
+    }
+  }
+
+  function startNocPollingCountdown() {
+    if (nocState.pollTimer) clearInterval(nocState.pollTimer);
+    nocState.countdownSecs = 15;
+    updateCountdownBadge();
+
+    nocState.pollTimer = setInterval(function () {
+      if (state.currentPage !== 'monitoring') return;
+      nocState.countdownSecs--;
+      if (nocState.countdownSecs <= 0) {
+        nocState.countdownSecs = 15;
+        window.refreshNocFleet(false);
+      }
+      updateCountdownBadge();
+    }, 1000);
+  }
+
+  function updateCountdownBadge() {
+    var badge = document.getElementById('nocCountdownBadge');
+    if (badge) {
+      badge.textContent = 'Polls in ' + nocState.countdownSecs + 's';
+    }
+  }
+
+  window.refreshNocFleet = function (force) {
+    if (force === undefined) force = false;
+    var refreshBtn = document.getElementById('btnNocRefresh');
+    if (refreshBtn && force) {
+      refreshBtn.style.opacity = '0.6';
+      refreshBtn.style.pointerEvents = 'none';
+    }
+
+    // Only query real hardware printers added in the database (no dummy printers)
+    var url = '/api/admin/printers/monitoring' + (force ? '?refresh=true' : '');
+    fetch(url)
+      .then(function (res) {
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        return res.json();
+      })
+      .then(function (data) {
+        if (refreshBtn && force) {
+          refreshBtn.style.opacity = '1';
+          refreshBtn.style.pointerEvents = 'auto';
+        }
+        nocState.fleetData = data;
+        nocState.printers = data.printers || [];
+        updateNocKpis(data);
+        renderNocFleet();
+        if (force) showToast('SNMP Telemetry refreshed from hardware!', 'success');
+      })
+      .catch(function (err) {
+        if (refreshBtn && force) {
+          refreshBtn.style.opacity = '1';
+          refreshBtn.style.pointerEvents = 'auto';
+        }
+        console.error('SNMP Poll error:', err);
+      });
+  };
+
+  function updateNocKpis(data) {
+    if (!data) return;
+    var elTotal    = document.getElementById('nocKpiTotal');
+    var elReady    = document.getElementById('nocKpiReady');
+    var elPrinting = document.getElementById('nocKpiPrinting');
+    var elWarning  = document.getElementById('nocKpiWarning');
+    var elError    = document.getElementById('nocKpiError');
+    var elVolume   = document.getElementById('nocKpiVolume');
+    var badgeCount = document.getElementById('nocActiveCountBadge');
+
+    var count = data.totalPrinters || 0;
+    if (elTotal)    elTotal.textContent    = count;
+    if (badgeCount) badgeCount.textContent = count + ' MFPs';
+    if (elReady)    elReady.textContent    = (data.onlinePrinters - data.printingPrinters - data.warningPrinters) || 0;
+    if (elPrinting) elPrinting.textContent = data.printingPrinters || 0;
+    if (elWarning)  elWarning.textContent  = data.warningPrinters || 0;
+    if (elError)    elError.textContent    = (data.errorPrinters + data.offlinePrinters) || 0;
+    if (elVolume)   elVolume.textContent   = Number(data.totalFleetPrints || 0).toLocaleString();
+
+    // Populate Floor / Location dropdown with real locations
+    var select = document.getElementById('nocFloorFilter');
+    if (select && data.printers) {
+      var currentVal = nocState.filterFloor;
+      var locs = [];
+      for (var i = 0; i < data.printers.length; i++) {
+        var loc = data.printers[i].location || data.printers[i].floor;
+        if (loc && locs.indexOf(loc) === -1) locs.push(loc);
+      }
+      var sHtml = '<option value="ALL">📍 All (' + count + ')</option>';
+      for (var j = 0; j < locs.length; j++) {
+        var sel = (locs[j] === currentVal) ? ' selected' : '';
+        sHtml += '<option value="' + escapeHtml(locs[j]) + '"' + sel + '>' + escapeHtml(locs[j]) + '</option>';
+      }
+      select.innerHTML = sHtml;
+    }
+  }
+
+  function getFilteredFleet() {
+    var list = nocState.printers.slice();
+
+    // 1. Status Filter
+    if (nocState.filterStatus !== 'ALL') {
+      list = list.filter(function (p) {
+        if (nocState.filterStatus === 'READY') {
+          return (p.status === 'READY');
+        } else if (nocState.filterStatus === 'PRINTING') {
+          return (p.status === 'PRINTING');
+        } else if (nocState.filterStatus === 'WARNING') {
+          return (p.status === 'WARNING');
+        } else if (nocState.filterStatus === 'ERROR') {
+          return (p.status === 'ERROR' || p.status === 'OFFLINE');
+        }
+        return true;
+      });
+    }
+
+    // 2. Floor / Location Filter
+    if (nocState.filterFloor !== 'ALL') {
+      list = list.filter(function (p) {
+        return (p.location === nocState.filterFloor || p.floor === nocState.filterFloor);
+      });
+    }
+
+    // 3. Text Search Query
+    if (nocState.searchQuery) {
+      var q = nocState.searchQuery.toLowerCase();
+      list = list.filter(function (p) {
+        return (p.printerCode || '').toLowerCase().indexOf(q) !== -1 ||
+               (p.name || '').toLowerCase().indexOf(q) !== -1 ||
+               (p.ipAddress || '').toLowerCase().indexOf(q) !== -1 ||
+               (p.department || '').toLowerCase().indexOf(q) !== -1 ||
+               (p.location || '').toLowerCase().indexOf(q) !== -1 ||
+               (p.model || '').toLowerCase().indexOf(q) !== -1;
+      });
+    }
+
+    return list;
+  }
+
+  function renderNocFleet() {
+    var filtered = getFilteredFleet();
+    if (nocState.activeView === 'matrix') {
+      renderNocMatrix(filtered);
+    } else {
+      renderNocCards(filtered);
+    }
+  }
+
+
+
+  /* =========================================================================
+     VIEW 1: NOC MATRIX GRID (CRISP LIGHT THEME + 3D MFP ICON + ERRORS)
+     ========================================================================= */
+  function renderNocMatrix(list) {
+    var container = document.getElementById('nocMatrixContainer');
+    var cardsContainer = document.getElementById('nocCardsContainer');
+    if (!container) return;
+
+    container.style.display = 'grid';
+    if (cardsContainer) cardsContainer.style.display = 'none';
+
+    if (list.length === 0) {
+      container.innerHTML = '<div style="grid-column: 1 / -1; text-align:center; padding:50px; color:#64748B; font-size:14px; background:#FFFFFF; border:1px solid #E2E8F0; border-radius:10px;">No registered printers match the filter criteria.</div>';
+      return;
+    }
+
+    var html = '';
+    for (var i = 0; i < list.length; i++) {
+      var p = list[i];
+      var statClass = (p.status || 'READY').toLowerCase();
+      var indicatorClass = statClass;
+      if (p.status === 'OFFLINE') statClass = 'status-offline';
+      else statClass = 'status-' + statClass;
+
+      var tonerPct = 80;
+      var tonerColor = '#059669';
+      if (p.toners && p.toners.length > 0) {
+        tonerPct = p.toners[0].levelPercent || 80;
+      }
+      if (tonerPct <= 10) tonerColor = '#DC2626';
+      else if (tonerPct <= 25) tonerColor = '#D97706';
+
+      var realBadge = '<span class="noc-badge-real">LAN</span>';
+      var isPrinting = (p.currentlyPrinting || p.status === 'PRINTING' || p.hrPrinterStatusText === 'PRINTING');
+
+      var bulbClass = 'normal';
+      var bulbTitle = 'Normal / Ready';
+      if (isPrinting) {
+        bulbClass = 'printing';
+        bulbTitle = 'Currently Printing';
+      } else if (p.status === 'WARNING') {
+        bulbClass = 'warning';
+        bulbTitle = 'Warning' + ((p.alertDetails && p.alertDetails.length > 0) ? (' #' + p.alertDetails[0].code) : '');
+      } else if (p.status === 'ERROR') {
+        bulbClass = 'error';
+        bulbTitle = 'Fault' + ((p.alertDetails && p.alertDetails.length > 0) ? (' #' + p.alertDetails[0].code) : '');
+      } else if (p.status === 'OFFLINE') {
+        bulbClass = 'offline';
+        bulbTitle = 'Offline';
+      }
+
+      var bulbTag = '<span class="noc-bulb ' + bulbClass + '" title="' + escapeHtml(bulbTitle) + '"></span>';
+
+      html += '<div class="noc-tile" onclick="window.openNocDeviceModal(' + p.id + ')" title="' + escapeHtml(p.printerCode + ' - ' + p.name + ' (' + p.statusMessage + ')') + '">';
+      html += '  <div class="noc-tile-head">';
+      html += '    <div style="display:flex; align-items:center; gap:8px;">';
+      html += '      <img src="img/toshiba-mfp.png" alt="MFP" style="width:30px; height:30px; object-fit:contain;">';
+      html += '      <span class="noc-tile-code">' + escapeHtml(p.printerCode) + '</span>';
+      html += '    </div>';
+      html += '    <div style="display:flex; align-items:center; gap:6px;">' + realBadge + bulbTag + '</div>';
+      html += '  </div>';
+      html += '  <div class="noc-tile-loc">' + escapeHtml(p.name) + '</div>';
+      html += '  <div class="noc-tile-toner-row">';
+      html += '    <div class="noc-mini-toner-track" title="Toner ' + tonerPct + '%">';
+      html += '      <div class="noc-mini-toner-bar" style="width:' + Math.max(5, tonerPct) + '%; background:' + tonerColor + ';"></div>';
+      html += '    </div>';
+      html += '    <span style="font-size:9.5px; color:#475569; font-family:\'JetBrains Mono\',monospace; font-weight:700;">' + tonerPct + '%</span>';
+      html += '  </div>';
+      html += '  <div class="noc-tile-foot">';
+      html += '    <span>' + escapeHtml(p.location || 'Office') + '</span>';
+      html += '    <span>' + Number(p.lifeCount || 0).toLocaleString() + ' p</span>';
+      html += '  </div>';
+      html += '</div>';
+    }
+
+    container.innerHTML = html;
+  }
+
+  /* =========================================================================
+     VIEW 2: VISUAL FLEET EQUIPMENT CARDS (CRISP LIGHT THEME + 3D ICON + ERRORS)
+     ========================================================================= */
+  function renderNocCards(list) {
+    var container = document.getElementById('nocCardsContainer');
+    var matrixContainer = document.getElementById('nocMatrixContainer');
+    if (!container) return;
+
+    container.style.display = 'grid';
+    if (matrixContainer) matrixContainer.style.display = 'none';
+
+    if (list.length === 0) {
+      container.innerHTML = '<div style="grid-column: 1 / -1; text-align:center; padding:50px; color:#64748B; font-size:14px; background:#FFFFFF; border:1px solid #E2E8F0; border-radius:10px;">No registered printers match the filter criteria.</div>';
+      return;
+    }
+
+    var html = '';
+    for (var i = 0; i < list.length; i++) {
+      var p = list[i];
+      var statKey = (p.status || 'READY').toLowerCase();
+      var isPrinting = (p.currentlyPrinting || p.status === 'PRINTING' || p.hrPrinterStatusText === 'PRINTING');
+
+      // Toner Cylinders (Short CMYK Symbols)
+      var tonerBarsHtml = '';
+      if (p.toners && p.toners.length > 0) {
+        for (var t = 0; t < p.toners.length; t++) {
+          var tn = p.toners[t];
+          var fillPct = Math.max(4, Math.min(100, tn.levelPercent));
+          var fillBg = tn.color || '#2563EB';
+          var shortCode = 'K';
+          var tLower = (tn.name || '').toLowerCase();
+          if (tLower.indexOf('black') !== -1 || tLower === 'k') { shortCode = 'K'; fillBg = '#1E293B'; }
+          else if (tLower.indexOf('cyan') !== -1 || tLower === 'c') { shortCode = 'C'; fillBg = '#0284C7'; }
+          else if (tLower.indexOf('magenta') !== -1 || tLower === 'm') { shortCode = 'M'; fillBg = '#DB2777'; }
+          else if (tLower.indexOf('yellow') !== -1 || tLower === 'y') { shortCode = 'Y'; fillBg = '#D97706'; }
+          else { shortCode = tn.name.substring(0, 3).toUpperCase(); }
+
+          if (fillPct <= 10) fillBg = '#DC2626';
+          else if (fillPct <= 20) fillBg = '#D97706';
+
+          tonerBarsHtml += '<div class="noc-toner-cyl" title="' + escapeHtml(tn.name) + ': ' + fillPct + '%">';
+          tonerBarsHtml += '  <div class="noc-toner-cyl-head">';
+          tonerBarsHtml += '    <span style="font-weight:800;">' + shortCode + '</span>';
+          tonerBarsHtml += '    <span>' + fillPct + '%</span>';
+          tonerBarsHtml += '  </div>';
+          tonerBarsHtml += '  <div class="noc-toner-track">';
+          tonerBarsHtml += '    <div class="noc-toner-fill" style="width:' + fillPct + '%; background:' + fillBg + ';"></div>';
+          tonerBarsHtml += '  </div>';
+          tonerBarsHtml += '</div>';
+        }
+      }
+
+      // Trays (Short Codes D1, D2, LCF, BYP)
+      var traysHtml = '';
+      if (p.trays && p.trays.length > 0) {
+        for (var ty = 0; ty < p.trays.length; ty++) {
+          var tray = p.trays[ty];
+          var emptyClass = tray.status === 'EMPTY' ? 'empty' : '';
+          var shortTray = (tray.trayName || '')
+            .replace(/Drawer\s*/i, 'D')
+            .replace(/Tray\s*/i, 'T')
+            .replace(/Large Capacity Feeder|LCF/i, 'LCF')
+            .replace(/Bypass\s*(Tray)?/i, 'BYP');
+
+          traysHtml += '<div class="noc-tray-chip ' + emptyClass + '" title="' + escapeHtml(tray.trayName) + ' (' + escapeHtml(tray.paperSize) + ')">';
+          traysHtml += '  <span>' + escapeHtml(shortTray) + ' <small style="opacity:0.8;">(' + escapeHtml(tray.paperSize) + ')</small></span>';
+          traysHtml += '  <span style="font-weight:700;">' + (tray.status === 'EMPTY' ? '\u2715 0%' : tray.levelPercent + '%') + '</span>';
+          traysHtml += '</div>';
+        }
+      }
+
+      // Alert Banners (Compact RFC 3805 Error Codes)
+      var alertsHtml = '';
+      if (p.alertDetails && p.alertDetails.length > 0) {
+        for (var aIdx = 0; aIdx < p.alertDetails.length; aIdx++) {
+          var alt = p.alertDetails[aIdx];
+          var isCritical = alt.severity === 'CRITICAL' || p.status === 'ERROR';
+          alertsHtml += '<div class="noc-card-alert ' + (isCritical ? 'critical' : '') + '" style="margin-bottom:6px; padding:6px 10px;">';
+          alertsHtml += '  <div style="display:flex; justify-content:space-between; align-items:center; font-weight:800; font-size:11px;">';
+          alertsHtml += '    <span>\u26A0\uFE0F #' + alt.code + ' ' + escapeHtml(alt.codeName) + '</span>';
+          if (alt.location) alertsHtml += '    <span style="font-weight:700; opacity:0.85;">\uD83D\uDCCD ' + escapeHtml(alt.location) + '</span>';
+          alertsHtml += '  </div>';
+          alertsHtml += '  <div style="font-size:11px; margin-top:2px; font-weight:600;">' + escapeHtml(alt.description) + '</div>';
+          alertsHtml += '</div>';
+        }
+      } else if (p.alerts && p.alerts.length > 0) {
+        var isCrit = p.status === 'ERROR';
+        alertsHtml = '<div class="noc-card-alert ' + (isCrit ? 'critical' : '') + '" style="padding:6px 10px;"><span>\u26A0\uFE0F ' + escapeHtml(p.alerts[0]) + '</span></div>';
+      }
+
+      // Bitfield detected errors (Short symbols)
+      if (p.detectedErrors && p.detectedErrors.length > 0) {
+        alertsHtml += '<div style="font-size:10px; padding:3px 8px; background:#FEF2F2; border:1px solid #FECACA; color:#B91C1C; border-radius:4px; font-weight:700; margin-top:4px;">\uD83D\uDEA8 ' + escapeHtml(p.detectedErrors.join(' \u2022 ')) + '</div>';
+      }
+
+      // Status Badge with small bulb (Normal=Green, Printing=Violet, Warning=Amber, Error=Red)
+      var statusBadgeHtml = '';
+      if (isPrinting) {
+        statusBadgeHtml = '<span class="noc-status-badge printing"><span class="noc-bulb printing"></span> PRINT</span>';
+      } else if (p.status === 'READY') {
+        statusBadgeHtml = '<span class="noc-status-badge ready"><span class="noc-bulb normal"></span> READY</span>';
+      } else if (p.status === 'WARNING') {
+        var codeTag = (p.alertDetails && p.alertDetails.length > 0) ? (' #' + p.alertDetails[0].code) : '';
+        statusBadgeHtml = '<span class="noc-status-badge warning"><span class="noc-bulb warning"></span> WARN' + codeTag + '</span>';
+      } else if (p.status === 'ERROR') {
+        var errTag = (p.alertDetails && p.alertDetails.length > 0) ? (' #' + p.alertDetails[0].code) : '';
+        statusBadgeHtml = '<span class="noc-status-badge error"><span class="noc-bulb error"></span> ERR' + errTag + '</span>';
+      } else {
+        statusBadgeHtml = '<span class="noc-status-badge offline"><span class="noc-bulb offline"></span> OFF</span>';
+      }
+
+      var wasteBadge = '<span style="font-size:10px; font-weight:700; padding:2px 6px; border-radius:4px; background:' + (p.wasteTonerStatus === 'FULL' ? '#FEE2E2' : '#F1F5F9') + '; color:' + (p.wasteTonerStatus === 'FULL' ? '#DC2626' : '#475569') + '; border:1px solid ' + (p.wasteTonerStatus === 'FULL' ? '#FECACA' : '#E2E8F0') + ';" title="Waste Toner Box">\uD83D\uDDD1\uFE0F ' + escapeHtml(p.wasteTonerStatus || 'OK') + '</span>';
+
+      html += '<div class="noc-card">';
+      html += '  <div class="noc-card-header">';
+      html += '    <div class="noc-card-identity">';
+      html += '      <div class="noc-card-icon-box ' + statKey + '">';
+      html += '        <img src="img/toshiba-mfp.png" alt="Toshiba MFP" style="width:78px; height:78px; object-fit:contain; filter:drop-shadow(0 4px 8px rgba(0,0,0,0.14));">';
+      html += '      </div>';
+      html += '      <div>';
+      html += '        <div class="noc-card-code" style="display:flex; align-items:center; gap:6px;">' + escapeHtml(p.printerCode) + ' <span class="noc-badge-real">LAN</span> ' + wasteBadge + '</div>';
+      html += '        <div class="noc-card-name">' + escapeHtml(p.name) + '</div>';
+      html += '        <div class="noc-card-meta">' + escapeHtml(p.ipAddress) + ' \u2022 \uD83D\uDCCD ' + escapeHtml(p.location || 'Office') + '</div>';
+      html += '      </div>';
+      html += '    </div>';
+      html += '    ' + statusBadgeHtml;
+      html += '  </div>';
+
+      if (alertsHtml) {
+        html += '<div style="margin-top:10px;">' + alertsHtml + '</div>';
+      }
+
+      html += '  <div class="noc-card-consumables">';
+      html += '    <div class="noc-toners-row">' + tonerBarsHtml + '</div>';
+      if (traysHtml) {
+        html += '    <div class="noc-trays-row">' + traysHtml + '</div>';
+      }
+      html += '  </div>';
+
+      html += '  <div class="noc-card-footer">';
+      html += '    <div class="noc-odometer" title="Lifetime Page Count"><span>\uD83D\uDCC4</span> <span>' + Number(p.lifeCount || 0).toLocaleString() + '</span></div>';
+      html += '    <button type="button" class="btn btn-sm btn-secondary" onclick="window.openNocDeviceModal(' + p.id + ')" style="padding:4px 10px; font-size:11px; font-weight:700;">Diag \u2197</button>';
+      html += '  </div>';
+      html += '</div>';
+    }
+
+    container.innerHTML = html;
+  }
+
+  /* =========================================================================
+     VIEW SWITCHING & CONTROLS
+     ========================================================================= */
+  window.switchNocView = function (mode) {
+    nocState.activeView = mode;
+    var btnM = document.getElementById('btnNocViewMatrix');
+    var btnC = document.getElementById('btnNocViewCards');
+
+    if (btnM) btnM.classList.toggle('active', mode === 'matrix');
+    if (btnC) btnC.classList.toggle('active', mode === 'cards');
+
+    renderNocFleet();
+  };
+
+  window.toggleNocTvMode = function () {
+    var body = document.body;
+    var isNowTv = !body.classList.contains('noc-fullscreen-active');
+    body.classList.toggle('noc-fullscreen-active', isNowTv);
+    nocState.isTvMode = isNowTv;
+
+    var btnText = document.getElementById('btnNocTvText');
+    if (btnText) {
+      btnText.textContent = isNowTv ? 'Exit TV Mode' : 'TV Wall Mode';
+    }
+
+    if (isNowTv) {
+      if (document.documentElement.requestFullscreen) {
+        document.documentElement.requestFullscreen().catch(function () {});
+      }
+    } else {
+      if (document.exitFullscreen && document.fullscreenElement) {
+        document.exitFullscreen().catch(function () {});
+      }
+    }
+  };
+
+  // Exit TV mode on ESC key or browser fullscreen exit
+  document.addEventListener('fullscreenchange', function () {
+    if (!document.fullscreenElement) {
+      document.body.classList.remove('noc-fullscreen-active');
+      var btnText = document.getElementById('btnNocTvText');
+      if (btnText) btnText.textContent = 'TV Wall Mode';
+    }
+  });
+
+  /* =========================================================================
+     FILTERING & SEARCH
+     ========================================================================= */
+  window.filterNocStatus = function (status) {
+    nocState.filterStatus = status;
+    updateFilterPillStyles();
+    renderNocFleet();
+  };
+
+  window.filterNocFloor = function (floor) {
+    nocState.filterFloor = floor;
+    renderNocFleet();
+  };
+
+  window.searchNocFleet = function (query) {
+    nocState.searchQuery = (query || '').trim();
+    renderNocFleet();
+  };
+
+  function updateFilterPillStyles() {
+    var pAll      = document.getElementById('pillNocAll');
+    var pReady    = document.getElementById('pillNocReady');
+    var pPrinting = document.getElementById('pillNocPrinting');
+    var pWarning  = document.getElementById('pillNocWarning');
+    var pError    = document.getElementById('pillNocError');
+
+    var s = nocState.filterStatus;
+    if (pAll)      pAll.classList.toggle('active', s === 'ALL');
+    if (pReady)    pReady.classList.toggle('active', s === 'READY');
+    if (pPrinting) pPrinting.classList.toggle('active', s === 'PRINTING');
+    if (pWarning)  pWarning.classList.toggle('active', s === 'WARNING');
+    if (pError)    pError.classList.toggle('active', s === 'ERROR');
+  }
+
+  /* =========================================================================
+     DETAILED SNMP DEVICE DIAGNOSTICS MODAL (LIGHT THEME + FULL ERROR TELEMETRY)
+     ========================================================================= */
+  window.openNocDeviceModal = function (printerId) {
+    var p = nocState.printers.find(function (item) { return item.id === printerId; });
+    if (!p) return;
+
+    nocState.selectedPrinter = p;
+
+    var modal = document.getElementById('modalNocDeviceDetail');
+    if (!modal) return;
+
+    var isPrinting = (p.currentlyPrinting || p.status === 'PRINTING' || p.hrPrinterStatusText === 'PRINTING');
+
+    document.getElementById('nocModalTitle').textContent = p.printerCode + ' - ' + p.name;
+    document.getElementById('nocModalSub').textContent = (p.location || 'Office') + ' \u2022 ' + (p.department || 'General') + ' \u2022 ' + p.ipAddress + ' \u2022 ' + (p.model || 'Toshiba MFP');
+    document.getElementById('nocModalUptime').textContent = p.uptime || '0s';
+    document.getElementById('nocModalLifeCount').textContent = Number(p.lifeCount || 0).toLocaleString() + ' clicks';
+    document.getElementById('nocModalPing').textContent = (p.pingMs || 1) + ' ms';
+    document.getElementById('nocModalIp').textContent = p.ipAddress;
+    document.getElementById('nocModalHardwareType').textContent = 'Physical Toshiba e-BRIDGE Next MFP (LAN Hardware)';
+    document.getElementById('nocModalLastPolled').textContent = p.lastPolled ? new Date(p.lastPolled).toLocaleTimeString() : new Date().toLocaleTimeString();
+
+    // Engine & Printing State
+    var elEngine = document.getElementById('nocModalEngineState');
+    if (elEngine) {
+      elEngine.textContent = p.hrPrinterStatusText || (isPrinting ? 'PRINTING' : (p.status === 'OFFLINE' ? 'OFFLINE' : 'IDLE'));
+      elEngine.style.color = isPrinting ? '#0284C7' : (p.status === 'ERROR' ? '#DC2626' : '#059669');
+    }
+
+    var elIsPrinting = document.getElementById('nocModalIsPrinting');
+    if (elIsPrinting) {
+      elIsPrinting.textContent = isPrinting ? 'YES (Active)' : 'NO (Idle)';
+      elIsPrinting.style.color = isPrinting ? '#0284C7' : '#64748B';
+    }
+
+    var elWaste = document.getElementById('nocModalWasteBox');
+    if (elWaste) {
+      var wStat = p.wasteTonerStatus || 'OK';
+      elWaste.textContent = wStat;
+      elWaste.style.color = (wStat === 'FULL') ? '#DC2626' : (wStat === 'NEAR_FULL' ? '#D97706' : '#059669');
+    }
+
+    // Live State Badge in Header
+    var liveBadge = document.getElementById('nocModalLiveStateBadge');
+    if (liveBadge) {
+      if (isPrinting) {
+        liveBadge.textContent = 'PRINTING';
+        liveBadge.style.background = '#F5F3FF';
+        liveBadge.style.color = '#7C3AED';
+      } else if (p.status === 'READY') {
+        liveBadge.textContent = 'IDLE / READY';
+        liveBadge.style.background = '#DCFCE7';
+        liveBadge.style.color = '#15803D';
+      } else if (p.status === 'WARNING') {
+        liveBadge.textContent = 'WARNING';
+        liveBadge.style.background = '#FEF3C7';
+        liveBadge.style.color = '#B45309';
+      } else if (p.status === 'ERROR') {
+        liveBadge.textContent = 'FAULT';
+        liveBadge.style.background = '#FEE2E2';
+        liveBadge.style.color = '#B91C1C';
+      } else {
+        liveBadge.textContent = 'OFFLINE';
+        liveBadge.style.background = '#F1F5F9';
+        liveBadge.style.color = '#64748B';
+      }
+    }
+
+    var openWebBtn = document.getElementById('btnNocOpenWebUi');
+    if (openWebBtn) {
+      openWebBtn.href = 'https://' + p.ipAddress;
+    }
+
+    // Status Dot Color (Small bulb: normal=green, printing=violet, warning=amber, error=red)
+    var dot = document.getElementById('nocModalStatusDot');
+    if (dot) {
+      var bulbType = isPrinting ? 'printing' : (p.status === 'READY' ? 'normal' : (p.status === 'WARNING' ? 'warning' : (p.status === 'ERROR' ? 'error' : 'offline')));
+      dot.className = 'noc-bulb ' + bulbType;
+      var color = '#10B981';
+      if (isPrinting) color = '#8B5CF6';
+      else if (p.status === 'WARNING') color = '#F59E0B';
+      else if (p.status === 'ERROR') color = '#EF4444';
+      else if (p.status === 'OFFLINE') color = '#94A3B8';
+      dot.style.background = color;
+      dot.style.boxShadow = '0 0 8px ' + color;
+    }
+
+    // Active Alerts & Detailed RFC Error Codes
+    var alertSec = document.getElementById('nocModalAlertSection');
+    var alertList = document.getElementById('nocModalAlertList');
+    var badgeAlertCount = document.getElementById('nocModalAlertCountBadge');
+    var flagsBar = document.getElementById('nocModalDetectedErrorsBar');
+
+    // Bitfield flags bar
+    if (flagsBar) {
+      if (p.detectedErrors && p.detectedErrors.length > 0) {
+        flagsBar.style.display = 'block';
+        flagsBar.innerHTML = '\uD83D\uDEA8 <strong>Flags:</strong> ' + escapeHtml(p.detectedErrors.join(' \u2022 '));
+      } else {
+        flagsBar.style.display = 'none';
+        flagsBar.innerHTML = '';
+      }
+    }
+
+    if (alertSec && alertList) {
+      if (p.alertDetails && p.alertDetails.length > 0) {
+        alertSec.style.display = 'block';
+        if (badgeAlertCount) badgeAlertCount.textContent = p.alertDetails.length + (p.alertDetails.length === 1 ? ' Fault' : ' Faults');
+        
+        var aHtml = '';
+        for (var k = 0; k < p.alertDetails.length; k++) {
+          var ad = p.alertDetails[k];
+          var isCrit = ad.severity === 'CRITICAL' || p.status === 'ERROR';
+          var bg = isCrit ? '#FEF2F2' : '#FFFBEB';
+          var border = isCrit ? '#FECACA' : '#FDE68A';
+          var textCol = isCrit ? '#991B1B' : '#92400E';
+          var sevBadge = isCrit 
+            ? '<span style="background:#DC2626; color:#FFFFFF; padding:2px 6px; border-radius:4px; font-size:10px; font-weight:800;">CRIT</span>' 
+            : '<span style="background:#F59E0B; color:#FFFFFF; padding:2px 6px; border-radius:4px; font-size:10px; font-weight:800;">WARN</span>';
+
+          aHtml += '<div style="background:' + bg + '; border:1px solid ' + border + '; color:' + textCol + '; padding:8px 12px; border-radius:8px;">';
+          aHtml += '  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:3px;">';
+          aHtml += '    <div style="font-size:12px; font-weight:800; font-family:\'JetBrains Mono\',monospace;">\u26A0\uFE0F #' + ad.code + ' [' + escapeHtml(ad.codeName) + ']</div>';
+          aHtml += '    <div>' + sevBadge + '</div>';
+          aHtml += '  </div>';
+          aHtml += '  <div style="font-size:11.5px; font-weight:600; margin-bottom:4px;">' + escapeHtml(ad.description) + '</div>';
+          aHtml += '  <div style="font-size:10.5px; color:#64748B; display:flex; gap:12px; font-family:\'JetBrains Mono\',monospace;">';
+          if (ad.location) aHtml += '    <span>\uD83D\uDCCD <strong style="color:#0F172A;">' + escapeHtml(ad.location) + '</strong></span>';
+          if (ad.time) aHtml += '    <span>\u23F1\uFE0F <strong style="color:#0F172A;">' + escapeHtml(ad.time) + '</strong></span>';
+          aHtml += '  </div>';
+          aHtml += '</div>';
+        }
+        alertList.innerHTML = aHtml;
+      } else if (p.alerts && p.alerts.length > 0) {
+        alertSec.style.display = 'block';
+        if (badgeAlertCount) badgeAlertCount.textContent = p.alerts.length;
+        alertList.innerHTML = p.alerts.map(function (a) {
+          return '<div style="background:#FFFBEB; border:1px solid #FDE68A; color:#B45309; padding:8px 12px; border-radius:6px; font-size:12px; font-weight:700;">\u26A0\uFE0F ' + escapeHtml(a) + '</div>';
+        }).join('');
+      } else {
+        alertSec.style.display = 'none';
+        alertList.innerHTML = '';
+      }
+    }
+
+    // Toners
+    var tonerList = document.getElementById('nocModalTonerList');
+    if (tonerList) {
+      var tHtml = '';
+      if (p.toners && p.toners.length > 0) {
+        for (var i = 0; i < p.toners.length; i++) {
+          var t = p.toners[i];
+          var pct = Math.max(0, Math.min(100, t.levelPercent));
+          var barColor = '#1E293B';
+          var shortCode = 'K';
+          var tLower = (t.name || '').toLowerCase();
+          if (tLower.indexOf('cyan') !== -1 || tLower === 'c') { shortCode = 'C (Cyan)'; barColor = '#0284C7'; }
+          else if (tLower.indexOf('magenta') !== -1 || tLower === 'm') { shortCode = 'M (Magenta)'; barColor = '#DB2777'; }
+          else if (tLower.indexOf('yellow') !== -1 || tLower === 'y') { shortCode = 'Y (Yellow)'; barColor = '#D97706'; }
+          else { shortCode = 'K (Black)'; }
+
+          if (pct <= 10) barColor = '#DC2626';
+          else if (pct <= 20) barColor = '#D97706';
+
+          tHtml += '<div style="background:#F8FAFC; border:1px solid #E2E8F0; border-radius:8px; padding:8px 12px;">';
+          tHtml += '  <div style="display:flex; justify-content:space-between; font-size:11.5px; font-weight:700; margin-bottom:5px;">';
+          tHtml += '    <span style="color:#0F172A;">' + shortCode + '</span>';
+          tHtml += '    <span style="font-family:\'JetBrains Mono\',monospace; color:' + barColor + ';">' + pct + '% ' + (t.status === 'OK' ? '\u2713' : '\u26A0') + '</span>';
+          tHtml += '  </div>';
+          tHtml += '  <div style="height:7px; background:#E2E8F0; border-radius:4px; overflow:hidden;">';
+          tHtml += '    <div style="height:100%; width:' + pct + '%; background:' + barColor + '; border-radius:4px;"></div>';
+          tHtml += '  </div>';
+          tHtml += '</div>';
+        }
+      }
+      tonerList.innerHTML = tHtml;
+    }
+
+    // Trays
+    var trayList = document.getElementById('nocModalTrayList');
+    if (trayList) {
+      var trHtml = '';
+      if (p.trays && p.trays.length > 0) {
+        for (var j = 0; j < p.trays.length; j++) {
+          var tr = p.trays[j];
+          var isEmp = tr.status === 'EMPTY';
+          var shortTray = (tr.trayName || '')
+            .replace(/Drawer\s*/i, 'D')
+            .replace(/Tray\s*/i, 'T')
+            .replace(/Large Capacity Feeder|LCF/i, 'LCF')
+            .replace(/Bypass\s*(Tray)?/i, 'BYP');
+
+          trHtml += '<div style="background:#F8FAFC; border:1px solid ' + (isEmp ? '#FCA5A5' : '#E2E8F0') + '; border-radius:8px; padding:8px 12px;">';
+          trHtml += '  <div style="font-size:10px; color:#64748B; text-transform:uppercase; font-weight:700;">' + escapeHtml(shortTray) + ' (' + escapeHtml(tr.paperSize) + ')</div>';
+          trHtml += '  <div style="font-size:13px; font-weight:800; font-family:\'JetBrains Mono\',monospace; margin-top:2px; color:' + (isEmp ? '#DC2626' : '#0F172A') + ';">';
+          trHtml += isEmp ? '\u2715 EMPTY' : tr.levelPercent + '%';
+          trHtml += '  </div>';
+          trHtml += '</div>';
+        }
+      }
+      trayList.innerHTML = trHtml;
+    }
+
+    modal.style.display = 'flex';
+  };
+
+  window.closeNocDeviceModal = function () {
+    var modal = document.getElementById('modalNocDeviceDetail');
+    if (modal) modal.style.display = 'none';
+  };
+
 })();

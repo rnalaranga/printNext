@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
@@ -7,23 +7,17 @@
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
   <title>nexPrint - Touch Terminal</title>
-  <link rel="stylesheet" href="/css/ewb-touch.css?v=36">
+  <link rel="stylesheet" href="/css/ewb-touch.css?v=38">
   <style>
-    /* Fail-safe resets for Toshiba EWB (Pure Square Modern Design) */
+    /* ============================================================
+       nexPrint - Modern Enterprise Touchscreen Design
+       Clean, tactile, high-contrast, optimized for Toshiba EWB
+       ============================================================ */
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    button, input, select, textarea, table, thead, tbody, th, td,
-    .pc-logo-box, .pc-device-ready, .pc-user-info, .pc-btn-logout,
-    .pc-auth-table, .pc-pin-box, .pc-kbtn, .pc-kbtn-clear,
-    .pc-kbtn-enter, .pc-tab-bar, .pc-tab-active, .pc-tab-link, .pc-count-tag,
-    .pc-btn-print-all, .pc-btn-refresh, .pc-table-wrap, .pc-checkbox-touch,
-    .pc-badge-tag, .pc-action-dock, .pc-btn-dock-cancel, .pc-btn-dock-print,
-    .pc-alert-strip, .pc-menu-card {
-      border-radius: 0px !important;
-    }
 
     html, body {
-      font-family: -apple-system, BlinkMacSystemFont, Arial, "Helvetica Neue", Helvetica, sans-serif;
-      background-color: #F1F5F9;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+      background-color: #F8FAFC;
       color: #0F172A;
       margin: 0 !important;
       padding: 0 !important;
@@ -44,86 +38,112 @@
     }
     strong, b { font-weight: 700; color: #0F172A; }
 
-    /* Top Header - Compact, never overflows on 800px / 1024px / 1280px */
+    /* Top Header Bar */
     .pc-header {
-      height: 52px;
-      background-color: #FFFFFF;
-      border-bottom: 2px solid #F59E0B;
-      padding: 0 24px;
-      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+      height: 56px;
+      background: #FFFFFF;
+      border-bottom: 2px solid #E2E8F0;
+      padding: 0 20px;
+      box-shadow: 0 2px 10px rgba(15, 23, 42, 0.05);
       width: 100%;
       box-sizing: border-box;
+      position: relative;
+      z-index: 100;
     }
     .pc-logo-box {
       display: inline-block;
-      width: 48px;
-      height: 48px;
-      line-height: 44px;
-      background-color: #1D4ED8;
+      width: 42px;
+      height: 42px;
+      line-height: 38px;
+      background: linear-gradient(135deg, #2563EB 0%, #1D4ED8 100%);
       border: 2px solid #1E40AF;
       color: #FFFFFF;
       font-weight: 900;
-      font-size: 22px;
+      font-size: 20px;
       text-align: center;
-      border-radius: 10px !important;
+      border-radius: 12px !important;
       vertical-align: middle;
       margin-right: 12px;
       letter-spacing: -0.5px;
-      box-shadow: 0 3px 8px rgba(29, 78, 216, 0.25);
+      box-shadow: 0 4px 10px rgba(37, 99, 235, 0.25);
     }
     .pc-brand-info { display: inline-block; vertical-align: middle; }
-    .pc-brand-name { display: block; color: #0F172A; font-size: 20px; font-weight: 800; line-height: 1.2; letter-spacing: -0.3px; }
-    .pc-brand-subtitle { display: block; color: #64748B; font-size: 11.5px; font-weight: 600; }
+    .pc-brand-name { display: block; color: #0F172A; font-size: 20px; font-weight: 800; line-height: 1.15; letter-spacing: -0.4px; }
+    .pc-brand-subtitle { display: block; color: #64748B; font-size: 11px; font-weight: 600; letter-spacing: 0.2px; }
+    
     .pc-device-ready {
       display: inline-block;
-      background-color: #F0FDF4;
-      border: 1.5px solid #86EFAC;
-      padding: 5px 12px;
-      color: #14532D;
+      background-color: #ECFDF5;
+      border: 1.5px solid #A7F3D0;
+      padding: 6px 14px;
+      border-radius: 20px !important;
+      color: #065F46;
       font-size: 12px;
       font-weight: 700;
       vertical-align: middle;
+      box-shadow: 0 1px 3px rgba(16, 185, 129, 0.1);
     }
     .pc-status-dot {
       display: inline-block;
       width: 8px;
       height: 8px;
-      background-color: #16A34A;
+      background-color: #10B981;
       border-radius: 50% !important;
       margin-right: 6px;
       vertical-align: middle;
+      box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.25);
     }
     .pc-user-info {
       display: inline-block;
       background-color: #F8FAFC;
-      border: 1px solid #CBD5E1;
-      padding: 5px 12px;
+      border: 1.5px solid #E2E8F0;
+      border-radius: 20px !important;
+      padding: 6px 14px;
       font-size: 12px;
       color: #1E293B;
       vertical-align: middle;
       font-weight: 600;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
     }
-    .pc-btn-logout {
+    .pc-btn-header-home {
       display: inline-block;
       background-color: #0F172A !important;
       border: 1px solid #334155 !important;
+      border-radius: 8px !important;
       color: #FFFFFF !important;
-      font-size: 12px;
+      font-size: 11.5px;
       font-weight: 700;
-      padding: 6px 14px;
+      padding: 7px 12px;
+      cursor: pointer;
+      vertical-align: middle;
+      margin-left: 6px;
+      transition: all 0.15s ease;
+    }
+    .pc-btn-header-home:active { background-color: #1E293B !important; }
+    .pc-btn-logout {
+      display: inline-block;
+      background: linear-gradient(135deg, #1E293B 0%, #0F172A 100%) !important;
+      border: 1px solid #334155 !important;
+      border-radius: 8px !important;
+      color: #FFFFFF !important;
+      font-size: 11.5px;
+      font-weight: 700;
+      padding: 7px 14px;
       cursor: pointer;
       vertical-align: middle;
       text-transform: uppercase;
       margin-left: 6px;
-      letter-spacing: 0.3px;
+      letter-spacing: 0.4px;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+      transition: all 0.15s ease;
     }
-    .pc-btn-logout:active { background-color: #991B1B !important; }
+    .pc-btn-logout:active { background: #DC2626 !important; border-color: #B91C1C !important; }
 
-    /* Alert Banner — fixed overlay, rock-solid centering without CSS3 transform bugs */
+    /* Alert Banner */
     .pc-alert-strip {
       display: none;
       position: fixed;
-      top: 54px;
+      top: 60px;
       left: 15px;
       right: 15px;
       margin-left: auto;
@@ -131,112 +151,279 @@
       width: auto;
       max-width: 650px;
       padding: 10px 18px;
-      font-size: 14px;
+      font-size: 13.5px;
       font-weight: 800;
       text-align: center;
       letter-spacing: 0.3px;
-      border-radius: 6px;
-      box-shadow: 0 4px 18px rgba(0, 0, 0, 0.2);
+      border-radius: 10px;
+      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
       box-sizing: border-box;
       z-index: 9999;
-      -webkit-transform: none !important;
-      transform: none !important;
     }
     .pc-alert-strip.pc-alert-info {
       display: block !important;
       background-color: #EFF6FF !important;
-      border: 1.5px solid #2563EB !important;
-      color: #1E40AF !important;
+      border: 1.5px solid #3B82F6 !important;
+      color: #1D4ED8 !important;
     }
     .pc-alert-strip.pc-alert-success {
       display: block !important;
-      background-color: #F0FDF4 !important;
-      border: 1.5px solid #16A34A !important;
-      color: #15803D !important;
+      background-color: #ECFDF5 !important;
+      border: 1.5px solid #10B981 !important;
+      color: #047857 !important;
     }
     .pc-alert-strip.pc-alert-error {
       display: block !important;
       background-color: #FEF2F2 !important;
-      border: 1.5px solid #DC2626 !important;
-      color: #991B1B !important;
+      border: 1.5px solid #EF4444 !important;
+      color: #B91C1C !important;
     }
 
     /* Screen Views */
     .pc-screen { display: none; }
     .pc-screen.pc-active { display: block; }
 
-    /* Authentication Screen */
-    .pc-auth-screen { padding: 12px 14px 20px 14px; }
+    /* Screen 1: Authentication Screen */
+    .pc-auth-screen { padding: 10px 14px 16px 14px; }
     .pc-auth-wrapper { max-width: 860px; width: 100%; margin: 0 auto; }
-    .pc-auth-nav-tabs { width: 100%; border-collapse: collapse; margin-bottom: -1px; }
-    .pc-auth-tab {
-      width: 100%; height: 44px; line-height: 44px;
-      background: #E2E8F0; border: 1.5px solid #CBD5E1;
-      font-size: 13px; font-weight: 700; color: #475569;
-      cursor: pointer; text-transform: uppercase; letter-spacing: 0.5px;
+    
+    /* Modern Pill Navigation Segmented Dock */
+    .pc-auth-nav-dock {
+      display: flex;
+      justify-content: center;
+      gap: 8px;
+      margin-bottom: 12px;
+      background: #E2E8F0;
+      padding: 4px;
+      border-radius: 28px;
+      width: fit-content;
+      margin-left: auto;
+      margin-right: auto;
     }
-    .pc-auth-tab.active {
-      background: #FFFFFF; border-bottom-color: #FFFFFF;
-      border-top: 3px solid #1D4ED8; color: #1D4ED8;
+    .pc-auth-pill {
+      background: transparent;
+      border: none;
+      border-radius: 22px !important;
+      padding: 7px 24px;
+      font-size: 12.5px;
+      font-weight: 700;
+      color: #64748B;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      transition: all 0.15s ease;
     }
+    .pc-auth-pill.active {
+      background: #FFFFFF !important;
+      color: #1D4ED8 !important;
+      box-shadow: 0 2px 8px rgba(15, 23, 42, 0.08);
+      font-weight: 800;
+    }
+    .pc-auth-pill-icon {
+      width: 16px;
+      height: 16px;
+      border-radius: 4px;
+      vertical-align: middle;
+    }
+
     .pc-auth-table {
-      width: 100%; background: #FFFFFF;
-      border: 1.5px solid #CBD5E1; border-collapse: separate;
-      box-shadow: 0 2px 8px rgba(15, 23, 42, 0.05);
+      width: 100%;
+      background: #FFFFFF;
+      border: 1.5px solid #E2E8F0;
+      border-radius: 18px !important;
+      border-collapse: separate;
+      box-shadow: 0 10px 30px rgba(15, 23, 42, 0.06);
+      overflow: hidden;
     }
-    .pc-col-left { width: 50%; padding: 20px 24px; vertical-align: top; }
-    .pc-col-left h2 { font-size: 20px; font-weight: 700; color: #0F172A; margin-bottom: 6px; }
-    .pc-col-left p { color: #475569; font-size: 12.5px; line-height: 1.4; margin-bottom: 14px; }
-    .pc-pin-label { font-size: 11px; font-weight: 700; color: #475569; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; }
+    .pc-col-left {
+      width: 48%;
+      background: linear-gradient(180deg, #F8FAFC 0%, #EFF6FF 100%);
+      border-right: 1.5px solid #E2E8F0;
+      padding: 16px 20px;
+      vertical-align: top;
+      text-align: center;
+    }
+    .pc-rfid-hero-wrap {
+      background: #FFFFFF;
+      border: 1.5px solid #DBEAFE;
+      border-radius: 14px;
+      padding: 12px 10px 10px 10px;
+      box-shadow: 0 3px 10px rgba(37, 99, 235, 0.06);
+      margin-bottom: 12px;
+    }
+    .pc-rfid-hero-img {
+      max-width: 84px;
+      max-height: 84px;
+      object-fit: contain;
+      border-radius: 10px;
+      display: block;
+      margin: 0 auto 6px auto;
+    }
+    .pc-rfid-title {
+      font-size: 16px;
+      font-weight: 800;
+      color: #1D4ED8;
+      letter-spacing: 0.4px;
+      margin-bottom: 1px;
+    }
+    .pc-rfid-sub {
+      font-size: 10.5px;
+      font-weight: 600;
+      color: #64748B;
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+    }
+    .pc-rfid-status {
+      width: 85%;
+      height: 26px;
+      line-height: 24px;
+      margin: 6px auto 0 auto;
+      border: 1px solid #BFDBFE;
+      background: #EFF6FF;
+      border-radius: 20px !important;
+      text-align: center;
+      font-size: 11px;
+      font-weight: 700;
+      color: #1D4ED8;
+    }
+
+    .pc-pin-label {
+      font-size: 11px;
+      font-weight: 800;
+      color: #475569;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 4px;
+      text-align: left;
+    }
     .pc-pin-box {
-      width: 100%; height: 48px; line-height: 46px;
-      background: #F8FAFC; border: 2px solid #CBD5E1;
-      text-align: center; margin-bottom: 12px;
+      width: 100%;
+      height: 48px;
+      line-height: 44px;
+      background: #FFFFFF;
+      border: 2px solid #3B82F6;
+      border-radius: 12px !important;
+      text-align: center;
+      margin-bottom: 8px;
+      box-shadow: 0 2px 8px rgba(59, 130, 246, 0.12);
     }
-    .pc-pin-placeholder { color: #94A3B8; font-size: 13px; font-weight: 700; letter-spacing: 3px; }
+    .pc-pin-placeholder {
+      color: #94A3B8;
+      font-size: 13px;
+      font-weight: 800;
+      letter-spacing: 3px;
+    }
     .pc-pin-dot {
-      display: inline-block; width: 14px; height: 14px;
-      background: #0F172A; border-radius: 50% !important;
-      margin: 0 5px; vertical-align: middle;
+      display: inline-block;
+      width: 13px;
+      height: 13px;
+      background-color: #2563EB !important;
+      border-radius: 50% !important;
+      margin: 0 5px;
+      vertical-align: middle;
+      box-shadow: 0 2px 6px rgba(37, 99, 235, 0.4);
     }
-    .pc-auth-foot { font-size: 11px; color: #94A3B8; font-weight: 500; }
 
     /* Right Column: Numeric Keypad */
-    .pc-col-right { width: 50%; background: #F8FAFC; border-left: 1.5px solid #E2E8F0; padding: 14px 18px; vertical-align: top; }
-    .pc-keypad-title { font-size: 11px; font-weight: 700; color: #64748B; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px; text-align: center; }
-    .pc-keypad-tbl { width: 100%; border-collapse: separate; border-spacing: 6px; }
+    .pc-col-right {
+      width: 52%;
+      background: #FFFFFF;
+      padding: 16px 20px;
+      vertical-align: top;
+    }
+    .pc-keypad-title {
+      font-size: 11px;
+      font-weight: 800;
+      color: #64748B;
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+      margin-bottom: 8px;
+      text-align: center;
+    }
+    .pc-keypad-tbl {
+      width: 100%;
+      border-collapse: separate;
+      border-spacing: 6px;
+    }
     .pc-keypad-tbl td { width: 33.33%; padding: 0; }
     .pc-kbtn {
-      width: 100%; height: 48px; line-height: 46px;
-      background: #FFFFFF; border: 1.5px solid #CBD5E1;
-      font-size: 22px; font-weight: 700; color: #0F172A;
-      cursor: pointer; text-align: center;
+      width: 100%;
+      height: 50px;
+      line-height: 48px;
+      background: #F8FAFC;
+      border: 1.5px solid #E2E8F0;
+      border-radius: 12px !important;
+      font-size: 24px;
+      font-weight: 700;
+      color: #0F172A;
+      cursor: pointer;
+      text-align: center;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.03);
+      transition: all 0.12s ease;
     }
-    .pc-kbtn:active { background: #E2E8F0; }
-    .pc-kbtn-clear { background: #F1F5F9; border-color: #CBD5E1; color: #475569; font-size: 12px; font-weight: 800; }
-    .pc-kbtn-clear:active { background: #E2E8F0; }
-    .pc-kbtn-enter { background: #1D4ED8; border-color: #1D4ED8; color: #FFFFFF; font-size: 13px; font-weight: 800; }
-    .pc-kbtn-enter:active { background: #1E40AF; }
+    .pc-kbtn:active {
+      background: #EFF6FF !important;
+      border-color: #3B82F6 !important;
+      color: #1D4ED8 !important;
+    }
+    .pc-kbtn-clear {
+      background: #F1F5F9;
+      border-color: #CBD5E1;
+      color: #475569;
+      font-size: 12.5px;
+      font-weight: 800;
+      border-radius: 12px !important;
+    }
+    .pc-kbtn-clear:active {
+      background: #FEE2E2 !important;
+      border-color: #F87171 !important;
+      color: #DC2626 !important;
+    }
+    .pc-kbtn-enter {
+      background: linear-gradient(135deg, #2563EB 0%, #1D4ED8 100%) !important;
+      border: none !important;
+      color: #FFFFFF !important;
+      font-size: 13.5px;
+      font-weight: 800;
+      letter-spacing: 0.4px;
+      border-radius: 12px !important;
+      box-shadow: 0 4px 14px rgba(37, 99, 235, 0.35) !important;
+    }
+    .pc-kbtn-enter:active {
+      background: #1E40AF !important;
+    }
 
     .pc-input-touch {
-      width: 100%; height: 42px; line-height: 40px;
-      background: #FFFFFF; border: 1.5px solid #CBD5E1;
-      font-size: 14px; font-weight: 600; color: #0F172A;
-      padding: 0 12px; margin-bottom: 10px;
+      width: 100%;
+      height: 44px;
+      line-height: 42px;
+      background: #FFFFFF;
+      border: 1.5px solid #CBD5E1;
+      border-radius: 10px !important;
+      font-size: 14px;
+      font-weight: 600;
+      color: #0F172A;
+      padding: 0 12px;
+      margin-bottom: 10px;
     }
-    .pc-input-touch:focus { border-color: #1D4ED8; outline: none; background: #EFF6FF; }
+    .pc-input-touch:focus {
+      border-color: #2563EB;
+      outline: none;
+      background: #EFF6FF;
+      box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+    }
 
-    /* SCREEN 2: MAIN MENU - Strictly Horizontal 3 Tiles (Table Layout for 100% Toshiba Compatibility) */
+    /* SCREEN 2: MAIN MENU */
     .pc-menu-screen { padding: 14px 16px 20px 16px; }
     .pc-menu-wrapper { max-width: 1060px; width: 100%; margin: 0 auto; }
-    .pc-menu-title-bar { text-align: center; margin-bottom: 12px; }
-    .pc-menu-title-bar h2 { font-size: 18px; font-weight: 800; color: #0F172A; margin-bottom: 2px; }
-    .pc-menu-title-bar p { font-size: 12px; color: #64748B; }
+    .pc-menu-title-bar { text-align: center; margin-bottom: 20px; }
+    .pc-menu-title-bar h2 { font-size: 21px; font-weight: 800; color: #0F172A; margin: 0; letter-spacing: -0.3px; }
 
     .pc-menu-table {
       width: 100% !important;
       border-collapse: separate !important;
-      border-spacing: 14px 0 !important;
+      border-spacing: 16px 0 !important;
       table-layout: fixed !important;
     }
     .pc-menu-table td {
@@ -247,192 +434,302 @@
     .pc-menu-card {
       width: 100% !important;
       background: #FFFFFF;
-      border: 1.5px solid #CBD5E1;
-      border-top: 5px solid #1D4ED8;
-      padding: 18px 12px 14px 12px !important;
-      text-align: center;
+      border: 1.5px solid #E2E8F0;
+      border-radius: 18px !important;
+      padding: 38px 16px 32px 16px !important;
+      text-align: center !important;
       cursor: pointer;
-      box-shadow: 0 3px 10px rgba(15, 23, 42, 0.06);
+      box-shadow: 0 4px 16px rgba(15, 23, 42, 0.05);
       position: relative;
       box-sizing: border-box !important;
-      min-height: 255px;
+      min-height: 200px;
+      transition: all 0.15s ease;
     }
-    .pc-menu-card-print,
-    .pc-menu-card-copy,
-    .pc-menu-card-scan { border-top-color: #1D4ED8 !important; }
+    .pc-menu-card:active {
+      background: #F8FAFC;
+    }
 
-    .pc-menu-card-badge,
-    .pc-badge-ready {
+    /* Individual Color Signatures */
+    .pc-menu-card-print {
+      border-top: 5px solid #2563EB !important;
+    }
+    .pc-menu-card-print:active {
+      border-color: #2563EB !important;
+      box-shadow: 0 8px 24px rgba(37, 99, 235, 0.18);
+    }
+    .pc-menu-card-copy {
+      border-top: 5px solid #F59E0B !important;
+    }
+    .pc-menu-card-copy:active {
+      border-color: #F59E0B !important;
+      box-shadow: 0 8px 24px rgba(245, 158, 11, 0.18);
+    }
+    .pc-menu-card-scan {
+      border-top: 5px solid #10B981 !important;
+    }
+    .pc-menu-card-scan:active {
+      border-color: #10B981 !important;
+      box-shadow: 0 8px 24px rgba(16, 185, 129, 0.18);
+    }
+
+    .pc-menu-card-badge {
       position: absolute;
-      top: 10px; right: 10px;
-      background: #EFF6FF !important; color: #1D4ED8 !important;
+      top: 12px;
+      right: 12px;
+      background: #EFF6FF !important;
+      color: #1D4ED8 !important;
       border: 1px solid #BFDBFE !important;
-      font-size: 10.5px; font-weight: 700;
-      padding: 2px 7px; text-transform: uppercase;
+      border-radius: 20px !important;
+      font-size: 11px;
+      font-weight: 800;
+      padding: 3px 9px;
+      text-transform: uppercase;
     }
 
     .pc-menu-icon-wrap {
-      width: 100%; height: 76px;
-      line-height: 76px; text-align: center;
-      margin: 4px 0 8px 0;
+      width: 88px;
+      height: 88px;
+      margin: 0 auto 16px auto;
+      border-radius: 22px !important;
+      display: block;
+      text-align: center;
+      position: relative;
     }
-    .pc-menu-icon {
-      max-width: 74px; max-height: 74px;
-      width: auto; height: auto;
-      display: inline-block; vertical-align: middle;
+    .pc-menu-card-print .pc-menu-icon-wrap {
+      background: linear-gradient(135deg, #EFF6FF, #DBEAFE);
+      border: 1.5px solid #BFDBFE;
     }
-    .pc-menu-svg-fallback { width: 110px; height: 110px; margin: 0 auto; }
+    .pc-menu-card-copy .pc-menu-icon-wrap {
+      background: linear-gradient(135deg, #FEF3C7, #FDE68A);
+      border: 1.5px solid #FCD34D;
+    }
+    .pc-menu-card-scan .pc-menu-icon-wrap {
+      background: linear-gradient(135deg, #ECFDF5, #D1FAE5);
+      border: 1.5px solid #A7F3D0;
+    }
 
-    .pc-menu-card-title { font-size: 16px; font-weight: 800; color: #0F172A; margin-bottom: 2px; }
-    .pc-menu-card-subtitle { font-size: 11px; font-weight: 700; color: #64748B; text-transform: uppercase; margin-bottom: 6px; }
-    .pc-menu-card-desc { font-size: 11px; color: #64748B; line-height: 1.35; margin-bottom: 12px; min-height: 30px; }
-    .pc-menu-card-action {
-      width: 100%; padding: 8px 10px;
-      background: #F8FAFC; border: 1px solid #CBD5E1;
-      font-size: 11.5px; font-weight: 700; color: #1D4ED8;
-      text-transform: uppercase; box-sizing: border-box;
-      letter-spacing: 0.3px;
+    .pc-menu-icon {
+      width: 60px;
+      height: 60px;
+      margin: 14px auto 0 auto;
+      display: block;
+      border-radius: 10px;
+      object-fit: contain;
     }
-    .pc-menu-card:active { transform: translateY(1px); }
-    .pc-menu-card-print:active .pc-menu-card-action,
-    .pc-menu-card-copy:active .pc-menu-card-action,
-    .pc-menu-card-scan:active .pc-menu-card-action { background: #1D4ED8; color: #FFF; }
+    .pc-menu-svg-fallback {
+      width: 88px;
+      height: 88px;
+      line-height: 88px;
+      text-align: center;
+      margin: 0 auto;
+    }
+    .pc-menu-svg-fallback svg {
+      vertical-align: middle;
+      margin-top: 14px;
+    }
+
+    .pc-menu-card-title {
+      font-size: 21px !important;
+      font-weight: 800 !important;
+      color: #0F172A;
+      margin: 0 !important;
+      letter-spacing: -0.3px;
+      text-align: center !important;
+      line-height: 1.2;
+    }
+
+    .pc-btn-access-home {
+      display: inline-block;
+      padding: 10px 24px;
+      background: #0F172A;
+      border: 1.5px solid #334155;
+      color: #FFFFFF !important;
+      border-radius: 24px !important;
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 0.3px;
+      cursor: pointer;
+      box-shadow: 0 4px 12px rgba(15, 23, 42, 0.15);
+      transition: all 0.15s ease;
+    }
+    .pc-btn-access-home:active {
+      background: #1E293B;
+    }
 
     /* SCREEN 3: PRINT RELEASE QUEUE */
     .pc-queue-screen { padding: 10px 14px 70px 14px; }
     .pc-queue-wrapper { max-width: 1100px; width: 100%; margin: 0 auto; }
     .pc-tab-bar {
-      width: 100%; background: #FFFFFF;
-      border: 1.5px solid #CBD5E1; border-top: 3px solid #1D4ED8;
-      padding: 6px 10px; margin-bottom: 8px;
+      width: 100%;
+      background: #FFFFFF;
+      border: 1.5px solid #E2E8F0;
+      border-top: 3px solid #2563EB;
+      border-radius: 12px !important;
+      padding: 8px 12px;
+      margin-bottom: 10px;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.03);
     }
     .pc-btn-menu-back {
-      padding: 5px 12px; font-size: 12px; font-weight: 700;
-      background: #0F172A; color: #FFFFFF; border: none;
-      cursor: pointer; margin-right: 8px; vertical-align: middle;
-    }
-    .pc-tab-active {
-      font-size: 13.5px; font-weight: 800; color: #0F172A;
+      padding: 6px 14px;
+      font-size: 12px;
+      font-weight: 700;
+      background: #0F172A;
+      color: #FFFFFF;
+      border: none;
+      border-radius: 8px !important;
+      cursor: pointer;
+      margin-right: 8px;
       vertical-align: middle;
     }
-    .pc-count-tag { color: #1D4ED8; font-weight: 800; }
+    .pc-tab-active {
+      font-size: 14px;
+      font-weight: 800;
+      color: #0F172A;
+      vertical-align: middle;
+    }
+    .pc-count-tag {
+      color: #2563EB;
+      font-weight: 800;
+    }
     .pc-btn-print-all {
-      padding: 6px 16px; font-size: 12.5px; font-weight: 800;
-      background: #1D4ED8; color: #FFFFFF; border: none;
-      cursor: pointer; margin-right: 6px; vertical-align: middle;
+      padding: 7px 18px;
+      font-size: 12.5px;
+      font-weight: 800;
+      background: linear-gradient(135deg, #2563EB 0%, #1D4ED8 100%);
+      color: #FFFFFF;
+      border: none;
+      border-radius: 8px !important;
+      cursor: pointer;
+      margin-right: 6px;
+      vertical-align: middle;
+      box-shadow: 0 2px 8px rgba(37, 99, 235, 0.3);
     }
     .pc-btn-refresh {
-      padding: 6px 14px; font-size: 12px; font-weight: 700;
-      background: #FFFFFF; color: #0F172A; border: 1.5px solid #CBD5E1;
-      cursor: pointer; vertical-align: middle;
+      padding: 7px 14px;
+      font-size: 12px;
+      font-weight: 700;
+      background: #FFFFFF;
+      color: #0F172A;
+      border: 1.5px solid #CBD5E1;
+      border-radius: 8px !important;
+      cursor: pointer;
+      vertical-align: middle;
     }
 
     .pc-table-wrap {
-      width: 100%; background: #FFFFFF;
-      border: 1.5px solid #CBD5E1; max-height: calc(100vh - 165px);
-      overflow-y: auto; -webkit-overflow-scrolling: touch;
+      width: 100%;
+      background: #FFFFFF;
+      border: 1.5px solid #E2E8F0;
+      border-radius: 12px !important;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03);
+      max-height: calc(100vh - 165px);
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
     }
     table.pc-job-table { width: 100%; border-collapse: collapse; }
-    table.pc-job-table thead { background: #F8FAFC; position: sticky; top: 0; }
+    table.pc-job-table thead { background: #F8FAFC; position: sticky; top: 0; z-index: 2; }
     table.pc-job-table th {
-      padding: 10px 10px; font-size: 11px; font-weight: 700;
-      color: #64748B; text-align: left; border-bottom: 1.5px solid #CBD5E1;
+      padding: 10px 12px;
+      font-size: 11px;
+      font-weight: 700;
+      color: #64748B;
+      text-align: left;
+      border-bottom: 1.5px solid #E2E8F0;
     }
     table.pc-job-table td {
-      padding: 11px 10px; font-size: 13px; color: #0F172A;
-      border-bottom: 1px solid #E2E8F0; vertical-align: middle;
+      padding: 12px 12px;
+      font-size: 13px;
+      color: #0F172A;
+      border-bottom: 1px solid #F1F5F9;
+      vertical-align: middle;
     }
-    .pc-checkbox-touch { width: 22px; height: 22px; cursor: pointer; }
+    .pc-checkbox-touch {
+      width: 22px;
+      height: 22px;
+      cursor: pointer;
+      border-radius: 6px !important;
+    }
     .pc-empty-queue { padding: 40px 20px; text-align: center; color: #64748B; }
 
     /* Bottom Action Dock */
     .pc-action-dock {
-      position: fixed; bottom: 0; left: 0; right: 0;
-      height: 56px; background: #FFFFFF;
-      border-top: 2px solid #F59E0B; padding: 6px 16px;
-      box-shadow: 0 -2px 8px rgba(0,0,0,0.06); z-index: 50;
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: 60px;
+      background: rgba(255, 255, 255, 0.98);
+      border-top: 2px solid #E2E8F0;
+      padding: 8px 18px;
+      box-shadow: 0 -4px 16px rgba(0,0,0,0.06);
+      z-index: 50;
       box-sizing: border-box;
     }
     .pc-selection-summary { font-size: 13.5px; font-weight: 700; color: #0F172A; }
-    .pc-summary-sep { color: #CBD5E1; margin: 0 4px; }
+    .pc-summary-sep { color: #CBD5E1; margin: 0 5px; }
     .pc-btn-dock-cancel {
-      padding: 8px 14px; font-size: 12px; font-weight: 700;
-      background: #FFFFFF; border: 1.5px solid #CBD5E1; color: #0F172A;
-      cursor: pointer; margin-right: 6px;
+      padding: 8px 16px;
+      font-size: 12px;
+      font-weight: 700;
+      background: #FFFFFF;
+      border: 1.5px solid #CBD5E1;
+      border-radius: 8px !important;
+      color: #0F172A;
+      cursor: pointer;
+      margin-right: 6px;
     }
     .pc-btn-dock-print {
-      padding: 8px 20px; font-size: 13px; font-weight: 800;
-      background: #1D4ED8; border: 1.5px solid #1D4ED8; color: #FFFFFF;
-      cursor: pointer; text-transform: uppercase;
+      padding: 8px 22px;
+      font-size: 13px;
+      font-weight: 800;
+      background: linear-gradient(135deg, #2563EB 0%, #1D4ED8 100%);
+      border: none;
+      border-radius: 8px !important;
+      color: #FFFFFF;
+      cursor: pointer;
+      text-transform: uppercase;
+      box-shadow: 0 4px 14px rgba(37, 99, 235, 0.3);
     }
     .pc-btn-disabled { opacity: 0.45; cursor: default; }
 
-    /* SCREEN 4: PHOTOCOPY & SCREEN 5: SCAN WALK-UP STATIONS */
+    /* Walk-Up Screens (Photocopy & Document Scan) */
     .pc-copy-screen, .pc-scan-screen {
       padding: 10px 14px;
-      height: calc(100% - 52px);
-      max-height: calc(100% - 52px);
+      height: calc(100% - 56px);
+      max-height: calc(100% - 56px);
       box-sizing: border-box;
       overflow: hidden;
     }
-    .pc-copy-wrapper { max-width: 980px; width: 100%; margin: 0 auto; }
-    .pc-walkup-table {
-      width: 100%;
-      background: #FFFFFF;
-      border: 1.5px solid #CBD5E1;
-      border-top: 3px solid #1D4ED8;
-      border-collapse: collapse;
-      box-shadow: 0 2px 8px rgba(15, 23, 42, 0.05);
+    .pc-copy-wrapper { max-width: 720px; width: 100%; margin: 24px auto 0 auto; }
+    .pc-walkup-card {
+      border-radius: 18px !important;
+      padding: 32px 24px;
+      text-align: center;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
     }
-    .pc-scan-table {
-      border-top-color: #1D4ED8 !important;
-    }
-    .pc-step-num {
-      width: 22px; height: 22px; line-height: 22px;
-      text-align: center; color: #FFFFFF; font-weight: 800; font-size: 12px;
-    }
-    .pc-btn-open-native {
-      width: 100%; padding: 11px 14px;
-      font-size: 13px; font-weight: 800;
-      background: #1D4ED8; border: 1.5px solid #1E40AF; color: #FFFFFF;
-      cursor: pointer; text-transform: uppercase; letter-spacing: 0.3px; text-align: center;
-    }
-    .scan-pill-btn {
-      display: inline-block; padding: 7px 12px; margin-right: 6px; margin-bottom: 4px;
-      background: #F1F5F9; border: 1.5px solid #CBD5E1; color: #334155;
-      font-size: 12px; font-weight: 700; border-radius: 4px; cursor: pointer;
-      user-select: none; -webkit-user-select: none;
-    }
-    .scan-pill-btn.active {
-      background: #1D4ED8 !important; border-color: #1E40AF !important; color: #FFFFFF !important;
-    }
-    .scan-touch-input {
-      width: 100%; padding: 8px 10px; font-size: 13.5px; font-weight: 600; color: #0F172A;
-      border: 1.5px solid #94A3B8; border-radius: 4px; background: #FFFFFF; box-sizing: border-box;
-    }
-    .scan-touch-input:focus {
-      outline: none; border-color: #1D4ED8; box-shadow: 0 0 0 2px rgba(29,78,216,0.2);
-    }
-    .scan-action-btn {
-      width: 100%; padding: 12px 16px; font-size: 15px; font-weight: 900;
-      background: #16A34A; border: 2px solid #15803D; color: #FFFFFF;
-      border-radius: 5px; cursor: pointer; text-transform: uppercase;
-      letter-spacing: 0.5px; box-shadow: 0 3px 10px rgba(22, 163, 74, 0.3);
-    }
-    .scan-action-btn:active {
-      transform: translateY(1px); background: #15803D;
-    }
-    .pc-btn-open-native:active { background: #1E40AF; }
     .pc-btn-finish-walkup {
-      width: 100%; padding: 11px 14px;
-      font-size: 13px; font-weight: 800;
-      background: #16A34A; border: 1.5px solid #15803D; color: #FFFFFF;
-      cursor: pointer; text-transform: uppercase; letter-spacing: 0.3px; text-align: center;
+      padding: 12px 24px;
+      font-size: 13px;
+      font-weight: 800;
+      background: #10B981;
+      border: none;
+      border-radius: 10px !important;
+      color: #FFFFFF;
+      cursor: pointer;
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+      box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
     }
-    .pc-btn-finish-walkup:active { background: #15803D; }
-
-    /* Modal Backdrop (Safety stub) */
-    .pc-modal-backdrop { display: none !important; }
+    .pc-btn-secondary {
+      padding: 12px 22px;
+      font-size: 13px;
+      font-weight: 700;
+      background: #F1F5F9;
+      border: 1.5px solid #CBD5E1;
+      color: #334155;
+      border-radius: 10px !important;
+      cursor: pointer;
+    }
 
     @media (max-width: 900px) {
       .pc-col-hide-sm { display: none !important; }
@@ -522,10 +819,6 @@
               <div class="pc-rfid-hero-wrap">
                 <img src="/img/icon-card-tap.jpg" class="pc-rfid-hero-img" alt="Tap RFID / NFC Card">
                 <div class="pc-rfid-title">TAP CARD</div>
-                <div class="pc-rfid-sub">RFID / NFC Contactless</div>
-                <div class="pc-rfid-status" style="width:85%; height:26px; line-height:24px; margin:8px auto 0 auto; border:1px solid #BFDBFE; background:#EFF6FF; border-radius:4px; text-align:center; font-size:11px; font-weight:700; color:#1D4ED8;">
-                  Ready for Card Tap
-                </div>
                 <input type="text" id="pcCardCatcher" inputmode="none" readonly tabindex="-1" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
                        style="position:absolute; opacity:0; pointer-events:none; width:1px; height:1px; left:-9999px; top:-9999px;">
               </div>
@@ -628,7 +921,6 @@
     <div class="pc-menu-wrapper">
       <div class="pc-menu-title-bar">
         <h2>Select an Application</h2>
-        <p>Choose an action below to proceed with your authenticated session</p>
       </div>
 
       <!-- 3 Primary Application Cards (Clean & Minimal) -->
@@ -641,7 +933,7 @@
               <div class="pc-menu-icon-wrap">
                 <img src="/img/icon-print-release.jpg" class="pc-menu-icon" alt="Print Release" onerror="this.style.display='none'; document.getElementById('menuSvgPrint').style.display='block';">
                 <div id="menuSvgPrint" class="pc-menu-svg-fallback" style="display:none;">
-                  <svg width="120" height="120" viewBox="0 0 24 24" fill="none" stroke="#1D4ED8" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9V2h12v7"></path><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><rect x="6" y="14" width="12" height="8"></rect></svg>
+                  <svg width="50" height="50" viewBox="0 0 24 24" fill="none" stroke="#1D4ED8" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9V2h12v7"></path><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><rect x="6" y="14" width="12" height="8"></rect></svg>
                 </div>
               </div>
               <div class="pc-menu-card-title">Print Release</div>
@@ -654,7 +946,7 @@
               <div class="pc-menu-icon-wrap">
                 <img src="/img/icon-copy.jpg" class="pc-menu-icon" alt="Copy" onerror="this.style.display='none'; document.getElementById('menuSvgCopy').style.display='block';">
                 <div id="menuSvgCopy" class="pc-menu-svg-fallback" style="display:none;">
-                  <svg width="120" height="120" viewBox="0 0 24 24" fill="none" stroke="#1D4ED8" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+                  <svg width="50" height="50" viewBox="0 0 24 24" fill="none" stroke="#D97706" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
                 </div>
               </div>
               <div class="pc-menu-card-title">Copy</div>
@@ -667,7 +959,7 @@
               <div class="pc-menu-icon-wrap">
                 <img src="/img/icon-scan.jpg" class="pc-menu-icon" alt="Scan" onerror="this.style.display='none'; document.getElementById('menuSvgScan').style.display='block';">
                 <div id="menuSvgScan" class="pc-menu-svg-fallback" style="display:none;">
-                  <svg width="120" height="120" viewBox="0 0 24 24" fill="none" stroke="#1D4ED8" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7V5a2 2 0 0 1 2-2h2"></path><path d="M17 3h2a2 2 0 0 1 2 2v2"></path><path d="M21 17v2a2 2 0 0 1-2 2h-2"></path><path d="M7 21H5a2 2 0 0 1-2-2v-2"></path><line x1="7" y1="12" x2="17" y2="12"></line></svg>
+                  <svg width="50" height="50" viewBox="0 0 24 24" fill="none" stroke="#059669" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7V5a2 2 0 0 1 2-2h2"></path><path d="M17 3h2a2 2 0 0 1 2 2v2"></path><path d="M21 17v2a2 2 0 0 1-2 2h-2"></path><path d="M7 21H5a2 2 0 0 1-2-2v-2"></path><line x1="7" y1="12" x2="17" y2="12"></line></svg>
                 </div>
               </div>
               <div class="pc-menu-card-title">Scan</div>
@@ -776,19 +1068,13 @@
        ============================================================ -->
   <div id="screenCopy" class="pc-screen pc-copy-screen">
     <div class="pc-copy-wrapper" style="max-width: 680px; margin: 30px auto 0 auto;">
-      <div style="background:#EFF6FF; border:2.5px solid #2563EB; border-radius:14px; padding:32px 24px; text-align:center; box-shadow:0 6px 20px rgba(37,99,235,0.12);">
-        <div style="font-size:46px; margin-bottom:10px;">&#128424;</div>
-        <div style="font-size:24px; font-weight:900; color:#1E40AF; margin-bottom:14px; letter-spacing:0.3px;">
-          Photocopier Ready!
+      <div style="background:#EFF6FF; border:2px solid #2563EB; border-radius:16px; padding:32px 24px; text-align:center; box-shadow:0 6px 20px rgba(37,99,235,0.08);">
+        <div style="font-size:48px; margin-bottom:12px; line-height:1;">&#128424;</div>
+        <div style="font-size:24px; font-weight:900; color:#1E40AF; margin-bottom:12px; letter-spacing:0.2px;">
+          Photocopier Ready
         </div>
-        <div style="font-size:18px; font-weight:800; color:#0F172A; line-height:1.6; margin-bottom:12px;">
-          Press <span style="background:#FEF08A; padding:4px 14px; border:2px solid #CA8A04; border-radius:6px; color:#854D0E; font-size:20px; font-weight:900;">[ HOME ]</span> or <span style="background:#FEF08A; padding:4px 14px; border:2px solid #CA8A04; border-radius:6px; color:#854D0E; font-size:20px; font-weight:900;">[ CLEAR ]</span> on panel
-        </div>
-        <div style="font-size:13px; color:#1E40AF; font-weight:700; background:#DBEAFE; padding:8px 16px; border-radius:8px; display:inline-block; margin-bottom:10px;">
-          &#9889; Press physical button next to screen for INSTANT copy window (or wait for auto-switch)
-        </div>
-        <div style="font-size:14px; color:#475569; font-weight:600;">
-          Place pages on ADF or glass and press green [ START ]
+        <div style="font-size:16px; font-weight:700; color:#334155;">
+          Press <span style="background:#FEF08A; padding:4px 12px; border:1.5px solid #CA8A04; border-radius:6px; color:#854D0E; font-size:17px; font-weight:800;">[ HOME ]</span> on physical panel
         </div>
       </div>
 
@@ -808,19 +1094,13 @@
        ============================================================ -->
   <div id="screenScan" class="pc-screen pc-scan-screen">
     <div class="pc-copy-wrapper" style="max-width: 680px; margin: 30px auto 0 auto;">
-      <div style="background:#F0FDF4; border:2.5px solid #22C55E; border-radius:14px; padding:32px 24px; text-align:center; box-shadow:0 6px 20px rgba(34,197,94,0.12);">
-        <div style="font-size:46px; margin-bottom:10px;">&#128224;</div>
-        <div style="font-size:24px; font-weight:900; color:#15803D; margin-bottom:14px; letter-spacing:0.3px;">
-          Scanner Ready!
+      <div style="background:#F0FDF4; border:2px solid #16A34A; border-radius:16px; padding:32px 24px; text-align:center; box-shadow:0 6px 20px rgba(22,163,74,0.08);">
+        <div style="font-size:48px; margin-bottom:12px; line-height:1;">&#128224;</div>
+        <div style="font-size:24px; font-weight:900; color:#15803D; margin-bottom:12px; letter-spacing:0.2px;">
+          Scanner Ready
         </div>
-        <div style="font-size:18px; font-weight:800; color:#0F172A; line-height:1.6; margin-bottom:12px;">
-          Press <span style="background:#FEF08A; padding:4px 14px; border:2px solid #CA8A04; border-radius:6px; color:#854D0E; font-size:20px; font-weight:900;">[ HOME ]</span> or <span style="background:#FEF08A; padding:4px 14px; border:2px solid #CA8A04; border-radius:6px; color:#854D0E; font-size:20px; font-weight:900;">[ CLEAR ]</span> on panel
-        </div>
-        <div style="font-size:13px; color:#15803D; font-weight:700; background:#DCFCE7; padding:8px 16px; border-radius:8px; display:inline-block; margin-bottom:10px;">
-          &#9889; Press physical button next to screen for INSTANT scan window (or wait for auto-switch)
-        </div>
-        <div style="font-size:14px; color:#475569; font-weight:600;">
-          Destination email is ready in the Address Book
+        <div style="font-size:16px; font-weight:700; color:#334155;">
+          Press <span style="background:#FEF08A; padding:4px 12px; border:1.5px solid #CA8A04; border-radius:6px; color:#854D0E; font-size:17px; font-weight:800;">[ HOME ]</span> on physical panel
         </div>
       </div>
 

@@ -1227,18 +1227,22 @@ public class ToshibaEwbService {
         try {
             TopAccessSession session = getOrCreateSession(cleanIp, adminUsername, adminPassword);
 
+            String enableSslVal = useSsl ? "AcceptCertWithNoCA" : "Disable";
+            String sslProtoVal = useSsl ? (smtpPort == 465 ? "OverSSL" : "STARTTLS") : "None";
             String authXml = (smtpUser != null && !smtpUser.isBlank())
-                    ? "<Authentication><desiredType>LOGIN</desiredType><userName>" + escapeXml(smtpUser) + "</userName>" +
+                    ? "<Authentication><desiredType>Login</desiredType><userName>" + escapeXml(smtpUser) + "</userName>" +
                       (smtpPass != null && !smtpPass.isBlank() ? "<password>" + escapeXml(smtpPass) + "</password>" : "") + "</Authentication>"
                     : "<Authentication><desiredType>None</desiredType></Authentication>";
 
             String smtpXml = "<DeviceInformationModel>" +
                     "<Command><Commit><commandNode>Network</commandNode><SetValue>" +
                     "<Network><Protocols><SMTP><Client>" +
+                    "<enabled>1</enabled>" +
+                    "<enableSSL>" + enableSslVal + "</enableSSL>" +
+                    "<sslProtocol>" + sslProtoVal + "</sslProtocol>" +
                     "<server>" + escapeXml(smtpHost) + "</server>" +
-                    "<portNo>" + smtpPort + "</portNo>" +
+                    "<port>" + smtpPort + "</port>" +
                     authXml +
-                    "<SSLEnabled>" + (useSsl ? "Enable" : "Disable") + "</SSLEnabled>" +
                     "</Client></SMTP></Protocols></Network>" +
                     "</SetValue></Commit></Command></DeviceInformationModel>";
 
@@ -1252,29 +1256,9 @@ public class ToshibaEwbService {
                     .build();
 
             HttpResponse<String> smtpResp = session.client().send(smtpReq, HttpResponse.BodyHandlers.ofString());
-
-            if (fromAddr != null && !fromAddr.isBlank()) {
-                String emailXml = "<DeviceInformationModel>" +
-                        "<Command><Set><commandNode>Controller</commandNode><SetValue>" +
-                        "<Controller><Settings><AdminSystemSettings>" +
-                        "<EMail><fromAddr>" + escapeXml(fromAddr) + "</fromAddr></EMail>" +
-                        "</AdminSystemSettings></Settings></Controller>" +
-                        "</SetValue></Set></Command></DeviceInformationModel>";
-
-                HttpRequest emailReq = HttpRequest.newBuilder()
-                        .uri(URI.create("http://" + cleanIp + "/contentwebserver"))
-                        .timeout(TIMEOUT)
-                        .header("Content-Type", "text/xml; charset=UTF-8")
-                        .header("csrfpId", session.sessionCookie() != null ? session.sessionCookie() : "")
-                        .header("Referer", "http://" + cleanIp + "/Administration/Security/Authentication.html")
-                        .POST(HttpRequest.BodyPublishers.ofString(emailXml))
-                        .build();
-
-                session.client().send(emailReq, HttpResponse.BodyHandlers.discarding());
-            }
-
-            boolean ok = smtpResp.body() != null && smtpResp.body().contains("STATUS_OK");
-            log.info("[TOSHIBA CWS] Pushed SMTP ({}:{}) to {} -> ok={}", smtpHost, smtpPort, cleanIp, ok);
+            String respBody = smtpResp.body() != null ? smtpResp.body() : "";
+            boolean ok = (respBody.contains("STATUS_OK") || respBody.contains("Normal")) && !respBody.contains("STATUS_FAILED") && !respBody.contains("STATUS_AL_CWS_UNAUTHORIZED");
+            log.info("[TOSHIBA CWS] Pushed SMTP ({}:{}) to {} -> status={}, ok={}, resp={}", smtpHost, smtpPort, cleanIp, smtpResp.statusCode(), ok, respBody);
             return ok;
         } catch (Exception ex) {
             log.warn("[TOSHIBA CWS] Failed to push SMTP to {}: {}", cleanIp, ex.getMessage());
