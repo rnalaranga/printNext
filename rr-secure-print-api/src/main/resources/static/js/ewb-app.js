@@ -717,28 +717,50 @@
       }
     }
 
-    // 3. Enter or Tab: submit PIN if pinBuffer has characters; otherwise verify card
+    // 3. Enter or Tab: submit card swipe if buffer has card ID, or submit PIN
     if (keyCode === 13 || keyCode === 9 || key === 'Enter' || key === 'Tab') {
       if (cardDebounceTimer) { clearTimeout(cardDebounceTimer); cardDebounceTimer = null; }
 
+      var catcherVal = catcher ? (catcher.value || '').trim() : '';
+      var candidateCard = (cardKeystrokeBuffer || catcherVal || '').replace(/[\r\n]/g, '').trim();
+
+      // Measure stream speed to distinguish RFID card burst vs slow manual typing
+      var streamDuration = (new Date().getTime()) - (window._cardStreamStartTime || 0);
+      var streamCount = window._cardStreamCount || candidateCard.length || 1;
+      var avgKeyInterval = streamCount > 1 ? (streamDuration / streamCount) : 999;
+      var isFastRfidBurst = (avgKeyInterval < 120);
+
+      // If buffer has card-length characters (>= 4 digits):
+      // An RFID card is typically 5-16 digits OR arrived in high-speed burst (<120ms/char) OR contains non-digits
+      if (candidateCard && candidateCard.length >= 4 && (isFastRfidBurst || candidateCard.length > 5 || !/^\d{4,5}$/.test(candidateCard))) {
+        if (e.preventDefault) e.preventDefault();
+        if (e.stopPropagation) e.stopPropagation();
+        cardKeystrokeBuffer = '';
+        if (catcher) catcher.value = '';
+        state.pinBuffer = '';
+        refreshPinDisplay();
+        window._cardStreamCount = 0;
+        window.loginWithCard(candidateCard);
+        return;
+      }
+
+      // Otherwise, manual PIN submission
       if (state.authMode === 'PIN' && state.pinBuffer && state.pinBuffer.length > 0) {
         if (e.preventDefault) e.preventDefault();
         if (e.stopPropagation) e.stopPropagation();
         if (catcher) catcher.value = '';
         cardKeystrokeBuffer = '';
+        window._cardStreamCount = 0;
         submitPin();
         return;
       }
 
-      var catcherVal = catcher ? (catcher.value || '').trim() : '';
-      var cardId = (cardKeystrokeBuffer || catcherVal || '').replace(/[\r\n]/g, '').trim();
-      cardKeystrokeBuffer = '';
-      if (catcher) catcher.value = '';
-
-      if (cardId && cardId.length >= 3) {
+      if (candidateCard && candidateCard.length >= 3) {
         if (e.preventDefault) e.preventDefault();
         if (e.stopPropagation) e.stopPropagation();
-        window.loginWithCard(cardId);
+        cardKeystrokeBuffer = '';
+        if (catcher) catcher.value = '';
+        window.loginWithCard(candidateCard);
         return;
       }
       return;
@@ -788,37 +810,42 @@
     var timeSinceLastKey = now - cardLastKeyTime;
     cardLastKeyTime = now;
 
-    // Check for RFID reader burst: Hardware card readers transmit at < 45ms per character
-    var isRfidBurst = (timeSinceLastKey > 0 && timeSinceLastKey < 45);
-
-    // If user is in PIN mode and enters a digit at normal typing speed (> 45ms):
-    if (state.authMode === 'PIN' && isDigit && !isRfidBurst) {
-      if (e.preventDefault) e.preventDefault();
-      if (catcher) catcher.value = '';
+    // Track stream start and key counter
+    if (timeSinceLastKey > 900) {
       cardKeystrokeBuffer = '';
-      window.handleKeypad(char);
-      updateRawKeyDebug('PIN_DIGIT', { keyCode: keyCode, key: char });
-      return;
+      window._cardStreamStartTime = now;
+      window._cardStreamCount = 0;
     }
-
-    // Otherwise, treat as card reader stream (RFID burst or non-digit character like BADGE-)
-    if (timeSinceLastKey > 1200) {
-      cardKeystrokeBuffer = '';
-    }
+    window._cardStreamCount = (window._cardStreamCount || 0) + 1;
     cardKeystrokeBuffer += char;
     updateRawKeyDebug('CHAR', { keyCode: keyCode, key: char });
+
+    // Also mirror to PIN buffer only if user is manually typing slow single digits on physical keyboard
+    if (state.authMode === 'PIN' && isDigit && timeSinceLastKey > 150) {
+      if (state.pinBuffer.length < 10) {
+        state.pinBuffer += char;
+        refreshPinDisplay();
+      }
+    }
 
     if (cardDebounceTimer) clearTimeout(cardDebounceTimer);
     cardDebounceTimer = setTimeout(function () {
       var catcherVal = catcher ? (catcher.value || '').trim() : '';
       var autoCardId = (cardKeystrokeBuffer || catcherVal || '').replace(/[\r\n]/g, '').trim();
-      // Only auto-trigger card login if length >= 4 AND not a short numeric PIN typed in PIN mode
-      if (autoCardId && autoCardId.length >= 4 && !(/^\d{1,4}$/.test(autoCardId) && state.authMode === 'PIN')) {
+      var duration = (new Date().getTime()) - (window._cardStreamStartTime || 0);
+      var count = window._cardStreamCount || autoCardId.length || 1;
+      var avgInterval = count > 1 ? (duration / count) : 999;
+
+      // Auto-trigger card login if length >= 4 AND (burst speed OR long ID OR non-digit)
+      if (autoCardId && autoCardId.length >= 4 && (avgInterval < 120 || autoCardId.length > 5 || !/^\d{4,5}$/.test(autoCardId))) {
         cardKeystrokeBuffer = '';
         if (catcher) catcher.value = '';
+        state.pinBuffer = '';
+        refreshPinDisplay();
+        window._cardStreamCount = 0;
         window.loginWithCard(autoCardId);
       }
-    }, 350);
+    }, 280);
   }
 
   // Clean single listener binding on document or window
