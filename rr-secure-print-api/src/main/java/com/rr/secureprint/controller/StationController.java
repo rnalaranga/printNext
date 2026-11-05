@@ -142,17 +142,21 @@ public class StationController {
      */
     @PostMapping("/device-functions")
     public ResponseEntity<?> openDeviceFunctions(
-            @RequestBody(required = false) Map<String, String> body,
+            @RequestBody(required = false) Map<String, Object> body,
             HttpServletRequest request) {
-        String printerCode = body != null ? body.get("printerCode") : null;
-        String printerIp = body != null ? body.get("printerIp") : null;
-        String mode = (body != null && body.containsKey("mode")) ? body.get("mode").toUpperCase() : "COPY";
-        boolean switchScreen = body != null && "true".equalsIgnoreCase(body.get("switchScreen"));
+        String printerCode = (body != null && body.get("printerCode") != null) ? body.get("printerCode").toString() : null;
+        if (printerCode == null && body != null && body.get("terminalId") != null) {
+            printerCode = body.get("terminalId").toString();
+        }
+        String printerIp = (body != null && body.get("printerIp") != null) ? body.get("printerIp").toString() : null;
+        String mode = (body != null && body.get("mode") != null) ? body.get("mode").toString().toUpperCase() : "COPY";
+        boolean switchScreen = body == null || !body.containsKey("switchScreen") ||
+                "true".equalsIgnoreCase(String.valueOf(body.get("switchScreen")));
         String clientIp = request.getRemoteAddr();
 
         Optional<UserEntity> resolvedUserOpt = authService.getCurrentUser(request);
-        if (resolvedUserOpt.isEmpty() && body != null && body.containsKey("username") && !body.get("username").isBlank()) {
-            resolvedUserOpt = userRepository.findByUsernameIgnoreCase(body.get("username").trim());
+        if (resolvedUserOpt.isEmpty() && body != null && body.get("username") != null && !body.get("username").toString().isBlank()) {
+            resolvedUserOpt = userRepository.findByUsernameIgnoreCase(body.get("username").toString().trim());
         }
         final Optional<UserEntity> userOpt = resolvedUserOpt;
         final String username = userOpt.map(UserEntity::getUsername).orElse("unknown");
@@ -178,33 +182,50 @@ public class StationController {
 
             // Dynamically switch DefaultScreen to Copy/Scan only if requested (native jump)
             if (switchScreen && !"TOSHIBA_OLD".equalsIgnoreCase(p.getDeviceGeneration())) {
-                screenSuccess[0] = true;
+                try {
+                    String targetScreen = "SCAN".equalsIgnoreCase(mode) ? "Scan" : "Copy";
 
-                // Unlock copy/scan and push user contact to Toshiba address book asynchronously
-                // so the EWB browser receives an instantaneous response (<50ms) without waiting on heavy MFP commits.
-                CompletableFuture.runAsync(() -> {
-                    try {
-                        String targetScreen = "SCAN".equalsIgnoreCase(mode) ? "Scan" : ("HOME".equalsIgnoreCase(mode) ? "Home" : "Copy");
-                        toshibaEwbService.setDefaultScreen(p.getIpAddress(), p.getAdminUsername(), p.getAdminPassword(), targetScreen);
+                    // 1. Ensure hardware copy/scan restriction is unlocked FIRST!
+                    boolean unlockOk = toshibaEwbService.setCopyRestriction(p.getIpAddress(), p.getAdminUsername(), p.getAdminPassword(), false);
+                    if (!unlockOk) {
+                        log.warn("[STATION CONTROLLER] First unlock attempt returned false on {}, retrying immediately...", p.getIpAddress());
+                        unlockOk = toshibaEwbService.setCopyRestriction(p.getIpAddress(), p.getAdminUsername(), p.getAdminPassword(), false);
+                    }
+                    log.info("[STATION CONTROLLER] Synchronous setCopyRestriction(false) on {} result: {}", p.getIpAddress(), unlockOk);
 
-                        boolean unlockOk = toshibaEwbService.setCopyRestriction(p.getIpAddress(), p.getAdminUsername(), p.getAdminPassword(), false);
+                    // 2. Set DefaultScreen to targetScreen SECOND
+                    boolean screenOk = toshibaEwbService.setDefaultScreen(p.getIpAddress(), p.getAdminUsername(), p.getAdminPassword(), targetScreen);
+                    log.info("[STATION CONTROLLER] setDefaultScreen to {} on {} result: {}", targetScreen, p.getIpAddress(), screenOk);
+
+                    if (unlockOk || screenOk) {
                         unlockedPrinters.add(p.getIpAddress());
-                        log.info("[STATION CONTROLLER] Async setCopyRestriction(false) on {} result: {}", p.getIpAddress(), unlockOk);
+                        screenSuccess[0] = true;
 
-                        // Pre-restore DefaultScreen to "EWB" after 6 seconds so that whenever the user finishes
-                        // and Toshiba's Auto Clear timer (15s) or Sleep mode fires, the panel automatically
-                        // resets and wakes up directly on our nexPrint EWB login screen!
-                        CompletableFuture.delayedExecutor(6, java.util.concurrent.TimeUnit.SECONDS).execute(() -> {
+                        // 3. Pre-restore DefaultScreen to 'EWB' after 2 seconds in the background.
+                        // By second 2, the MFP panel has already loaded the native Copy screen.
+                        // Pre-restoring DefaultScreen to 'EWB' guarantees that when the user presses SLEEP or walks away,
+                        // the device wakes or auto-clears DIRECTLY into nexPrint EWB!
+                        java.util.concurrent.CompletableFuture.delayedExecutor(2, java.util.concurrent.TimeUnit.SECONDS).execute(() -> {
                             try {
                                 toshibaEwbService.setDefaultScreen(p.getIpAddress(), p.getAdminUsername(), p.getAdminPassword(), "EWB");
-                                log.info("[STATION CONTROLLER] DefaultScreen pre-restored to 'EWB' on {} for Auto-Clear / Sleep recovery", p.getIpAddress());
+                                log.info("[STATION CONTROLLER] DefaultScreen successfully pre-restored to 'EWB' on {}", p.getIpAddress());
                             } catch (Exception ex) {
-                                log.debug("Error pre-restoring DefaultScreen to EWB on {}: {}", p.getIpAddress(), ex.getMessage());
+                                log.warn("Could not pre-restore DefaultScreen to EWB on {}: {}", p.getIpAddress(), ex.getMessage());
                             }
                         });
+                    } else {
+                        screenSuccess[0] = false;
+                        log.error("[STATION CONTROLLER] Failed to unlock copy restriction on {}", p.getIpAddress());
+                    }
+                } catch (Exception ex) {
+                    screenSuccess[0] = false;
+                    log.warn("[STATION CONTROLLER] Synchronous unlock error on {}: {}", p.getIpAddress(), ex.getMessage());
+                }
 
-                        // If user is accessing Scanner, ensure FROM address is registered and ONLY their email in Address Book
-                        if ("SCAN".equalsIgnoreCase(mode)) {
+                // Asynchronously synchronize address book for scan
+                if ("SCAN".equalsIgnoreCase(mode)) {
+                    CompletableFuture.runAsync(() -> {
+                        try {
                             String email = userOpt.map(UserEntity::getEmail).filter(e -> !e.isBlank()).orElse(null);
                             if (email == null) {
                                 email = username + "@rrconstruction.lk";
@@ -216,17 +237,12 @@ public class StationController {
                             String dispName = userOpt.map(UserEntity::getDisplayName).filter(d -> !d.isBlank()).orElse(username);
                             String dept = userOpt.map(UserEntity::getDepartment).orElse("");
 
-                            // 0. Ensure DNS & LDAP SearchServer are fully optimized (cached, runs only once)
-                            toshibaEwbService.optimizeToshibaScanPerformance(p.getIpAddress(), p.getAdminUsername(), p.getAdminPassword());
-
-                            // 1. Always ensure Toshiba device has a registered FROM address to eliminate "FROM address is not registered"
                             boolean fromOk = toshibaEwbService.setScanFromAddress(
                                     p.getIpAddress(), p.getAdminUsername(), p.getAdminPassword(),
                                     email, dispName
                             );
                             log.info("[STATION CONTROLLER] Pushed Scan FROM address {} ({}) to {}: {}", dispName, email, p.getIpAddress(), fromOk);
 
-                            // 2. Ensure sole contact in Address Book (Destination)
                             String lastUser = currentAddressBookUserByPrinter.get(p.getIpAddress());
                             if (!username.equalsIgnoreCase(lastUser)) {
                                 currentAddressBookUserByPrinter.put(p.getIpAddress(), username);
@@ -237,23 +253,11 @@ public class StationController {
                                 log.info("[STATION CONTROLLER] Synchronized sole user {} ({}) to Toshiba AddressBook on {}: {}",
                                         dispName, email, p.getIpAddress(), addrOk);
                             }
+                        } catch (Exception ex) {
+                            log.debug("Async contact push error on {}: {}", p.getIpAddress(), ex.getMessage());
                         }
-                    } catch (Exception ex) {
-                        log.debug("Async hardware unlock/contact push error on {}: {}", p.getIpAddress(), ex.getMessage());
-                    }
-                });
-
-                // Revert DefaultScreen back to EWB after 90 seconds (1.5 mins walk-up window).
-                // Allows ample time for the user to place papers and scan multiple pages.
-                // When finished and idle, the machine will auto-return to our login screen.
-                CompletableFuture.delayedExecutor(90, TimeUnit.SECONDS).execute(() -> {
-                    try {
-                        toshibaEwbService.setDefaultScreen(p.getIpAddress(), p.getAdminUsername(), p.getAdminPassword(), "EWB");
-                        log.info("[STATION CONTROLLER] Auto-restored DefaultScreen to 'EWB' on {} (Panel will auto-return to login on idle/job complete)", p.getIpAddress());
-                    } catch (Exception ex) {
-                        log.debug("Could not auto-revert default screen on {}: {}", p.getIpAddress(), ex.getMessage());
-                    }
-                });
+                    });
+                }
             }
             auditService.logEvent("SWITCH_TO_DEVICE_FUNCTIONS",
                     userOpt.map(UserEntity::getUserSid).orElse("SYSTEM"),
@@ -261,9 +265,14 @@ public class StationController {
                     "User switched to Native Toshiba Device Functions (" + mode + ", switchScreen=" + switchScreen + ")", "SUCCESS");
         });
 
-        String msg = (mode.equalsIgnoreCase("SCAN") ? "Document scanner functions unlocked for " : "Walk-up photocopy functions unlocked for ") + username + ".";
+        String msg;
+        if (screenSuccess[0]) {
+            msg = (mode.equalsIgnoreCase("SCAN") ? "Document scanner functions unlocked for " : "Walk-up photocopy functions unlocked for ") + username + ".";
+        } else {
+            msg = "Could not unlock " + mode.toLowerCase() + " functions on MFP. Please try again.";
+        }
         return ResponseEntity.ok(Map.of(
-                "success", true,
+                "success", screenSuccess[0],
                 "mode", mode,
                 "screenSwitched", screenSuccess[0],
                 "message", msg
@@ -278,9 +287,12 @@ public class StationController {
      */
     @PostMapping("/copy-screen-opened")
     public ResponseEntity<?> copyScreenOpened(
-            @RequestBody(required = false) Map<String, String> body,
+            @RequestBody(required = false) Map<String, Object> body,
             HttpServletRequest request) {
-        String printerCode = body != null ? body.get("printerCode") : null;
+        String printerCode = (body != null && body.get("printerCode") != null) ? body.get("printerCode").toString() : null;
+        if (printerCode == null && body != null && body.get("terminalId") != null) {
+            printerCode = body.get("terminalId").toString();
+        }
         String clientIp = request.getRemoteAddr();
 
         Optional<PrinterEntity> printerOpt = Optional.empty();
@@ -298,14 +310,7 @@ public class StationController {
         }
 
         printerOpt.ifPresent(p -> {
-            if (!"TOSHIBA_OLD".equalsIgnoreCase(p.getDeviceGeneration())) {
-                try {
-                    toshibaEwbService.setDefaultScreen(p.getIpAddress(), p.getAdminUsername(), p.getAdminPassword(), "EWB");
-                    log.info("[STATION CONTROLLER] Copy screen active on {} -> DefaultScreen pre-restored to 'EWB' for sleep security", p.getIpAddress());
-                } catch (Exception ex) {
-                    log.debug("Error pre-restoring DefaultScreen to EWB on {}: {}", p.getIpAddress(), ex.getMessage());
-                }
-            }
+            log.info("[STATION CONTROLLER] Native copy/scan screen active on {}", p.getIpAddress());
         });
 
         return ResponseEntity.ok(Map.of("success", true));
@@ -439,12 +444,15 @@ public class StationController {
      */
     @PostMapping("/auto-lock")
     public ResponseEntity<?> autoLockDevice(
-            @RequestBody(required = false) Map<String, String> body,
+            @RequestBody(required = false) Map<String, Object> body,
             HttpServletRequest request) {
-        String printerCode = body != null ? body.get("printerCode") : null;
-        String printerIp = body != null ? body.get("printerIp") : null;
+        String printerCode = (body != null && body.get("printerCode") != null) ? body.get("printerCode").toString() : null;
+        if (printerCode == null && body != null && body.get("terminalId") != null) {
+            printerCode = body.get("terminalId").toString();
+        }
+        String printerIp = (body != null && body.get("printerIp") != null) ? body.get("printerIp").toString() : null;
         String clientIp = request.getRemoteAddr();
-        String reason = body != null ? body.getOrDefault("reason", "SLEEP_MODE") : "SLEEP_MODE";
+        String reason = (body != null && body.get("reason") != null) ? body.get("reason").toString() : "SLEEP_MODE";
 
         List<PrinterEntity> toLock = new ArrayList<>();
 
@@ -476,10 +484,6 @@ public class StationController {
             unlockedPrinters.remove(p.getIpAddress());
             currentAddressBookUserByPrinter.remove(p.getIpAddress());
             copyTrackingService.recordTerminalLogout(p.getIpAddress());
-            if (!"TOSHIBA_OLD".equalsIgnoreCase(p.getDeviceGeneration())) {
-                toshibaEwbService.setCopyRestriction(p.getIpAddress(), p.getAdminUsername(), p.getAdminPassword(), true);
-                toshibaEwbService.setDefaultScreen(p.getIpAddress(), p.getAdminUsername(), p.getAdminPassword(), "EWB");
-            }
             auditService.logEvent("DEVICE_AUTO_LOCKED", "SYSTEM", "hardware", null,
                     p.getPrinterCode(), p.getIpAddress(),
                     "Physical device copy restriction locked due to " + reason, "SUCCESS");
@@ -521,9 +525,15 @@ public class StationController {
                 }
             }
         }
-        printerOpt.ifPresent(p -> copyTrackingService.updateSessionHeartbeat(p.getIpAddress()));
+        if (printerOpt.isPresent()) {
+            PrinterEntity p = printerOpt.get();
+            copyTrackingService.updateSessionHeartbeat(p.getIpAddress());
+            String activeUser = copyTrackingService.getActiveTerminalUser(p.getIpAddress());
+            boolean hasActiveSession = (activeUser != null);
+            return ResponseEntity.ok(Map.of("status", "alive", "authenticated", hasActiveSession, "printer", p.getPrinterCode()));
+        }
 
-        return ResponseEntity.ok(Map.of("status", "alive"));
+        return ResponseEntity.ok(Map.of("status", "alive", "authenticated", false));
     }
 
     /**

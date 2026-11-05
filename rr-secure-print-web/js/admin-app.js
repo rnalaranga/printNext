@@ -548,7 +548,20 @@
     document.getElementById('printerModalTitle').textContent = 'Register New Printer';
     document.getElementById('printerFormId').value = '';
     document.getElementById('printerName').value = '';
-    document.getElementById('printerCode').value = '';
+
+    // Auto-calculate next unique printer code (e.g. PCT0001, PCT0002, PCT0003 -> PCT0004)
+    var nextNum = 1;
+    if (state.printers && state.printers.length) {
+      for (var i = 0; i < state.printers.length; i++) {
+        var m = (state.printers[i].printerCode || '').match(/^PCT(\d+)$/i);
+        if (m) {
+          var val = parseInt(m[1], 10);
+          if (val >= nextNum) nextNum = val + 1;
+        }
+      }
+    }
+    var padded = ('0000' + nextNum).slice(-4);
+    document.getElementById('printerCode').value = 'PCT' + padded;
     document.getElementById('printerCode').disabled = false;
     document.getElementById('printerIp').value = '';
     document.getElementById('printerPort').value = '9100';
@@ -571,7 +584,11 @@
     var logBox = document.getElementById('modalEwbLog');
     if (logBox) { logBox.style.display = 'none'; logBox.textContent = ''; }
 
-    document.getElementById('printerSubmitBtn').textContent = 'Register Printer';
+    var submitBtn = document.getElementById('printerSubmitBtn');
+    if (submitBtn) {
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'Register Printer';
+    }
     document.getElementById('printerModal').style.display = 'flex';
   };
 
@@ -1045,8 +1062,17 @@
 
   window.handleSavePrinter = function (e) {
     e.preventDefault();
+    var btn = document.getElementById('printerSubmitBtn');
+    if (btn && btn.disabled) return; // Prevent concurrent double-clicks!
+
     var id = document.getElementById('printerFormId').value;
     var isEdit = !!id;
+    var origBtnText = btn ? btn.textContent : (isEdit ? 'Update Printer' : 'Register Printer');
+
+    if (btn) {
+      btn.disabled = true;
+      btn.textContent = isEdit ? 'Updating Printer...' : 'Registering & Configuring MFP...';
+    }
 
     var payload = {
       printerCode: document.getElementById('printerCode').value.trim(),
@@ -1080,6 +1106,10 @@
         return res.json();
       })
       .then(function (saved) {
+        if (btn) {
+          btn.disabled = false;
+          btn.textContent = origBtnText;
+        }
         closePrinterModal();
         var msg = isEdit ? 'Printer updated successfully.' : 'New printer registered successfully.';
         if (saved.ewbConfigured) {
@@ -1090,6 +1120,10 @@
         loadStats();
       })
       .catch(function (err) {
+        if (btn) {
+          btn.disabled = false;
+          btn.textContent = origBtnText;
+        }
         showToast('Error saving printer: ' + err.message, 'error');
       });
   };

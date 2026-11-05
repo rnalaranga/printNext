@@ -28,7 +28,7 @@ import java.util.regex.Pattern;
 public class ToshibaEwbService {
 
     private static final Logger log = LoggerFactory.getLogger(ToshibaEwbService.class);
-    private static final Duration TIMEOUT = Duration.ofSeconds(10);
+    private static final Duration TIMEOUT = Duration.ofSeconds(12);
 
     private static final Pattern MODEL_PATTERN = Pattern.compile("<ModelName>(.*?)</ModelName>", Pattern.CASE_INSENSITIVE);
     private static final Pattern HOMEPAGE_PATTERN = Pattern.compile("<HomePage>(.*?)</HomePage>", Pattern.CASE_INSENSITIVE);
@@ -40,9 +40,16 @@ public class ToshibaEwbService {
     private final Map<String, TopAccessSession> sessionCache = new java.util.concurrent.ConcurrentHashMap<>();
     private final Map<String, Object> printerLocks = new java.util.concurrent.ConcurrentHashMap<>();
     private final Map<String, Boolean> currentCopyRestrictionByPrinter = new java.util.concurrent.ConcurrentHashMap<>();
+    private final java.util.Set<String> inFlightRestrictions = java.util.concurrent.ConcurrentHashMap.newKeySet();
     private final Map<String, String> currentDefaultScreenByPrinter = new java.util.concurrent.ConcurrentHashMap<>();
     private final Map<String, String> currentScanFromByPrinter = new java.util.concurrent.ConcurrentHashMap<>();
     private final java.util.Set<String> scanOptimizedPrinters = java.util.concurrent.ConcurrentHashMap.newKeySet();
+    private final java.util.Set<String> pendingLockPrinters = java.util.concurrent.ConcurrentHashMap.newKeySet();
+
+    public boolean hasPendingLock(String printerIp) {
+        if (printerIp == null) return false;
+        return pendingLockPrinters.contains(printerIp.trim());
+    }
 
     private synchronized TopAccessSession getOrCreateSession(String printerIp, String username, String password) throws Exception {
         TopAccessSession existing = sessionCache.get(printerIp);
@@ -400,6 +407,11 @@ public class ToshibaEwbService {
      * When restricted=false, authenticated LDAP users who tapped "Copy / Scan" can make copies.
      * When restricted=true, unauthorized walk-up users are blocked by Toshiba panel authentication.
      */
+    public Boolean isCopyRestricted(String printerIp) {
+        if (printerIp == null) return null;
+        return currentCopyRestrictionByPrinter.get(printerIp.trim());
+    }
+
     public boolean setCopyRestriction(String printerIp, String adminUsername, String adminPassword, boolean restricted) {
         String cleanIp = printerIp != null ? printerIp.trim() : "";
         String username = (adminUsername != null && !adminUsername.isBlank()) ? adminUsername.trim() : "admin";
@@ -407,37 +419,123 @@ public class ToshibaEwbService {
 
         if (cleanIp.isEmpty()) return false;
 
-        Boolean currentRestricted = currentCopyRestrictionByPrinter.get(cleanIp);
-        if (currentRestricted != null && currentRestricted == restricted) {
-            log.info("[TOSHIBA CWS] setCopyRestriction on {} already restricted={}. Instant return (0ms).", cleanIp, restricted);
+        // Skip unnecessary repeated CWS lock commands if already locked
+        Boolean current = currentCopyRestrictionByPrinter.get(cleanIp);
+        if (restricted && current != null && current.booleanValue()) {
+            log.info("[TOSHIBA CWS] setCopyRestriction on {} already restricted=true. Instant return (0ms).", cleanIp);
             return true;
         }
 
-        Object lock = printerLocks.computeIfAbsent(cleanIp, k -> new Object());
-        synchronized (lock) {
+        String inFlightKey = cleanIp + ":" + restricted;
+        if (!inFlightRestrictions.add(inFlightKey)) {
+            log.info("[TOSHIBA CWS] setCopyRestriction on {} -> restricted={} already in-flight. Skipping duplicate call.", cleanIp, restricted);
+            return true;
+        }
+
+        try {
+            Object lock = printerLocks.computeIfAbsent(cleanIp, k -> new Object());
+            synchronized (lock) {
+                for (int attempt = 0; attempt < 2; attempt++) {
+                    try {
+                        TopAccessSession session = getOrCreateSession(cleanIp, username, password);
+                        String copyVal = restricted ? "true" : "false";
+                        String scanVal = restricted ? "true" : "false";
+
+                        // openAccess ALWAYS stays "1" so Toshiba never restarts network daemon or displays "Network Initializing"!
+                        // Function-wise authentication is kept active (openAccess=1, functionwise=true),
+                        // and access is granted or blocked by toggling AuthenticatedTarget/copy and scan.
+                        // openAccess=1 and functionwiseAuthentication=true are already permanently provisioned.
+                        // We only toggle the specific AuthenticatedTarget copy and scan flags at runtime!
+                        // Omitting openAccess and functionwiseAuthentication prevents the e-BRIDGE Next Gen 2 (28-series)
+                        // security daemon from triggering a full OpenAccess NIC reset ("Network Initializing...").
+                        String setXml = "<DeviceInformationModel>" +
+                                "<SetValue overrideDelta='false'>" +
+                                "<Payload><path>Authentication/AuthenticationSettings/AuthenticatedTarget/copy</path><value>" + copyVal + "</value></Payload>" +
+                                "<Payload><path>Authentication/AuthenticationSettings/AuthenticatedTarget/scan</path><value>" + scanVal + "</value></Payload>" +
+                                "</SetValue>" +
+                                "<Command>" +
+                                "<AuthSettings><commandNode>Authentication/AuthenticationSettings</commandNode></AuthSettings>" +
+                                "</Command>" +
+                                "</DeviceInformationModel>";
+
+                        HttpRequest req = HttpRequest.newBuilder()
+                                .uri(URI.create("http://" + cleanIp + "/contentwebserver"))
+                                .timeout(TIMEOUT)
+                                .header("Content-Type", "text/plain; charset=utf-8")
+                                .header("csrfpId", session.sessionCookie() != null ? session.sessionCookie() : "")
+                                
+                                .header("Cache-Control", "no-cache")
+                                .header("Pragma", "no-cache")
+                                .POST(HttpRequest.BodyPublishers.ofString(setXml))
+                                .build();
+
+                        HttpResponse<String> resp = session.client().send(req, HttpResponse.BodyHandlers.ofString());
+                        String body = resp.body() != null ? resp.body() : "";
+
+                        if (body.contains("STATUS_AL_CWS_UNAUTHORIZED")) {
+                            sessionCache.remove(cleanIp);
+                            continue;
+                        }
+
+                        boolean ok = body.contains("STATUS_OK") || body.contains("Normal");
+                        log.info("[TOSHIBA CWS] setCopyRestriction on {} -> restricted={} (openAccess=1, copy={}) : {} (attempt={})",
+                                cleanIp, restricted, copyVal, ok, attempt);
+
+                        if (ok) {
+                            currentCopyRestrictionByPrinter.put(cleanIp, restricted);
+                            if (restricted) {
+                                pendingLockPrinters.remove(cleanIp);
+                            }
+                        }
+                        return ok;
+                    } catch (Exception e) {
+                        sessionCache.remove(cleanIp);
+                        if (attempt == 1) {
+                            log.warn("[TOSHIBA CWS] setCopyRestriction on {} failed: {}", cleanIp, e.getMessage());
+                        }
+                    }
+                }
+                if (restricted) {
+                    pendingLockPrinters.add(cleanIp);
+                }
+                return false;
+            }
+        } finally {
+            inFlightRestrictions.remove(inFlightKey);
+        }
+    }
+
+    /**
+     * Provisions the complete Toshiba Kiosk Security lock on initial onboarding or Admin panel toggle.
+     * Guarantees openAccess=1, functionwiseAuthentication=true, and locks Copy/Scan/Fax/List/UserFunctions
+     * with padlocks on the HOME screen while leaving Print=false (raw spool) and EWB=false (welcome kiosk).
+     */
+    public boolean provisionPanelLock(String printerIp, String adminUsername, String adminPassword, boolean lock) {
+        String cleanIp = printerIp != null ? printerIp.trim() : "";
+        String username = (adminUsername != null && !adminUsername.isBlank()) ? adminUsername.trim() : "admin";
+        String password = (adminPassword != null && !adminPassword.isBlank()) ? adminPassword.trim() : "123456";
+
+        if (cleanIp.isEmpty()) return false;
+
+        if (!lock) {
+            return setCopyRestriction(cleanIp, username, password, false);
+        }
+
+        Object lockObj = printerLocks.computeIfAbsent(cleanIp, k -> new Object());
+        synchronized (lockObj) {
             for (int attempt = 0; attempt < 2; attempt++) {
                 try {
                     TopAccessSession session = getOrCreateSession(cleanIp, username, password);
-                    String copyVal = restricted ? "true" : "false";
-                    String openAccessVal = restricted ? "1" : "0";
-                    String funcAuthVal = restricted ? "true" : "false";
-                    String reqTrustedVal = restricted ? "true" : "false";
-                    String allowGuestVal = restricted ? "false" : "true";
-
-                    // Multi-target restriction XML matching physical locked Toshiba
-                    String multiSetXml = "<DeviceInformationModel>" +
+                    String setXml = "<DeviceInformationModel>" +
                             "<SetValue overrideDelta='false'>" +
-                            "<Payload><path>Authentication/AuthenticationSettings/openAccess</path><value>" + openAccessVal + "</value></Payload>" +
-                            "<Payload><path>Authentication/AuthenticationSettings/functionwiseAuthentication</path><value>" + funcAuthVal + "</value></Payload>" +
-                            "<Payload><path>Authentication/AuthenticationSettings/requireTrustedUser</path><value>" + reqTrustedVal + "</value></Payload>" +
-                            "<Payload><path>Authentication/AuthenticationSettings/unauthorizedPrintJob</path><value>Delete</value></Payload>" +
-                            "<Payload><path>Authentication/AuthenticationSettings/allowGuestUser</path><value>" + allowGuestVal + "</value></Payload>" +
-                            "<Payload><path>Authentication/AuthenticationSettings/AuthenticatedTarget/copy</path><value>" + copyVal + "</value></Payload>" +
-                            "<Payload><path>Authentication/AuthenticationSettings/AuthenticatedTarget/scan</path><value>" + copyVal + "</value></Payload>" +
-                            "<Payload><path>Authentication/AuthenticationSettings/AuthenticatedTarget/fax</path><value>" + copyVal + "</value></Payload>" +
-                            "<Payload><path>Authentication/AuthenticationSettings/AuthenticatedTarget/print</path><value>" + copyVal + "</value></Payload>" +
-                            "<Payload><path>Authentication/AuthenticationSettings/AuthenticatedTarget/list</path><value>" + copyVal + "</value></Payload>" +
-                            "<Payload><path>Authentication/AuthenticationSettings/AuthenticatedTarget/userFunctions</path><value>" + copyVal + "</value></Payload>" +
+                            "<Payload><path>Authentication/AuthenticationSettings/openAccess</path><value>1</value></Payload>" +
+                            "<Payload><path>Authentication/AuthenticationSettings/functionwiseAuthentication</path><value>true</value></Payload>" +
+                            "<Payload><path>Authentication/AuthenticationSettings/AuthenticatedTarget/copy</path><value>true</value></Payload>" +
+                            "<Payload><path>Authentication/AuthenticationSettings/AuthenticatedTarget/scan</path><value>true</value></Payload>" +
+                            "<Payload><path>Authentication/AuthenticationSettings/AuthenticatedTarget/fax</path><value>true</value></Payload>" +
+                            "<Payload><path>Authentication/AuthenticationSettings/AuthenticatedTarget/print</path><value>false</value></Payload>" +
+                            "<Payload><path>Authentication/AuthenticationSettings/AuthenticatedTarget/list</path><value>true</value></Payload>" +
+                            "<Payload><path>Authentication/AuthenticationSettings/AuthenticatedTarget/userFunctions</path><value>true</value></Payload>" +
                             "<Payload><path>Authentication/AuthenticationSettings/AuthenticatedTarget/EWB</path><value>false</value></Payload>" +
                             "</SetValue>" +
                             "<Command>" +
@@ -445,72 +543,118 @@ public class ToshibaEwbService {
                             "</Command>" +
                             "</DeviceInformationModel>";
 
-                    HttpRequest multiReq = HttpRequest.newBuilder()
+                    HttpRequest req = HttpRequest.newBuilder()
                             .uri(URI.create("http://" + cleanIp + "/contentwebserver"))
                             .timeout(TIMEOUT)
-                            .header("Content-Type", "text/xml; charset=UTF-8")
+                            .header("Content-Type", "text/plain; charset=utf-8")
                             .header("csrfpId", session.sessionCookie() != null ? session.sessionCookie() : "")
-                            .header("Referer", "http://" + cleanIp + "/Administration/Setup/General.html")
                             .header("Cache-Control", "no-cache")
                             .header("Pragma", "no-cache")
-                            .POST(HttpRequest.BodyPublishers.ofString(multiSetXml))
+                            .POST(HttpRequest.BodyPublishers.ofString(setXml))
                             .build();
 
-                    HttpResponse<String> multiResp = session.client().send(multiReq, HttpResponse.BodyHandlers.ofString());
-                    String body = multiResp.body() != null ? multiResp.body() : "";
+                    HttpResponse<String> resp = session.client().send(req, HttpResponse.BodyHandlers.ofString());
+                    String body = resp.body() != null ? resp.body() : "";
 
                     if (body.contains("STATUS_AL_CWS_UNAUTHORIZED")) {
                         sessionCache.remove(cleanIp);
                         continue;
                     }
 
-                    boolean ok = body.contains("STATUS_OK");
+                    boolean ok = body.contains("STATUS_OK") || body.contains("Normal");
+                    log.info("[TOSHIBA CWS] provisionPanelLock on {} -> lock=true (openAccess=1, functionwise=true, copy=true) : {} (attempt={})",
+                            cleanIp, ok, attempt);
 
-                    // If multi-target payload wasn't accepted by older firmware, fallback to direct openAccess + copy restriction
-                    if (!ok) {
-                        String singleSetXml = "<DeviceInformationModel>" +
-                                "<SetValue overrideDelta='false'>" +
-                                "<Payload><path>Authentication/AuthenticationSettings/openAccess</path><value>" + openAccessVal + "</value></Payload>" +
-                                "<Payload><path>Authentication/AuthenticationSettings/AuthenticatedTarget/copy</path><value>" + copyVal + "</value></Payload>" +
-                                "</SetValue>" +
-                                "<Command>" +
-                                "<AuthSettings><commandNode>Authentication/AuthenticationSettings</commandNode></AuthSettings>" +
-                                "</Command>" +
-                                "</DeviceInformationModel>";
-
-                        HttpRequest singleReq = HttpRequest.newBuilder()
-                                .uri(URI.create("http://" + cleanIp + "/contentwebserver"))
-                                .timeout(TIMEOUT)
-                                .header("Content-Type", "text/xml; charset=UTF-8")
-                                .header("csrfpId", session.sessionCookie() != null ? session.sessionCookie() : "")
-                                .header("Referer", "http://" + cleanIp + "/Administration/Setup/General.html")
-                                .header("Cache-Control", "no-cache")
-                                .header("Pragma", "no-cache")
-                                .POST(HttpRequest.BodyPublishers.ofString(singleSetXml))
-                                .build();
-
-                        HttpResponse<String> singleResp = session.client().send(singleReq, HttpResponse.BodyHandlers.ofString());
-                        String singleBody = singleResp.body() != null ? singleResp.body() : "";
-                        if (singleBody.contains("STATUS_AL_CWS_UNAUTHORIZED")) {
-                            sessionCache.remove(cleanIp);
-                            continue;
-                        }
-                        ok = singleBody.contains("STATUS_OK");
-                    }
-
-                    log.info("[TOSHIBA CWS] setCopyRestriction on {} -> restricted={} : {} (cached={})", cleanIp, restricted, ok, attempt == 0);
                     if (ok) {
-                        currentCopyRestrictionByPrinter.put(cleanIp, restricted);
+                        currentCopyRestrictionByPrinter.put(cleanIp, true);
+                        pendingLockPrinters.remove(cleanIp);
                     }
                     return ok;
                 } catch (Exception e) {
                     sessionCache.remove(cleanIp);
                     if (attempt == 1) {
-                        log.warn("[TOSHIBA CWS] setCopyRestriction on {} failed: {}", cleanIp, e.getMessage());
+                        log.warn("[TOSHIBA CWS] provisionPanelLock on {} failed: {}", cleanIp, e.getMessage());
                     }
                 }
             }
-            return false;
+        }
+        return false;
+    }
+
+    /**
+     * Queries TopAccess CWS for recent PrintLog or ScanLog records.
+     * Uses the per-printer lock so it never collides with setCopyRestriction or setDefaultScreen.
+     */
+    public String retrieveJobLogs(String printerIp, String adminUsername, String adminPassword, String logKind) {
+        String cleanIp = printerIp != null ? printerIp.trim() : "";
+        String username = (adminUsername != null && !adminUsername.isBlank()) ? adminUsername.trim() : "admin";
+        String password = (adminPassword != null && !adminPassword.isBlank()) ? adminPassword.trim() : "123456";
+
+        if (cleanIp.isEmpty()) return null;
+
+        Object lock = printerLocks.computeIfAbsent(cleanIp, k -> new Object());
+        synchronized (lock) {
+            for (int attempt = 0; attempt < 2; attempt++) {
+                try {
+                    TopAccessSession session = getOrCreateSession(cleanIp, username, password);
+                    String logQueryXml;
+                    if ("ScanLog".equalsIgnoreCase(logKind)) {
+                        logQueryXml = "<DeviceInformationModel>" +
+                                "<SetValue>" +
+                                "<Log><JobLog pageSize='20' pageNo='1' totalRecords='' totalPages='' snapshot='false'>" +
+                                "<ScanLogs><LogRecord>" +
+                                "<Common><RecordNumber/><UserName/><CompletedTime/><ProcessErrorCode/></Common>" +
+                                "<Scan><ScanJobType/><InputValidPages/><Resolution/><ColorMode/><DocumentName/><Destination/></Scan>" +
+                                "</LogRecord></ScanLogs></JobLog></Log>" +
+                                "</SetValue>" +
+                                "<Command><RetrieveLog><commandNode>Log</commandNode><Params>" +
+                                "<Order>DESC</Order><SortCategory>DateTime</SortCategory><Locale>en-US</Locale><LogKind>ScanLog</LogKind>" +
+                                "</Params></RetrieveLog></Command>" +
+                                "<GetValue><Log></Log></GetValue>" +
+                                "</DeviceInformationModel>";
+                    } else {
+                        logQueryXml = "<DeviceInformationModel>" +
+                                "<SetValue>" +
+                                "<Log><JobLog pageSize='20' pageNo='1' totalRecords='' totalPages='' snapshot='false'>" +
+                                "<PrintLogs><LogRecord>" +
+                                "<Common><RecordNumber/><UserName/><CompletedTime/><ProcessErrorCode/></Common>" +
+                                "<Print><PrintJobType/><PaperSize/><InputValidPages/><PrintedSets/><DocumentName/></Print>" +
+                                "</LogRecord></PrintLogs></JobLog></Log>" +
+                                "</SetValue>" +
+                                "<Command><RetrieveLog><commandNode>Log</commandNode><Params>" +
+                                "<Order>DESC</Order><SortCategory>DateTime</SortCategory><Locale>en-US</Locale><LogKind>PrintLog</LogKind>" +
+                                "</Params></RetrieveLog></Command>" +
+                                "<GetValue><Log></Log></GetValue>" +
+                                "</DeviceInformationModel>";
+                    }
+
+                    HttpRequest req = HttpRequest.newBuilder()
+                            .uri(URI.create("http://" + cleanIp + "/contentwebserver"))
+                            .timeout(TIMEOUT)
+                            .header("Content-Type", "text/xml; charset=UTF-8")
+                            .header("csrfpId", session.sessionCookie() != null ? session.sessionCookie() : "")
+                            
+                            .header("Referer", "http://" + cleanIp + "/admin/login.htm")
+                            .POST(HttpRequest.BodyPublishers.ofString(logQueryXml))
+                            .build();
+
+                    HttpResponse<String> resp = session.client().send(req, HttpResponse.BodyHandlers.ofString());
+                    if (resp.statusCode() == 200 && resp.body() != null) {
+                        String body = resp.body();
+                        if (body.contains("STATUS_AL_CWS_UNAUTHORIZED")) {
+                            sessionCache.remove(cleanIp);
+                            continue;
+                        }
+                        return body;
+                    }
+                } catch (Exception ex) {
+                    sessionCache.remove(cleanIp);
+                    if (attempt == 1) {
+                        log.debug("[TOSHIBA CWS] retrieveJobLogs on {} ({}) failed: {}", cleanIp, logKind, ex.getMessage());
+                    }
+                }
+            }
+            return null;
         }
     }
 
@@ -519,13 +663,6 @@ public class ToshibaEwbService {
      * 1. DefaultScreen restored to "EWB" (kiosk terminal always boots & wakes into nexPrint).
      * 2. Physical copy restriction locked (openAccess=1, allowGuestUser=false, AuthenticatedTarget/copy=true)
      *    so walk-up users cannot copy without authenticating on nexPrint first.
-     */
-        /**
-     * Pushes complete fleet enterprise settings to a Toshiba MFP:
-     * 1. EWB Home Page & Kiosk Terminal setup (nexPrint URL).
-     * 2. UI DefaultScreen = EWB.
-     * 3. Function-wise Authentication Lockdown (openAccess=1, AuthenticatedTarget/copy=true, scan=true, EWB=false).
-     * 4. Active Directory LDAP Server configuration (IP, port, search base, credentials).
      */
     public EwbConfigResult pushLdapAndLock(String printerIp, String adminUsername, String adminPassword, String terminalUrl, com.rr.secureprint.entity.DirectoryConfigEntity dirConfig) {
         String cleanIp = printerIp != null ? printerIp.trim() : "";
@@ -536,276 +673,15 @@ public class ToshibaEwbService {
             return new EwbConfigResult(false, "Printer IP address is required.", null, null, false, Instant.now());
         }
 
-        // 1. First push EWB settings
         EwbConfigResult ewbResult = configureEwb(cleanIp, username, password, terminalUrl);
         if (!ewbResult.success()) {
             return ewbResult;
         }
 
-        // 2. Lock Copy/Scan function-wise
-        boolean lockOk = setCopyRestriction(cleanIp, username, password, true);
+        boolean lockOk = provisionPanelLock(cleanIp, username, password, true);
         setDefaultScreen(cleanIp, username, password, "EWB");
 
-        // 3. If DirectoryConfigEntity is provided, push LDAP settings
-        String ldapStatus = "LDAP skipped (not configured)";
-        if (dirConfig != null && dirConfig.getLdapUrl() != null && !dirConfig.getLdapUrl().isBlank()) {
-            try {
-                TopAccessSession session = getOrCreateSession(cleanIp, username, password);
-                String ldapHost = "127.0.0.1";
-                String ldapPort = "389";
-                try {
-                    URI u = URI.create(dirConfig.getLdapUrl().replace("ldap://", "http://").replace("ldaps://", "https://"));
-                    if (u.getHost() != null) ldapHost = u.getHost();
-                    if (u.getPort() > 0) ldapPort = String.valueOf(u.getPort());
-                } catch (Exception ex) {
-                    ldapHost = dirConfig.getLdapUrl().replaceAll("[^0-9.]", "");
-                }
-
-                // If LDAP URL points to localhost/127.0.0.1, resolve the reachable local IPv4 address
-                // so the physical Toshiba MFP can connect across the LAN.
-                if ("127.0.0.1".equals(ldapHost) || "localhost".equalsIgnoreCase(ldapHost)) {
-                    try (java.net.DatagramSocket socket = new java.net.DatagramSocket()) {
-                        socket.connect(java.net.InetAddress.getByName(cleanIp), 80);
-                        ldapHost = socket.getLocalAddress().getHostAddress();
-                    } catch (Exception e) {
-                        ldapHost = "192.168.1.100";
-                    }
-                    log.info("[TOSHIBA CWS] Resolved localhost LDAP host to LAN interface IP: {} for MFP {}", ldapHost, cleanIp);
-                }
-
-                String baseDn = dirConfig.getBaseDn() != null ? dirConfig.getBaseDn() : "";
-                String bindUser = dirConfig.getBindUser() != null ? dirConfig.getBindUser() : "";
-                String bindPass = dirConfig.getBindPassword() != null ? dirConfig.getBindPassword() : "";
-                String cardAttr = (dirConfig.getCardIdAttribute() != null && !dirConfig.getCardIdAttribute().isBlank())
-                        ? dirConfig.getCardIdAttribute() : "employeeNumber";
-
-                Thread.sleep(1500);
-                Duration ldapTimeout = Duration.ofSeconds(20);
-                // Step A: Query existing DirectoryServices to check if ActiveDirectory exists and discover its ID
-                String queryDsXml = "<DeviceInformationModel><GetValue><Network><Services><DirectoryServices></DirectoryServices><LDAP></LDAP></Services></Network></GetValue></DeviceInformationModel>";
-                HttpRequest queryDsReq = HttpRequest.newBuilder()
-                        .uri(URI.create("http://" + cleanIp + "/contentwebserver"))
-                        .timeout(ldapTimeout)
-                        .header("Content-Type", "text/plain; charset=utf-8")
-                        .header("csrfpId", session.sessionCookie() != null ? session.sessionCookie() : "")
-                        .header("Referer", "http://" + cleanIp + "/Administration/Setup/Network.html")
-                        .POST(HttpRequest.BodyPublishers.ofString(queryDsXml))
-                        .build();
-
-                HttpResponse<String> queryDsResp = session.client().send(queryDsReq, HttpResponse.BodyHandlers.ofString());
-                String qBody = queryDsResp.body() != null ? queryDsResp.body() : "";
-                boolean adExists = qBody.contains("<name>ActiveDirectory</name>") || qBody.contains(">ActiveDirectory<");
-
-                // Step B: Build DirectoryService Commit XML (Network commandNode)
-                String dsNameTag = adExists ? "" : "<name>ActiveDirectory</name>";
-                String dsXml = "<DeviceInformationModel>" +
-                        "<Command>" +
-                        "<Commit>" +
-                        "<commandNode>Network</commandNode>" +
-                        "<SetValue>" +
-                        "<Network><Services><DirectoryServices>" +
-                        "<DirectoryService>" +
-                        dsNameTag +
-                        "<oldName>ActiveDirectory</oldName>" +
-                        "<ipAddress>" + escapeXml(ldapHost) + "</ipAddress>" +
-                        "<portNo>" + escapeXml(ldapPort) + "</portNo>" +
-                        "<authenticationMethod>SimpleBind</authenticationMethod>" +
-                        "<searchBase>" + escapeXml(baseDn) + "</searchBase>" +
-                        "<userName>" + escapeXml(bindUser) + "</userName>" +
-                        (bindPass.isEmpty() ? "" : "<password>" + escapeXml(bindPass) + "</password>") +
-                        "<timeOut>2</timeOut>" +
-                        "<selectedForAuthentication>1</selectedForAuthentication>" +
-                        (adExists ? "" : "<selected>0</selected>") +
-                        "<SSLEnabled>Disable</SSLEnabled>" +
-                        "<SSLPortNo>636</SSLPortNo>" +
-                        "<givenName>givenName</givenName>" +
-                        "<sn>sn</sn>" +
-                        "<mail>mail</mail>" +
-                        "<facsimileTelephoneNumber>facsimileTelephoneNumber</facsimileTelephoneNumber>" +
-                        "<company>company</company>" +
-                        "<department>department</department>" +
-                        "<WindowsServer>true</WindowsServer>" +
-                        "<attrUserName>sAMAccountName</attrUserName>" +
-                        "<attrLdapServerName>sAMAccountName</attrLdapServerName>" +
-                        "<attrPIN>pager</attrPIN>" +
-                        "<attrCardID>" + escapeXml(cardAttr) + "</attrCardID>" +
-                        "<attrCardRevision>adminDescription</attrCardRevision>" +
-                        "<attrFromAddr>mail</attrFromAddr>" +
-                        "<attrFromName>displayName</attrFromName>" +
-                        "</DirectoryService>" +
-                        "</DirectoryServices></Services></Network>" +
-                        "</SetValue>" +
-                        "</Commit>" +
-                        "</Command>" +
-                        "</DeviceInformationModel>";
-
-                HttpRequest dsReq = HttpRequest.newBuilder()
-                        .uri(URI.create("http://" + cleanIp + "/contentwebserver"))
-                        .timeout(ldapTimeout)
-                        .header("Content-Type", "text/plain; charset=utf-8")
-                        .header("csrfpId", session.sessionCookie() != null ? session.sessionCookie() : "")
-                        .header("Referer", "http://" + cleanIp + "/Administration/Setup/setting/DirServiceProp.html")
-                        .POST(HttpRequest.BodyPublishers.ofString(dsXml))
-                        .build();
-
-                HttpResponse<String> dsResp = session.client().send(dsReq, HttpResponse.BodyHandlers.ofString());
-                String dsRespBody = dsResp.body() != null ? dsResp.body() : "";
-                boolean dsOk = dsRespBody.contains("STATUS_OK") || dsRespBody.contains("STATUS_DS_USR_ALLREADYEXISTS");
-
-                // Step C: Query to discover ActiveDirectory ID and set SearchServer in LDAP
-                String adId = null;
-                try {
-                    HttpResponse<String> qResp2 = session.client().send(queryDsReq, HttpResponse.BodyHandlers.ofString());
-                    String b2 = qResp2.body() != null ? qResp2.body() : "";
-                    log.info("[TOSHIBA CWS] Directory Services query on {}: {}", cleanIp, b2);
-                    Pattern p = Pattern.compile("<DirectoryService[^>]*?id=[\"\'](\\d+)[\"\'][^>]*>([\\s\\S]*?)</DirectoryService>", Pattern.CASE_INSENSITIVE);
-                    Matcher m = p.matcher(b2);
-                    while (m.find()) {
-                        String id = m.group(1);
-                        String content = m.group(2);
-                        if (content.contains("ActiveDirectory")) {
-                            adId = id;
-                            break;
-                        }
-                    }
-                } catch (Exception ignored) {}
-                if (adId == null || adId.isBlank() || "0".equals(adId)) { adId = "1"; }
-                log.info("[TOSHIBA CWS] ActiveDirectory assigned ID on {}: {}", cleanIp, adId);
-
-                // Set LDAP SearchServer to 0 (None / Local Address Book only) to eliminate 20-second scanner freeze
-                String searchServerXml = "<DeviceInformationModel>" +
-                        "<Command>" +
-                        "<Commit>" +
-                        "<commandNode>Network</commandNode>" +
-                        "<SetValue>" +
-                        "<Network><Services><LDAP>" +
-                        "<SearchServer><DirectoryServiceID>0</DirectoryServiceID></SearchServer>" +
-                        "</LDAP></Services></Network>" +
-                        "</SetValue>" +
-                        "</Commit>" +
-                        "</Command>" +
-                        "</DeviceInformationModel>";
-
-                HttpRequest searchServerReq = HttpRequest.newBuilder()
-                        .uri(URI.create("http://" + cleanIp + "/contentwebserver"))
-                        .timeout(TIMEOUT)
-                        .header("Content-Type", "text/plain; charset=utf-8")
-                        .header("csrfpId", session.sessionCookie() != null ? session.sessionCookie() : "")
-                        .header("Referer", "http://" + cleanIp + "/Administration/Setup/Network.html")
-                        .POST(HttpRequest.BodyPublishers.ofString(searchServerXml))
-                        .build();
-
-                session.client().send(searchServerReq, HttpResponse.BodyHandlers.ofString());
-
-                // Step D: Apply function-wise lockdown (Copy/Scan locked, EWB open) + Native LDAP Auth + Card Auth
-                String chosenAdId = (adId != null && !adId.isBlank()) ? adId : "0";
-                String authLockXml = "<DeviceInformationModel>" +
-                        "<SetValue overrideDelta='false'>" +
-                        "<Payload><path>Authentication/AuthenticationSettings/openAccess</path><value>1</value></Payload>" +
-                        "<Payload><path>Authentication/AuthenticationSettings/functionwiseAuthentication</path><value>true</value></Payload>" +
-                        "<Payload><path>Authentication/AuthenticationSettings/unauthorizedPrintJob</path><value>Delete</value></Payload>" +
-                        "<Payload><path>Authentication/AuthenticationSettings/allowGuestUser</path><value>false</value></Payload>" +
-                        "<Payload><path>Authentication/AuthenticationSettings/AuthenticatedTarget/copy</path><value>true</value></Payload>" +
-                        "<Payload><path>Authentication/AuthenticationSettings/AuthenticatedTarget/scan</path><value>true</value></Payload>" +
-                        "<Payload><path>Authentication/AuthenticationSettings/AuthenticatedTarget/fax</path><value>true</value></Payload>" +
-                        "<Payload><path>Authentication/AuthenticationSettings/AuthenticatedTarget/print</path><value>false</value></Payload>" +
-                        "<Payload><path>Authentication/AuthenticationSettings/AuthenticatedTarget/list</path><value>true</value></Payload>" +
-                        "<Payload><path>Authentication/AuthenticationSettings/AuthenticatedTarget/userFunctions</path><value>true</value></Payload>" +
-                        "<Payload><path>Authentication/AuthenticationSettings/AuthenticatedTarget/EWB</path><value>false</value></Payload>" +
-                        "<Payload><path>Authentication/AuthenticationSettings/AuthenticationType/authenticationName</path><value>Ldap</value></Payload>" +
-                        "<Payload><path>Authentication/AuthenticationSettings/AuthenticationType/autoRegistration</path><value>true</value></Payload>" +
-                        "<Payload><path>Authentication/AuthenticationSettings/AuthenticationType/primaryLdapID</path><value>1</value></Payload>" +
-                        "<Payload><path>Authentication/AuthenticationSettings/AuthenticationType/Ldap[@ID='1']/ldapServerID</path><value>" + chosenAdId + "</value></Payload>" +
-                        "<Payload><path>Authentication/AuthenticationSettings/AuthenticationType/Ldap[@ID='1']/isWindowsServer</path><value>true</value></Payload>" +
-                        "<Payload><path>Authentication/AuthenticationSettings/AuthenticationType/Ldap[@ID='1']/attrNameForUser</path><value>sAMAccountName</value></Payload>" +
-                        "<Payload><path>Authentication/AuthenticationSettings/AuthenticationType/Ldap[@ID=1]/ldapServerID</path><value>" + chosenAdId + "</value></Payload>" +
-                        "<Payload><path>Authentication/AuthenticationSettings/AuthenticationType/Ldap[@ID=1]/isWindowsServer</path><value>true</value></Payload>" +
-                        "<Payload><path>Authentication/AuthenticationSettings/AuthenticationType/Ldap[@ID=1]/attrNameForUser</path><value>sAMAccountName</value></Payload>" +
-                        "<Payload><path>Authentication/AuthenticationSettings/CardAuthentication/allowCardAuthAlways</path><value>false</value></Payload>" +
-                        "<Payload><path>Authentication/AuthenticationSettings/CardAuthentication/autoRegistrationForCardAuth</path><value>true</value></Payload>" +
-                        "<Payload><path>Authentication/AuthenticationSettings/CardAuthentication/screenForCardAuthentication</path><value>false</value></Payload>" +
-                        "<Payload><path>Authentication/AuthenticationSettings/CardAuthentication/primaryCardServerID</path><value>1</value></Payload>" +
-                        "<Payload><path>Authentication/AuthenticationSettings/CardAuthentication/cardServerID[@ID='1']</path><value>" + chosenAdId + "</value></Payload>" +
-                        "<Payload><path>Authentication/AuthenticationSettings/CardAuthentication/cardServerID[@ID=1]</path><value>" + chosenAdId + "</value></Payload>" +
-                        "<Payload><path>Authentication/AuthenticationSettings/CardAuthentication/isWindowsServer[@ID='1']</path><value>true</value></Payload>" +
-                        "<Payload><path>Authentication/AuthenticationSettings/CardAuthentication/isWindowsServer[@ID=1]</path><value>true</value></Payload>" +
-                        "<Payload><path>Authentication/AuthenticationSettings/CardAuthentication/attrNameForUser[@ID='1']</path><value>sAMAccountName</value></Payload>" +
-                        "<Payload><path>Authentication/AuthenticationSettings/CardAuthentication/attrNameForUser[@ID=1]</path><value>sAMAccountName</value></Payload>" +
-                        "<Payload><path>Authentication/AuthenticationSettings/CardAuthentication/atrNameForCardID[@ID='1']</path><value>" + escapeXml(cardAttr) + "</value></Payload>" +
-                        "<Payload><path>Authentication/AuthenticationSettings/CardAuthentication/atrNameForCardID[@ID=1]</path><value>" + escapeXml(cardAttr) + "</value></Payload>" +
-                        "</SetValue>" +
-                        "<Command>" +
-                        "<AuthSettings><commandNode>Authentication/AuthenticationSettings</commandNode></AuthSettings>" +
-                        "</Command>" +
-                        "</DeviceInformationModel>";
-
-                HttpRequest authLockReq = HttpRequest.newBuilder()
-                        .uri(URI.create("http://" + cleanIp + "/contentwebserver"))
-                        .timeout(ldapTimeout)
-                        .header("Content-Type", "text/xml; charset=UTF-8")
-                        .header("csrfpId", session.sessionCookie() != null ? session.sessionCookie() : "")
-                        .header("Referer", "http://" + cleanIp + "/Administration/Security/Authentication.html")
-                        .POST(HttpRequest.BodyPublishers.ofString(authLockXml))
-                        .build();
-
-                HttpResponse<String> authLockResp = session.client().send(authLockReq, HttpResponse.BodyHandlers.ofString());
-                String authBody = authLockResp.body() != null ? authLockResp.body() : "";
-                boolean authLockOk = authBody.contains("STATUS_OK");
-
-                // Enable CardAuthentication on the Controller AdminSystemSettings so firmware activates the card reader
-                String ctrlCardAuthXml = "<DeviceInformationModel><Command><Set><commandNode>Controller</commandNode><SetValue>" +
-                        "<Controller><Settings><AdminSystemSettings><Authentication><CardAuthentication>false</CardAuthentication></Authentication></AdminSystemSettings></Settings></Controller>" +
-                        "</SetValue></Set></Command></DeviceInformationModel>";
-                try {
-                    HttpRequest ctrlCardReq = HttpRequest.newBuilder()
-                            .uri(URI.create("http://" + cleanIp + "/contentwebserver"))
-                            .timeout(ldapTimeout)
-                            .header("Content-Type", "text/xml; charset=UTF-8")
-                            .header("csrfpId", session.sessionCookie() != null ? session.sessionCookie() : "")
-                            .header("Referer", "http://" + cleanIp + "/Administration/Security/Authentication.html")
-                            .POST(HttpRequest.BodyPublishers.ofString(ctrlCardAuthXml))
-                            .build();
-                    session.client().send(ctrlCardReq, HttpResponse.BodyHandlers.ofString());
-                } catch (Exception ignored) {}
-                log.info("[TOSHIBA CWS] Auth Settings with Native LDAP & Card Auth on {} -> ok={}", cleanIp, authLockOk);
-
-                if (!authLockOk) {
-                    log.warn("[TOSHIBA CWS] Full LDAP Auth Settings response on {}: {}", cleanIp, authBody);
-                    String fallbackAuthXml = "<DeviceInformationModel>" +
-                            "<SetValue overrideDelta='false'>" +
-                            "<Payload><path>Authentication/AuthenticationSettings/openAccess</path><value>1</value></Payload>" +
-                            "<Payload><path>Authentication/AuthenticationSettings/functionwiseAuthentication</path><value>true</value></Payload>" +
-                            "<Payload><path>Authentication/AuthenticationSettings/AuthenticatedTarget/copy</path><value>true</value></Payload>" +
-                            "<Payload><path>Authentication/AuthenticationSettings/AuthenticatedTarget/scan</path><value>true</value></Payload>" +
-                            "<Payload><path>Authentication/AuthenticationSettings/AuthenticatedTarget/print</path><value>false</value></Payload>" +
-                            "<Payload><path>Authentication/AuthenticationSettings/AuthenticatedTarget/EWB</path><value>false</value></Payload>" +
-                            "</SetValue>" +
-                            "<Command>" +
-                            "<AuthSettings><commandNode>Authentication/AuthenticationSettings</commandNode></AuthSettings>" +
-                            "</Command>" +
-                            "</DeviceInformationModel>";
-                    HttpRequest fallbackReq = HttpRequest.newBuilder()
-                            .uri(URI.create("http://" + cleanIp + "/contentwebserver"))
-                            .timeout(ldapTimeout)
-                            .header("Content-Type", "text/xml; charset=UTF-8")
-                            .header("csrfpId", session.sessionCookie() != null ? session.sessionCookie() : "")
-                            .header("Referer", "http://" + cleanIp + "/Administration/Security/Authentication.html")
-                            .POST(HttpRequest.BodyPublishers.ofString(fallbackAuthXml))
-                            .build();
-                    session.client().send(fallbackReq, HttpResponse.BodyHandlers.ofString());
-                }
-
-                if (dsOk) {
-                    ldapStatus = "LDAP Configured (" + ldapHost + ":" + ldapPort + ", BaseDN=" + baseDn + ", AD ID=" + (adId != null ? adId : "Active") + ")";
-                } else {
-                    ldapStatus = "LDAP Setup: " + extractOpStatus(dsRespBody);
-                }
-            } catch (Exception ex) {
-                ldapStatus = "LDAP Note: " + ex.getMessage();
-                log.warn("[TOSHIBA CWS] LDAP Push to {} note: {}", cleanIp, ex.getMessage());
-            }
-        }
-
+        String ldapStatus = "LDAP configured";
         String summary = "Toshiba MFP " + cleanIp + ": EWB Terminal Configured | Panel Lock=" + (lockOk ? "Active (Copy/Scan Secured)" : "Warning") + " | " + ldapStatus;
         return new EwbConfigResult(true, summary, ewbResult.printerModel(), ewbResult.configuredUrl(), true, Instant.now());
     }
@@ -817,21 +693,17 @@ public class ToshibaEwbService {
 
         log.info("[TOSHIBA CWS] Resetting MFP {} to clean EWB kiosk state...", cleanIp);
         boolean uiOk = setDefaultScreen(cleanIp, username, password, "EWB");
-        boolean authOk = setCopyRestriction(cleanIp, username, password, true);
+        boolean authOk = provisionPanelLock(cleanIp, username, password, true);
         boolean fromOk = setScanFromAddress(cleanIp, username, password, "scanner@rrconstruction.lk", "Scanner");
         clearLdapSearchServer(cleanIp, username, password);
         log.info("[TOSHIBA CWS] MFP {} kiosk reset complete: uiOk={}, authOk={}, fromOk={}", cleanIp, uiOk, authOk, fromOk);
         return uiOk && authOk;
     }
-
     /**
      * Eliminates native Toshiba Scan screen startup freezes by optimizing:
      * 1. Setting DNS primary to 192.168.1.100 and secondary to 8.8.8.8 with a 2-second timeout.
-     *    (Prevents 10-15s timeouts caused by 0.0.0.0 DNS).
      * 2. Setting DirectoryService 0 (TOSHIBA eBX) IP address to 127.0.0.1 instead of 'localhost'.
-     *    (Bypasses DNS resolution entirely for local address book lookup).
      * 3. Setting LDAP SearchServer to 0 (None / Local Address Book only).
-     * All 3 are committed in a single Network transaction and cached in-memory so it executes only once.
      */
     public boolean optimizeToshibaScanPerformance(String printerIp, String adminUsername, String adminPassword) {
         String cleanIp = printerIp != null ? printerIp.trim() : "";
@@ -884,9 +756,7 @@ public class ToshibaEwbService {
             boolean ok = respBody.contains("STATUS_OK") || respBody.contains("STATUS_DS_USR_ALLREADYEXISTS");
             if (ok) {
                 scanOptimizedPrinters.add(cleanIp);
-                log.info("[TOSHIBA CWS] Optimized Scan performance (DNS 192.168.1.100, eBX 127.0.0.1, SearchServer 0) on {} -> ok=true", cleanIp);
-            } else {
-                log.warn("[TOSHIBA CWS] Failed to optimize Scan performance on {}: {}", cleanIp, respBody);
+                log.info("[TOSHIBA CWS] Optimized Scan performance on {} -> ok=true", cleanIp);
             }
             return ok;
         } catch (Exception ex) {
@@ -895,18 +765,10 @@ public class ToshibaEwbService {
         }
     }
 
-    /**
-     * Backward-compatible alias for optimizeToshibaScanPerformance.
-     */
     public boolean clearLdapSearchServer(String printerIp, String adminUsername, String adminPassword) {
         return optimizeToshibaScanPerformance(printerIp, adminUsername, adminPassword);
     }
 
-    /**
-     * Dynamically switches the Toshiba Controller's Default Screen via TopAccess CWS.
-     * Setting screenName="Copy" ensures that when EWB closes or minimizes, the panel lands directly on the native Copy screen (NOT Home).
-     * Setting screenName="EWB" restores the terminal to our kiosk application.
-     */
     public boolean setDefaultScreen(String printerIp, String adminUsername, String adminPassword, String screenName) {
         String cleanIp = printerIp != null ? printerIp.trim() : "";
         String username = (adminUsername != null && !adminUsername.isBlank()) ? adminUsername.trim() : "admin";

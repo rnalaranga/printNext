@@ -10,6 +10,8 @@ import com.rr.secureprint.repository.PrinterRepository;
 import com.rr.secureprint.repository.ScanJobRepository;
 import com.rr.secureprint.repository.UserRepository;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.context.event.EventListener;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -103,6 +105,41 @@ public class CopyTrackingService {
     }
 
     /**
+     * Startup Security Sweep:
+     * Guarantees that upon server boot or restart, all active Toshiba physical MFPs
+     * are locked down with padlocks and set to display the secure EWB login screen.
+     */
+    @EventListener(ApplicationReadyEvent.class)
+    public void secureAllPrintersOnStartup() {
+        LOGGER.info("[STARTUP SWEEP] Running startup security sweep on all Toshiba MFPs...");
+        CompletableFuture.runAsync(() -> {
+            try {
+                // Short 2s delay to ensure Spring context and repositories are completely warm
+                Thread.sleep(2000);
+                List<PrinterEntity> physicalPrinters = printerRepository.findAll().stream()
+                        .filter(PrinterEntity::isActive)
+                        .filter(p -> !"VIRTUAL-QUEUE".equalsIgnoreCase(p.getPrinterCode()))
+                        .filter(p -> p.getIpAddress() != null && !p.getIpAddress().isBlank())
+                        .filter(p -> !"TOSHIBA_OLD".equalsIgnoreCase(p.getDeviceGeneration()))
+                        .toList();
+
+                for (PrinterEntity p : physicalPrinters) {
+                    try {
+                        String adminUser = (p.getAdminUsername() != null && !p.getAdminUsername().isBlank()) ? p.getAdminUsername() : "admin";
+                        String adminPass = (p.getAdminPassword() != null && !p.getAdminPassword().isBlank()) ? p.getAdminPassword() : "123456";
+                        boolean locked = toshibaEwbService.setCopyRestriction(p.getIpAddress(), adminUser, adminPass, true);
+                        LOGGER.info("[STARTUP SWEEP] Secured printer " + p.getPrinterCode() + " (" + p.getIpAddress() + "): lock=" + locked);
+                    } catch (Exception ex) {
+                        LOGGER.warning("[STARTUP SWEEP] Error securing " + p.getPrinterCode() + " (" + p.getIpAddress() + "): " + ex.getMessage());
+                    }
+                }
+            } catch (Exception ex) {
+                LOGGER.warning("[STARTUP SWEEP] Startup sweep encountered error: " + ex.getMessage());
+            }
+        });
+    }
+
+    /**
      * Returns a set of all printer/client IPs currently holding an active terminal session.
      */
     public Set<String> getActiveTerminalIps() {
@@ -117,7 +154,7 @@ public class CopyTrackingService {
         String cleanIp = clientOrPrinterIp.trim();
         TerminalSession current = activeTerminalUsers.get(cleanIp);
         if (current != null && current.isActive()) {
-            activeTerminalUsers.put(cleanIp, new TerminalSession(current.username(), current.loginTime(), null, Instant.now()));
+            activeTerminalUsers.put(cleanIp, new TerminalSession(current.username(), current.loginTime(), null, Instant.now(), current.isWalkUp()));
         }
     }
 
@@ -134,23 +171,13 @@ public class CopyTrackingService {
         activeTerminalUsers.put(cleanIp, session);
         addToHistory(cleanIp, session);
 
-        // Pre-warm TopAccess session, pre-populate Address Book contact, and pre-unlock hardware on login
-        // so that when the user taps Copy or Scan, the hardware is ALREADY unlocked and ready (<100ms response).
+        // Pre-warm TopAccess session on login so subsequent CWS requests have an active session
+        // (Icons remain strictly locked until user explicitly requests Copy or Scan)
         printerRepository.findByIpAddress(cleanIp).ifPresent(p -> {
             if (!"TOSHIBA_OLD".equalsIgnoreCase(p.getDeviceGeneration())) {
                 CompletableFuture.runAsync(() -> {
                     try {
                         toshibaEwbService.warmUpSession(p.getIpAddress(), p.getAdminUsername(), p.getAdminPassword());
-                        userRepository.findByUsernameIgnoreCase(cleanUser).ifPresent(u -> {
-                            String email = (u.getEmail() != null && !u.getEmail().isBlank()) ? u.getEmail().trim() : cleanUser + "@rrconstruction.lk";
-                            String disp = (u.getDisplayName() != null && !u.getDisplayName().isBlank()) ? u.getDisplayName().trim() : cleanUser;
-                            String dept = u.getDepartment() != null ? u.getDepartment() : "";
-                            toshibaEwbService.registerAddressBookContact(p.getIpAddress(), p.getAdminUsername(), p.getAdminPassword(), cleanUser, disp, email, dept);
-                            toshibaEwbService.setScanFromAddress(p.getIpAddress(), p.getAdminUsername(), p.getAdminPassword(), email, disp);
-                        });
-                        // Pre-unlock hardware walk-up permissions on login
-                        toshibaEwbService.setCopyRestriction(p.getIpAddress(), p.getAdminUsername(), p.getAdminPassword(), false);
-                        toshibaEwbService.clearLdapSearchServer(p.getIpAddress(), p.getAdminUsername(), p.getAdminPassword());
                     } catch (Exception ignored) {}
                 });
             }
@@ -191,23 +218,25 @@ public class CopyTrackingService {
             LOGGER.info("[TERMINAL SESSION] User '" + active.username() + "' logged out from IP " + cleanIp + " (Session recorded for job reconciliation)");
         }
 
-        // Ensure DefaultScreen is restored to EWB kiosk on logout AND physical copy restriction is LOCKED!
         printerRepository.findByIpAddress(cleanIp).ifPresent(p -> {
             if (!"TOSHIBA_OLD".equalsIgnoreCase(p.getDeviceGeneration())) {
                 CompletableFuture.runAsync(() -> {
                     try {
-                        toshibaEwbService.setDefaultScreen(p.getIpAddress(), p.getAdminUsername(), p.getAdminPassword(), "EWB");
                         toshibaEwbService.setCopyRestriction(p.getIpAddress(), p.getAdminUsername(), p.getAdminPassword(), true);
                         LOGGER.info("[TERMINAL LOGOUT] Copier physical copy restriction locked on " + cleanIp);
+                        toshibaEwbService.setDefaultScreen(p.getIpAddress(), p.getAdminUsername(), p.getAdminPassword(), "EWB");
+                        if (active != null) {
+                            // Poll sequentially AFTER lock is secured so TopAccess never collides
+                            pollPrinterJobLogs(p);
+                        }
                     } catch (Exception ex) {
-                        LOGGER.warning("Could not restore default screen or lock copy on " + cleanIp + ": " + ex.getMessage());
+                        LOGGER.warning("Could not lock copy on " + cleanIp + ": " + ex.getMessage());
                     }
                 });
+            } else if (active != null) {
+                triggerAsyncPrinterPoll(cleanIp);
             }
         });
-
-        // Immediately trigger async poll for this printer to capture any copies completed just before logout
-        triggerAsyncPrinterPoll(cleanIp);
     }
 
     /**
@@ -437,15 +466,18 @@ public class CopyTrackingService {
     }
 
     /**
-     * Fast Poll for Active Walk-Up Printers: Runs every 3 seconds.
-     * When a user is in front of the machine performing walk-up Scan or Copy,
-     * this detects completed scan/copy jobs within ~2 seconds instead of waiting 60s.
+     * Fast Poll for Active Walk-Up Printers: disabled to ensure 100% CWS bandwidth
+     * is preserved for user panel interactions without any polling lock contention.
+     * Reconciliation is performed reliably upon session logout and fleet poll.
      */
-    @Scheduled(fixedDelay = 3000, initialDelay = 5000)
+    // @Scheduled(fixedDelay = 15000, initialDelay = 10000)
     public void fastPollActiveWalkUpPrinters() {
         if (activeTerminalUsers.isEmpty()) return;
         for (Map.Entry<String, TerminalSession> entry : activeTerminalUsers.entrySet()) {
             if (entry.getValue().isWalkUp()) {
+                if (Duration.between(entry.getValue().loginTime(), Instant.now()).getSeconds() < 12) {
+                    continue; // Skip immediately after login so unlock has 100% CWS bandwidth
+                }
                 printerRepository.findByIpAddress(entry.getKey()).ifPresent(p -> {
                     try {
                         pollPrinterJobLogs(p);
@@ -458,12 +490,12 @@ public class CopyTrackingService {
     }
 
     /**
-     * Automatic Sleep & Inactivity Watchdog: Runs every 5 seconds.
-     * Detects if an MFP has gone to sleep or been abandoned (no heartbeat for > 25s,
-     * or maximum walk-up copy session exceeded 90s, or post-job completion timeout).
+     * Automatic Sleep & Inactivity Watchdog: Runs every 2 seconds.
+     * Detects if an MFP has gone to sleep or been abandoned (no heartbeat for > 10s,
+     * or maximum walk-up copy session exceeded 180s, or post-job completion timeout).
      * Immediately re-locks the physical Toshiba MFP via CWS so nobody can make unauthorized copies.
      */
-    @Scheduled(fixedDelay = 5000, initialDelay = 5000)
+    @Scheduled(fixedDelay = 2000, initialDelay = 3000)
     public void autoLockInactiveOrSleepingTerminals() {
         if (activeTerminalUsers.isEmpty()) return;
 
@@ -481,15 +513,17 @@ public class CopyTrackingService {
                 Long postJobDeadline = postJobAutoLockDeadlineByIp.get(ip);
                 boolean postJobTimeout = postJobDeadline != null && System.currentTimeMillis() >= postJobDeadline;
 
-                // If in walk-up mode (photocopy / scan on physical glass):
-                // EWB browser runs in background so heartbeats are paused/throttled by WebKit.
-                // 15s heartbeat gap matches Toshiba's 15s AutoClear timer so sleep/idle immediately locks!
-                long maxHeartbeatGap = session.isWalkUp() ? 15 : 30;
-                long maxSessionSeconds = session.isWalkUp() ? 90 : 120;
+                // Sleep / Inactivity detection:
+                // Normal heartbeat from active EWB browser is every 2.5s.
+                // When user presses physical [SLEEP] button, display turns off, or machine sleeps:
+                // heartbeat completely halts. Within 10s of sleep, watchdog auto-locks the MFP
+                // and restores DefaultScreen to 'EWB'.
+                long maxHeartbeatGap = 10;
+                long maxSessionSeconds = 120;
 
                 if (postJobTimeout || secondsSinceHeartbeat > maxHeartbeatGap || totalSessionSeconds > maxSessionSeconds) {
                     postJobAutoLockDeadlineByIp.remove(ip);
-                    String reason = postJobTimeout ? "Job completed (10s post-job auto-lock)"
+                    String reason = postJobTimeout ? "Job completed (15s post-job auto-lock)"
                             : (secondsSinceHeartbeat + "s without heartbeat, isWalkUp=" + session.isWalkUp());
                     LOGGER.info("[AUTO-LOCK WATCHDOG] Terminal on IP " + ip + " entered Sleep or Inactivity (" +
                             reason + ", user: '" + session.username() + "'). Auto-locking physical device now.");
@@ -519,6 +553,9 @@ public class CopyTrackingService {
                 .toList();
 
         for (PrinterEntity printer : physicalPrinters) {
+            if (activeTerminalUsers.containsKey(printer.getIpAddress())) {
+                continue; // Skip actively operated printer so user operations have 100% bandwidth
+            }
             try {
                 pollPrinterJobLogs(printer);
             } catch (Exception e) {
@@ -532,7 +569,6 @@ public class CopyTrackingService {
      */
     public void pollPrinterJobLogs(PrinterEntity printer) {
         if ("TOSHIBA_OLD".equalsIgnoreCase(printer.getDeviceGeneration())) {
-            // Older Toshiba models (e-STUDIO 306SE, 256, 356, 456) do not expose the e-BRIDGE Next CWS XML RetrieveLog endpoint
             return;
         }
         String ip = printer.getIpAddress().trim();
@@ -542,188 +578,21 @@ public class CopyTrackingService {
                 ? printer.getAdminPassword().trim() : "123456";
 
         try {
-            // 1. Initial Handshake to obtain Session cookie
-            HttpRequest hsReq = HttpRequest.newBuilder()
-                    .uri(URI.create("http://" + ip + "/"))
-                    .timeout(TIMEOUT)
-                    .GET()
-                    .build();
-            HttpResponse<String> hsResp = httpClient.send(hsReq, HttpResponse.BodyHandlers.ofString());
-            String cookie = hsResp.headers().firstValue("set-cookie").orElse("");
-            String session = "";
-            Matcher m = Pattern.compile("Session=([^;]+)").matcher(cookie);
-            if (m.find()) {
-                session = m.group(1);
+            // 1. Query PrintLogs via ToshibaEwbService thread-safe session
+            String printLogXml = toshibaEwbService.retrieveJobLogs(ip, adminUser, adminPass, "PrintLog");
+            if (printLogXml != null && !printLogXml.isBlank()) {
+                parseAndRecordToshibaLogRecords(printLogXml, printer);
             }
 
-            if (session.isBlank()) {
-                LOGGER.fine("[COPY POLL] No session cookie from " + ip);
-                return;
+            // 2. Query ScanLogs via ToshibaEwbService thread-safe session
+            String scanLogXml = toshibaEwbService.retrieveJobLogs(ip, adminUser, adminPass, "ScanLog");
+            if (scanLogXml != null && !scanLogXml.isBlank()) {
+                parseAndRecordToshibaLogRecords(scanLogXml, printer);
             }
-
-            // Extract client IP prefix from session cookie (e.g. 192.168.1.100.xxxx)
-            String clientIp = "192.168.1.100";
-            Matcher ipM = Pattern.compile("^(\\d+\\.\\d+\\.\\d+\\.\\d+)").matcher(session);
-            if (ipM.find()) {
-                clientIp = ipM.group(1);
-            }
-
-            // 2. Admin Login to TopAccess
-            String loginXml = "<DeviceInformationModel>" +
-                    "<GetValue><Authentication><UserCredential></UserCredential></Authentication></GetValue>" +
-                    "<GetValue><Panel><DiagnosticMode><Mode_08><Code_8913></Code_8913></Mode_08></DiagnosticMode></Panel></GetValue>" +
-                    "<SetValue><Authentication><UserCredential>" +
-                    "<userName>" + adminUser + "</userName>" +
-                    "<passwd>" + adminPass + "</passwd>" +
-                    "<ipaddress>" + clientIp + "</ipaddress>" +
-                    "<DepartmentManagement isEnable='false'><requireDepartment>false</requireDepartment></DepartmentManagement>" +
-                    "<domainName></domainName><applicationType>TOP_ACCESS</applicationType>" +
-                    "</UserCredential></Authentication></SetValue>" +
-                    "<Command><Login><commandNode>Authentication/UserCredential</commandNode><Params><appName>TOPACCESS</appName></Params></Login></Command>" +
-                    "<SaveSessionInformation><SessionInfo>" +
-                    "<Information><type>LoginPassword</type><data>" + adminPass + "</data></Information>" +
-                    "<Information><type>LoginUser</type><data>" + adminUser + "</data></Information>" +
-                    "</SessionInfo></SaveSessionInformation>" +
-                    "</DeviceInformationModel>";
-
-            HttpRequest loginReq = HttpRequest.newBuilder()
-                    .uri(URI.create("http://" + ip + "/contentwebserver"))
-                    .timeout(TIMEOUT)
-                    .header("Content-Type", "text/xml; charset=UTF-8")
-                    .header("Cookie", "Session=" + session)
-                    .header("csrfpId", session)
-                    .header("Referer", "http://" + ip + "/admin/login.htm")
-                    .POST(HttpRequest.BodyPublishers.ofString(loginXml))
-                    .build();
-
-            HttpResponse<String> loginResp = httpClient.send(loginReq, HttpResponse.BodyHandlers.ofString());
-            String loginBody = loginResp.body() != null ? loginResp.body() : "";
-            if (!loginBody.contains("Normal") && !loginBody.contains("STATUS_OK")) {
-                LOGGER.fine("[COPY POLL] Login failed on " + ip + " status=" + loginResp.statusCode());
-                return;
-            }
-
-            // TopAccess may rotate or re-issue the Session cookie upon successful authentication
-            for (String setCookieHeader : loginResp.headers().allValues("set-cookie")) {
-                Matcher scM = Pattern.compile("Session=([^;]+)").matcher(setCookieHeader);
-                if (scM.find()) {
-                    session = scM.group(1);
-                    break;
-                }
-            }
-
-            // 3. Query PrintLogs using authentic TopAccess RetrieveLog XML with GetValue
-            String logQueryXml = "<DeviceInformationModel>" +
-                    "<SetValue>" +
-                    "<Log><JobLog pageSize='20' pageNo='1' totalRecords='' totalPages='' snapshot='false'>" +
-                    "<PrintLogs><LogRecord>" +
-                    "<Common>" +
-                    "<RecordNumber/><UserName/><CompletedTime/><ProcessErrorCode/>" +
-                    "</Common>" +
-                    "<Print>" +
-                    "<PrintJobType/><PaperSize/><InputValidPages/><PrintedSets/><DocumentName/>" +
-                    "</Print>" +
-                    "</LogRecord></PrintLogs></JobLog></Log>" +
-                    "</SetValue>" +
-                    "<Command>" +
-                    "<RetrieveLog>" +
-                    "<commandNode>Log</commandNode>" +
-                    "<Params>" +
-                    "<Order>DESC</Order>" +
-                    "<SortCategory>DateTime</SortCategory>" +
-                    "<Locale>en-US</Locale>" +
-                    "<LogKind>PrintLog</LogKind>" +
-                    "</Params>" +
-                    "</RetrieveLog>" +
-                    "</Command>" +
-                    "<GetValue>" +
-                    "<Log></Log>" +
-                    "</GetValue>" +
-                    "</DeviceInformationModel>";
-
-            HttpRequest logReq = HttpRequest.newBuilder()
-                    .uri(URI.create("http://" + ip + "/contentwebserver"))
-                    .timeout(TIMEOUT)
-                    .header("Content-Type", "text/xml; charset=UTF-8")
-                    .header("Cookie", "Session=" + session)
-                    .header("csrfpId", session)
-                    .header("Referer", "http://" + ip + "/admin/login.htm")
-                    .POST(HttpRequest.BodyPublishers.ofString(logQueryXml))
-                    .build();
-
-            HttpResponse<String> logResp = httpClient.send(logReq, HttpResponse.BodyHandlers.ofString());
-            if (logResp.statusCode() == 200 && logResp.body() != null) {
-                parseAndRecordToshibaLogRecords(logResp.body(), printer);
-            }
-
-            // 3b. Query ScanLogs using authentic TopAccess RetrieveLog XML
-            String scanLogQueryXml = "<DeviceInformationModel>" +
-                    "<SetValue>" +
-                    "<Log><JobLog pageSize='20' pageNo='1' totalRecords='' totalPages='' snapshot='false'>" +
-                    "<ScanLogs><LogRecord>" +
-                    "<Common>" +
-                    "<RecordNumber/><UserName/><CompletedTime/><ProcessErrorCode/>" +
-                    "</Common>" +
-                    "<Scan>" +
-                    "<ScanJobType/><InputValidPages/><Resolution/><ColorMode/><DocumentName/><Destination/>" +
-                    "</Scan>" +
-                    "</LogRecord></ScanLogs></JobLog></Log>" +
-                    "</SetValue>" +
-                    "<Command>" +
-                    "<RetrieveLog>" +
-                    "<commandNode>Log</commandNode>" +
-                    "<Params>" +
-                    "<Order>DESC</Order>" +
-                    "<SortCategory>DateTime</SortCategory>" +
-                    "<Locale>en-US</Locale>" +
-                    "<LogKind>ScanLog</LogKind>" +
-                    "</Params>" +
-                    "</RetrieveLog>" +
-                    "</Command>" +
-                    "<GetValue>" +
-                    "<Log></Log>" +
-                    "</GetValue>" +
-                    "</DeviceInformationModel>";
-
-            try {
-                HttpRequest scanLogReq = HttpRequest.newBuilder()
-                        .uri(URI.create("http://" + ip + "/contentwebserver"))
-                        .timeout(TIMEOUT)
-                        .header("Content-Type", "text/xml; charset=UTF-8")
-                        .header("Cookie", "Session=" + session)
-                        .header("csrfpId", session)
-                        .header("Referer", "http://" + ip + "/admin/login.htm")
-                        .POST(HttpRequest.BodyPublishers.ofString(scanLogQueryXml))
-                        .build();
-
-                HttpResponse<String> scanLogResp = httpClient.send(scanLogReq, HttpResponse.BodyHandlers.ofString());
-                if (scanLogResp.statusCode() == 200 && scanLogResp.body() != null) {
-                    parseAndRecordToshibaLogRecords(scanLogResp.body(), printer);
-                }
-            } catch (Exception ex) {
-                LOGGER.fine("[SCAN POLL] Exception querying ScanLog on " + ip + ": " + ex.getMessage());
-            }
-
-            // 4. Clean Admin Logoff
-            String logoffXml = "<DeviceInformationModel><Command><Logoff><commandNode>Authentication/UserCredential</commandNode><Params><appName>TOPACCESS</appName></Params></Logoff></Command></DeviceInformationModel>";
-            HttpRequest logoffReq = HttpRequest.newBuilder()
-                    .uri(URI.create("http://" + ip + "/contentwebserver"))
-                    .timeout(Duration.ofSeconds(2))
-                    .header("Content-Type", "text/xml; charset=UTF-8")
-                    .header("Cookie", "Session=" + session)
-                    .header("csrfpId", session)
-                    .POST(HttpRequest.BodyPublishers.ofString(logoffXml))
-                    .build();
-            httpClient.send(logoffReq, HttpResponse.BodyHandlers.discarding());
-
         } catch (Exception e) {
             LOGGER.fine("[COPY POLL] Exception polling " + ip + ": " + e.getMessage());
         }
     }
-
-    /**
-     * Parses TopAccess XML response and persists any newly discovered COPY and SCAN jobs.
-     */
     private void parseAndRecordToshibaLogRecords(String xml, PrinterEntity printer) {
         Pattern recordPattern = Pattern.compile("<LogRecord>(.*?)</LogRecord>", Pattern.DOTALL | Pattern.CASE_INSENSITIVE);
         Matcher matcher = recordPattern.matcher(xml);
@@ -766,6 +635,16 @@ public class CopyTrackingService {
                 } catch (Exception ignored) {}
             }
 
+                        // Skip already recorded jobs immediately to prevent duplicate attribution overhead
+            if (recordNumber != null && !recordNumber.isBlank()) {
+                String scanFileName = "TOSHIBA-SCAN-" + recordNumber + ".pdf";
+                if (copyJobRepository.existsByPrinterIpAndPrinterJobId(printer.getIpAddress(), recordNumber)
+                        || scanJobRepository.existsByPrinterIpAndFileName(printer.getIpAddress(), recordNumber)
+                        || scanJobRepository.existsByPrinterIpAndFileName(printer.getIpAddress(), scanFileName)) {
+                    continue;
+                }
+            }
+
             // If Toshiba UserName is blank, resolve effective user via session attribution window
             String effectiveUser = rawUser;
             if (effectiveUser == null || effectiveUser.isBlank()) {
@@ -776,23 +655,30 @@ public class CopyTrackingService {
             }
 
             if (jobType != null && "Copy".equalsIgnoreCase(jobType.trim())) {
-                recordCopyJob(effectiveUser, printer.getIpAddress(), printer.getName(), totalPages, 0, totalPages, recordNumber, completedAt);
-                copyCount++;
+                CopyJobEntity cj = recordCopyJob(effectiveUser, printer.getIpAddress(), printer.getName(), totalPages, 0, totalPages, recordNumber, completedAt);
+                if (cj != null) {
+                    copyCount++;
+                    TerminalSession activeSession = activeTerminalUsers.get(printer.getIpAddress());
+                    if (activeSession != null && activeSession.isWalkUp()) {
+                        postJobAutoLockDeadlineByIp.put(printer.getIpAddress(), System.currentTimeMillis() + 15000L);
+                        LOGGER.info("[AUTO-LOCK] New physical copy job completed on " + printer.getIpAddress() + ". Auto-lock scheduled in 15s.");
+                    }
+                }
             } else if ((jobType != null && (jobType.toLowerCase().contains("scan") || jobType.toLowerCase().contains("email") || jobType.toLowerCase().contains("efiling")))
                     || recordXml.contains("<Scan>") || recordXml.contains("ScanJobType")) {
-                recordNativeScanJob(effectiveUser, printer.getIpAddress(), printer.getName(), totalPages, colorMode, docName, destination, recordNumber, completedAt);
-                scanCount++;
+                ScanJobEntity sj = recordNativeScanJob(effectiveUser, printer.getIpAddress(), printer.getName(), totalPages, colorMode, docName, destination, recordNumber, completedAt);
+                if (sj != null) {
+                    scanCount++;
+                    TerminalSession activeSession = activeTerminalUsers.get(printer.getIpAddress());
+                    if (activeSession != null && activeSession.isWalkUp()) {
+                        postJobAutoLockDeadlineByIp.put(printer.getIpAddress(), System.currentTimeMillis() + 15000L);
+                        LOGGER.info("[AUTO-LOCK] New physical scan job completed on " + printer.getIpAddress() + ". Auto-lock scheduled in 15s.");
+                    }
+                }
             }
         }
         if (copyCount > 0 || scanCount > 0) {
-            LOGGER.info("[DEVICE POLL] Successfully parsed and recorded " + copyCount + " copy and " + scanCount + " scan records from " + printer.getName() + " (" + printer.getIpAddress() + ")");
-            TerminalSession activeSession = activeTerminalUsers.get(printer.getIpAddress());
-            if (activeSession != null && activeSession.isWalkUp()) {
-                if (!postJobAutoLockDeadlineByIp.containsKey(printer.getIpAddress())) {
-                    postJobAutoLockDeadlineByIp.put(printer.getIpAddress(), System.currentTimeMillis() + 8000L);
-                    LOGGER.info("[AUTO-LOCK] Detected completed scan/copy job on " + printer.getIpAddress() + ". Auto-lock scheduled in 8s.");
-                }
-            }
+            LOGGER.info("[DEVICE POLL] Successfully parsed and recorded " + copyCount + " NEW copy and " + scanCount + " NEW scan records from " + printer.getName() + " (" + printer.getIpAddress() + ")");
         }
     }
 

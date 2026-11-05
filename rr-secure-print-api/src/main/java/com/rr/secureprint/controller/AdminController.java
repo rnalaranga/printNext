@@ -112,6 +112,11 @@ public class AdminController {
             return ResponseEntity.status(HttpStatus.CREATED).body(printer);
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        } catch (org.springframework.dao.DataIntegrityViolationException e) {
+            String msg = e.getMessage() != null && e.getMessage().toLowerCase().contains("printer_code")
+                    ? "Printer code '" + request.printerCode() + "' is already registered in the system."
+                    : "Printer with this code or IP address already exists.";
+            return ResponseEntity.badRequest().body(Map.of("error", msg));
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of("error", e.getMessage()));
         }
@@ -130,6 +135,8 @@ public class AdminController {
             return ResponseEntity.ok(printer);
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        } catch (org.springframework.dao.DataIntegrityViolationException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", "Printer code or IP address conflicts with an existing printer."));
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of("error", e.getMessage()));
         }

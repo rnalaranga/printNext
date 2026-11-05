@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
@@ -1067,24 +1067,50 @@
        SCREEN 4: PHOTOCOPY WALK-UP STATION
        ============================================================ -->
   <div id="screenCopy" class="pc-screen pc-copy-screen">
-    <div class="pc-copy-wrapper" style="max-width: 680px; margin: 30px auto 0 auto;">
-      <div style="background:#EFF6FF; border:2px solid #2563EB; border-radius:16px; padding:32px 24px; text-align:center; box-shadow:0 6px 20px rgba(37,99,235,0.08);">
-        <div style="font-size:48px; margin-bottom:12px; line-height:1;">&#128424;</div>
-        <div style="font-size:24px; font-weight:900; color:#1E40AF; margin-bottom:12px; letter-spacing:0.2px;">
-          Photocopier Ready
+    <div class="pc-copy-wrapper" style="max-width: 720px; margin: 15px auto 0 auto;">
+      <div style="background:#FFFFFF; border:2px solid #2563EB; border-radius:18px; padding:24px 28px; box-shadow:0 8px 30px rgba(37,99,235,0.12);">
+        <div style="display:flex; align-items:center; justify-content:space-between; border-bottom:1.5px solid #E2E8F0; padding-bottom:14px; margin-bottom:18px;">
+          <div style="display:flex; align-items:center; gap:12px;">
+            <div style="background:#DBEAFE; color:#1D4ED8; width:48px; height:48px; border-radius:12px; display:flex; align-items:center; justify-content:center; font-size:26px;">&#128424;</div>
+            <div>
+              <div style="font-size:20px; font-weight:900; color:#1E3A8A; line-height:1.2;">Photocopier Unlocked</div>
+              <div style="font-size:12px; font-weight:600; color:#64748B;">Walk-up copy session active</div>
+            </div>
+          </div>
+          <div style="background:#DCFCE7; color:#15803D; font-size:12px; font-weight:800; padding:6px 14px; border-radius:20px; border:1px solid #86EFAC;">
+            &#9679; Hardware Ready
+          </div>
         </div>
-        <div style="font-size:16px; font-weight:700; color:#334155;">
-          Press <span style="background:#FEF08A; padding:4px 12px; border:1.5px solid #CA8A04; border-radius:6px; color:#854D0E; font-size:17px; font-weight:800;">[ HOME ]</span> on physical panel
-        </div>
-      </div>
 
-      <div style="display:flex; justify-content:space-between; margin-top:22px;">
-        <button type="button" class="pc-btn-secondary" onclick="window.showMenuScreen()" style="padding:12px 22px; font-size:13px; font-weight:700; background:#F1F5F9; border:1.5px solid #CBD5E1; color:#334155; border-radius:8px; cursor:pointer;">
-          &larr; Back to Apps
-        </button>
-        <button type="button" class="pc-btn-finish-walkup" onclick="window.handleFinishCopying()" style="padding:12px 24px; font-size:13px; font-weight:800; border-radius:8px;">
-          &#10003; Finish &amp; Logout
-        </button>
+        <!-- 3 Simple Visual Steps -->
+        <div style="display:grid; grid-template-columns: repeat(3, 1fr); gap:14px; margin-bottom:20px;">
+          <div style="background:#F8FAFC; border:1.5px solid #E2E8F0; border-radius:12px; padding:14px 12px; text-align:center;">
+            <div style="width:28px; height:28px; background:#2563EB; color:#FFF; border-radius:50%; font-weight:900; font-size:13px; display:flex; align-items:center; justify-content:center; margin:0 auto 8px auto;">1</div>
+            <div style="font-size:13px; font-weight:800; color:#1E293B; margin-bottom:4px;">Open Screen</div>
+            <div style="font-size:11px; font-weight:600; color:#64748B; line-height:1.4;">Press <span style="background:#FEF08A; padding:2px 6px; border-radius:4px; color:#854D0E; font-weight:800;">[ HOME ]</span> on physical panel</div>
+          </div>
+
+          <div style="background:#F8FAFC; border:1.5px solid #E2E8F0; border-radius:12px; padding:14px 12px; text-align:center;">
+            <div style="width:28px; height:28px; background:#10B981; color:#FFF; border-radius:50%; font-weight:900; font-size:13px; display:flex; align-items:center; justify-content:center; margin:0 auto 8px auto;">2</div>
+            <div style="font-size:13px; font-weight:800; color:#1E293B; margin-bottom:4px;">Make Copies</div>
+            <div style="font-size:11px; font-weight:600; color:#64748B; line-height:1.4;">Place paper &amp; press physical <span style="color:#059669; font-weight:800;">[ START ]</span> key</div>
+          </div>
+
+          <div style="background:#F8FAFC; border:1.5px solid #E2E8F0; border-radius:12px; padding:14px 12px; text-align:center;">
+            <div style="width:28px; height:28px; background:#EF4444; color:#FFF; border-radius:50%; font-weight:900; font-size:13px; display:flex; align-items:center; justify-content:center; margin:0 auto 8px auto;">3</div>
+            <div style="font-size:13px; font-weight:800; color:#1E293B; margin-bottom:4px;">Secure Device</div>
+            <div style="font-size:11px; font-weight:600; color:#64748B; line-height:1.4;">Press <span style="background:#FEE2E2; padding:2px 6px; border-radius:4px; color:#991B1B; font-weight:800;">[ SLEEP ]</span> or button below to lock</div>
+          </div>
+        </div>
+
+        <div style="display:flex; justify-content:space-between; align-items:center; border-top:1.5px solid #E2E8F0; padding-top:16px;">
+          <button type="button" class="pc-btn-secondary" onclick="window.showMenuScreen()" style="padding:12px 20px; font-size:13px; font-weight:700; background:#F1F5F9; border:1.5px solid #CBD5E1; color:#334155; border-radius:10px; cursor:pointer;">
+            &larr; Back to Apps
+          </button>
+          <button type="button" onclick="window.handleFinishCopying()" style="padding:12px 26px; font-size:14px; font-weight:800; background:#EF4444; color:#FFFFFF; border:none; border-radius:10px; cursor:pointer; box-shadow:0 4px 12px rgba(239,68,68,0.25);">
+            &#128274; Finish &amp; Lock Copier
+          </button>
+        </div>
       </div>
     </div>
   </div>
@@ -1093,28 +1119,54 @@
        SCREEN 5: DOCUMENT SCAN WALK-UP STATION
        ============================================================ -->
   <div id="screenScan" class="pc-screen pc-scan-screen">
-    <div class="pc-copy-wrapper" style="max-width: 680px; margin: 30px auto 0 auto;">
-      <div style="background:#F0FDF4; border:2px solid #16A34A; border-radius:16px; padding:32px 24px; text-align:center; box-shadow:0 6px 20px rgba(22,163,74,0.08);">
-        <div style="font-size:48px; margin-bottom:12px; line-height:1;">&#128224;</div>
-        <div style="font-size:24px; font-weight:900; color:#15803D; margin-bottom:12px; letter-spacing:0.2px;">
-          Scanner Ready
+    <div class="pc-copy-wrapper" style="max-width: 720px; margin: 15px auto 0 auto;">
+      <div style="background:#FFFFFF; border:2px solid #16A34A; border-radius:18px; padding:24px 28px; box-shadow:0 8px 30px rgba(22,163,74,0.12);">
+        <div style="display:flex; align-items:center; justify-content:space-between; border-bottom:1.5px solid #E2E8F0; padding-bottom:14px; margin-bottom:18px;">
+          <div style="display:flex; align-items:center; gap:12px;">
+            <div style="background:#DCFCE7; color:#15803D; width:48px; height:48px; border-radius:12px; display:flex; align-items:center; justify-content:center; font-size:26px;">&#128224;</div>
+            <div>
+              <div style="font-size:20px; font-weight:900; color:#14532D; line-height:1.2;">Scanner Unlocked</div>
+              <div style="font-size:12px; font-weight:600; color:#64748B;">Scan-to-Email destination ready</div>
+            </div>
+          </div>
+          <div style="background:#DCFCE7; color:#15803D; font-size:12px; font-weight:800; padding:6px 14px; border-radius:20px; border:1px solid #86EFAC;">
+            &#9679; Hardware Ready
+          </div>
         </div>
-        <div style="font-size:16px; font-weight:700; color:#334155;">
-          Press <span style="background:#FEF08A; padding:4px 12px; border:1.5px solid #CA8A04; border-radius:6px; color:#854D0E; font-size:17px; font-weight:800;">[ HOME ]</span> on physical panel
-        </div>
-      </div>
 
-      <div style="display:flex; justify-content:space-between; margin-top:22px;">
-        <button type="button" class="pc-btn-secondary" onclick="window.showMenuScreen()" style="padding:12px 22px; font-size:13px; font-weight:700; background:#F1F5F9; border:1.5px solid #CBD5E1; color:#334155; border-radius:8px; cursor:pointer;">
-          &larr; Back to Apps
-        </button>
-        <button type="button" class="pc-btn-secondary" onclick="window.handleFinishCopying()" style="padding:12px 24px; font-size:13px; font-weight:800; background:#10B981; color:#FFFFFF; border:none; border-radius:8px; cursor:pointer;">
-          &#10003; Finish &amp; Logout
-        </button>
+        <!-- 3 Simple Visual Steps -->
+        <div style="display:grid; grid-template-columns: repeat(3, 1fr); gap:14px; margin-bottom:20px;">
+          <div style="background:#F8FAFC; border:1.5px solid #E2E8F0; border-radius:12px; padding:14px 12px; text-align:center;">
+            <div style="width:28px; height:28px; background:#16A34A; color:#FFF; border-radius:50%; font-weight:900; font-size:13px; display:flex; align-items:center; justify-content:center; margin:0 auto 8px auto;">1</div>
+            <div style="font-size:13px; font-weight:800; color:#1E293B; margin-bottom:4px;">Open Screen</div>
+            <div style="font-size:11px; font-weight:600; color:#64748B; line-height:1.4;">Press <span style="background:#FEF08A; padding:2px 6px; border-radius:4px; color:#854D0E; font-weight:800;">[ HOME ]</span> on physical panel</div>
+          </div>
+
+          <div style="background:#F8FAFC; border:1.5px solid #E2E8F0; border-radius:12px; padding:14px 12px; text-align:center;">
+            <div style="width:28px; height:28px; background:#10B981; color:#FFF; border-radius:50%; font-weight:900; font-size:13px; display:flex; align-items:center; justify-content:center; margin:0 auto 8px auto;">2</div>
+            <div style="font-size:13px; font-weight:800; color:#1E293B; margin-bottom:4px;">Scan Documents</div>
+            <div style="font-size:11px; font-weight:600; color:#64748B; line-height:1.4;">Address Book is set &amp; press <span style="color:#059669; font-weight:800;">[ START ]</span></div>
+          </div>
+
+          <div style="background:#F8FAFC; border:1.5px solid #E2E8F0; border-radius:12px; padding:14px 12px; text-align:center;">
+            <div style="width:28px; height:28px; background:#EF4444; color:#FFF; border-radius:50%; font-weight:900; font-size:13px; display:flex; align-items:center; justify-content:center; margin:0 auto 8px auto;">3</div>
+            <div style="font-size:13px; font-weight:800; color:#1E293B; margin-bottom:4px;">Secure Device</div>
+            <div style="font-size:11px; font-weight:600; color:#64748B; line-height:1.4;">Press <span style="background:#FEE2E2; padding:2px 6px; border-radius:4px; color:#991B1B; font-weight:800;">[ SLEEP ]</span> or button below to lock</div>
+          </div>
+        </div>
+
+        <div style="display:flex; justify-content:space-between; align-items:center; border-top:1.5px solid #E2E8F0; padding-top:16px;">
+          <button type="button" class="pc-btn-secondary" onclick="window.showMenuScreen()" style="padding:12px 20px; font-size:13px; font-weight:700; background:#F1F5F9; border:1.5px solid #CBD5E1; color:#334155; border-radius:10px; cursor:pointer;">
+            &larr; Back to Apps
+          </button>
+          <button type="button" onclick="window.handleFinishCopying()" style="padding:12px 26px; font-size:14px; font-weight:800; background:#EF4444; color:#FFFFFF; border:none; border-radius:10px; cursor:pointer; box-shadow:0 4px 12px rgba(239,68,68,0.25);">
+            &#128274; Finish &amp; Lock Scanner
+          </button>
+        </div>
       </div>
     </div>
   </div>
 
-  <script src="/js/ewb-app.js?v=20261026_09"></script>
+  <script src="/js/ewb-app.js?v=20261105_15"></script>
 </body>
 </html>

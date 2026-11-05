@@ -1,0 +1,1 @@
+Get-ChildItem -Path '.' -Recurse -File | Where-Object { $_.LastWriteTime -ge (Get-Date '2026-11-05 00:00:00') -and $_.FullName -notmatch '\\(target|\.git)\\' } | Select-Object LastWriteTime, Length, FullName

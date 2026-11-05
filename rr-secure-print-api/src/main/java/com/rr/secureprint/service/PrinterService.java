@@ -431,7 +431,7 @@ public class PrinterService {
             // Lock Toshiba HOME screen functions (Photocopy restriction) if requested or by default
             if (request.lockHomeFunctions() == null || Boolean.TRUE.equals(request.lockHomeFunctions())) {
                 try {
-                    boolean locked = toshibaEwbService.setCopyRestriction(printer.getIpAddress(), user, pass, true);
+                    boolean locked = toshibaEwbService.provisionPanelLock(printer.getIpAddress(), user, pass, true);
                     printer.setFunctionsLocked(locked);
                     log.info("Auto-locked Toshiba HOME screen functions for {}: {}", printer.getPrinterCode(), locked);
                 } catch (Exception ex) {
@@ -463,7 +463,7 @@ public class PrinterService {
         String pass = printer.getAdminPassword() != null && !printer.getAdminPassword().isBlank()
                 ? printer.getAdminPassword() : "123456";
 
-        boolean success = toshibaEwbService.setCopyRestriction(printer.getIpAddress(), user, pass, lock);
+        boolean success = toshibaEwbService.provisionPanelLock(printer.getIpAddress(), user, pass, lock);
         if (success) {
             printer.setFunctionsLocked(lock);
             printerRepository.save(printer);

@@ -107,45 +107,51 @@
     document.body.ontouchstart = resetInactivityTimer;
 
     // Immediate Hardware Sleep / Energy Saver / Wake Lock Handlers
-    if (document.addEventListener) {
-      document.addEventListener('visibilitychange', function () {
-        if (document.visibilityState === 'hidden') {
-          if (state.isNativeOperationActive) {
-            // Native Copy screen has opened on panel! Pre-restore DefaultScreen to EWB for sleep security
-            sendCopyScreenOpenedBeacon();
-          } else {
-            window.emergencyLockAndLogout('HARDWARE_SLEEP_BUTTON');
-          }
-        } else if (document.visibilityState === 'visible') {
-          // Machine woke up from sleep or returned to nexPrint
-          // CRITICAL: Always lock and enforce PIN on wake-up!
-          state.isNativeOperationActive = false;
-          window.emergencyLockAndLogout('HARDWARE_WAKE_LOCK');
-        }
-      });
+    function isPageHidden() {
+      return (document.hidden === true) ||
+             (document.webkitHidden === true) ||
+             (document.visibilityState === 'hidden') ||
+             (document.webkitVisibilityState === 'hidden');
     }
 
-    if (window.addEventListener) {
-      window.addEventListener('pagehide', function () {
-        if (!state.isNativeOperationActive) {
-          window.emergencyLockAndLogout('PAGE_HIDE');
-        }
-      });
-      window.addEventListener('blur', function () {
+    function onVisibilityOrSleepChange() {
+      if (isPageHidden()) {
+        // If native copy or scan screen is active, hiding EWB is expected behavior!
+        // Do NOT lock the device while user is actively photocopying.
         if (state.isNativeOperationActive) {
-          sendCopyScreenOpenedBeacon();
+          return;
         }
-      });
-      window.addEventListener('focus', function () {
-        if (!state.currentUser) {
-          state.isNativeOperationActive = false;
-          window.emergencyLockAndLogout('WINDOW_FOCUS_LOCK');
+        // Physical [SLEEP] button was pressed while on EWB terminal UI
+        if (state.currentUser) {
+          window.emergencyLockAndLogout('HARDWARE_SLEEP_BUTTON');
         }
-      });
-      window.addEventListener('online', onWakeOrReconnect);
+      }
     }
 
-    // Hook into Toshiba OpenPlatform injected system sleep events
+    if (document.addEventListener) {
+      document.addEventListener('visibilitychange', onVisibilityOrSleepChange, false);
+      document.addEventListener('webkitvisibilitychange', onVisibilityOrSleepChange, false);
+    }
+    if (window.addEventListener) {
+      window.addEventListener('pagehide', onVisibilityOrSleepChange, false);
+    }
+
+    // Hardware sleep gap watchdog:
+    // When the MFP enters deep sleep, JavaScript execution halts.
+    // Upon hardware wake, if >2.5s elapsed between ticks, trigger lock & reset to PIN pad!
+    var lastHardwareTick = Date.now ? Date.now() : new Date().getTime();
+    setInterval(function () {
+      var now = Date.now ? Date.now() : new Date().getTime();
+      var gap = now - lastHardwareTick;
+      lastHardwareTick = now;
+      if (gap > 2500) {
+        if (state.currentUser || state.isNativeOperationActive) {
+          window.emergencyLockAndLogout('HARDWARE_WAKE_AFTER_SLEEP');
+        }
+      }
+    }, 1000);
+
+    // Hook into Toshiba OpenPlatform system sleep and autoclear events
     try {
       if (window.topaccess && window.topaccess.system && window.topaccess.system.addEventListener) {
         window.topaccess.system.addEventListener('sleep', function () {
@@ -178,11 +184,12 @@
   /* Emergency Sleep Auto-Lock & Device Security                        */
   /* ------------------------------------------------------------------ */
   window.emergencyLockAndLogout = function (reason) {
-    if (state.isNativeOperationActive &&
-        (reason === 'WINDOW_BLUR_SLEEP' || reason === 'PAGE_HIDE')) {
-      // User is actively transitioning to native Copy / Scan mode on physical panel
-      return;
+    var now = Date.now ? Date.now() : new Date().getTime();
+    if (state.lastEmergencyLockTime && (now - state.lastEmergencyLockTime < 2500)) {
+      return; // Debounce 2.5s: ignore rapid duplicate calls
     }
+    state.lastEmergencyLockTime = now;
+
     var stationCode = (state.station && state.station.printerCode) ? state.station.printerCode : null;
     var stationIp = (state.station && state.station.ipAddress) ? state.station.ipAddress : null;
     var payload = JSON.stringify({
@@ -191,27 +198,27 @@
       reason: reason || 'SLEEP_MODE'
     });
 
-    // 1. Send beacon immediately (guaranteed delivery across page freeze/sleep)
-    if (navigator.sendBeacon) {
+    // 1. Send via immediate XMLHttpRequest
+    var sent = false;
+    try {
+      var xhr = new XMLHttpRequest();
+      xhr.open('POST', '/api/station/auto-lock', true);
+      xhr.setRequestHeader('Content-Type', 'application/json');
+      xhr.send(payload);
+      sent = true;
+    } catch (e) {
+      sent = false;
+    }
+
+    // 2. Fallback to Beacon
+    if (!sent && navigator.sendBeacon) {
       try {
         var blob = new Blob([payload], { type: 'application/json' });
         navigator.sendBeacon('/api/station/auto-lock', blob);
-      } catch (e) {}
+      } catch (e2) {}
     }
 
-    // 2. Fetch with keepalive fallback
-    try {
-      if (window.fetch) {
-        fetch('/api/station/auto-lock', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: payload,
-          keepalive: true
-        });
-      }
-    } catch (e) {}
-
-    // 3. Reset local UI state to locked PIN pad
+    // Reset local UI state to locked PIN pad
     state.isNativeOperationActive = false;
     state.currentUser = null;
     state.pinBuffer = '';
@@ -220,6 +227,14 @@
     window.hideCopySessionModal();
     showAuthScreen();
     showAlert('Device locked & secured. Enter PIN to start.', 'info');
+
+    // Force Toshiba panel from native Copy back to EWB PIN pad
+    try {
+      var ta = window.topaccess || (window.top && window.top !== window ? window.top.topaccess : null);
+      if (ta && ta.system && typeof ta.system.openHomeScreen === 'function') {
+        ta.system.openHomeScreen();
+      }
+    } catch (ePanel) {}
   };
 
   function sendCopyScreenOpenedBeacon() {
@@ -254,7 +269,7 @@
   function startHeartbeat() {
     stopHeartbeat();
     sendHeartbeat();
-    heartbeatTimer = setInterval(sendHeartbeat, 8000); // Send heartbeat every 8 seconds
+    heartbeatTimer = setInterval(sendHeartbeat, 2500); // Send fast heartbeat every 2.5 seconds
   }
 
   function stopHeartbeat() {
@@ -265,14 +280,14 @@
   }
 
   function sendHeartbeat() {
-    if (!state.currentUser) {
+    if (!state.currentUser && !state.isNativeOperationActive) {
       stopHeartbeat();
       return;
     }
     var stationCode = (state.station && state.station.printerCode) ? state.station.printerCode : null;
     var stationIp = (state.station && state.station.ipAddress) ? state.station.ipAddress : null;
     apiRequest('POST', '/api/station/heartbeat', { printerCode: stationCode, printerIp: stationIp }, function (status, data) {
-      if (status === 401 || (data && data.locked)) {
+      if (status === 401 || (data && data.authenticated === false && state.currentUser)) {
         window.emergencyLockAndLogout('HEARTBEAT_EXPIRED');
       }
     });
@@ -390,9 +405,6 @@
           applyEwbBranding(data.branding);
         }
         state.station = data.currentStation;
-        if (!state.currentUser && !state.isNativeOperationActive) {
-          window.emergencyLockAndLogout('KIOSK_BOOT_LOCK');
-        }
         var nameEl = document.getElementById('stationNameHeader');
         var ipEl = document.getElementById('stationIpHeader');
         var selectEl = document.getElementById('stationSelect');
@@ -496,6 +508,16 @@
       } else {
         sessionRetryCount = 0;
         showAuthScreen();
+        // Unauthenticated state: enforce physical copy restriction
+        var stationCode = (state.station && state.station.printerCode) ? state.station.printerCode : null;
+        var stationIp = (state.station && state.station.ipAddress) ? state.station.ipAddress : null;
+        if (stationCode || stationIp) {
+          apiRequest('POST', '/api/station/auto-lock', {
+            printerCode: stationCode,
+            printerIp: stationIp,
+            reason: 'SESSION_CHECK_SECURE'
+          }, function () {});
+        }
       }
     });
   }
@@ -1176,13 +1198,14 @@
 
   window.openCopyFunction = function () {
     state.isNativeOperationActive = true;
-    state.inactivitySeconds = 30;
+    state.inactivitySeconds = 90;
     updateTimerText();
 
-    showAlert('Copier ready! Press [HOME] or [CLEAR] on panel', 'success');
+    showAlert('Unlocking Photocopier...', 'info');
 
-    // Trigger native unlock & CWS DefaultScreen = Copy
+    // Trigger physical unlock & CWS DefaultScreen = Copy
     unlockDeviceTarget('COPY');
+    window.showCopyScreen();
   };
 
   window.openScanFunction = function () {
@@ -1240,17 +1263,9 @@
     var modeLabel = (mode === 'SCAN' ? 'Scanner' : (mode === 'HOME' ? 'Device Home' : 'Photocopier'));
 
     state.isNativeOperationActive = true;
-
-    // Immediate attempt on local browser environment
-    triggerToshibaNativeHook(mode);
-
-    var now = Date.now();
-    if (state.lastUnlockMode === mode && (now - (state.lastUnlockTime || 0) < 15000)) {
-      showAlert(modeLabel + ' ready! Press [HOME] or [CLEAR] on panel', 'success');
-      return;
-    }
-    state.lastUnlockMode = mode;
-    state.lastUnlockTime = now;
+    state.inactivitySeconds = 90;
+    updateTimerText();
+    showAlert('Unlocking ' + modeLabel + '... Hardware activating, please wait.', 'info');
 
     try {
       apiRequest('POST', '/api/station/device-functions', {
@@ -1260,10 +1275,12 @@
         username: (state.currentUser && (state.currentUser.username || '')) || '',
         switchScreen: 'true'
       }, function (status, data) {
-        if (status === 200) {
-          showAlert(modeLabel + ' ready! Press [HOME] or [CLEAR] on panel', 'success');
+        if (status === 200 && data && data.screenSwitched) {
+          triggerToshibaNativeHook(mode);
+          showAlert(modeLabel + ' Unlocked! Hardware buttons are active. Press [HOME] on panel or [START] to copy.', 'success');
         } else {
-          showAlert(modeLabel + ' ready! Press [HOME] or [CLEAR] on panel', 'info');
+          var errText = (data && data.message) ? data.message : ('Failed to unlock ' + modeLabel + '. Please try again.');
+          showAlert(errText, 'error');
         }
       });
     } catch (e) {
@@ -1373,15 +1390,19 @@
       }
     } catch (err) {}
 
-    // Drop browser overlay to reveal Toshiba native UI
-    try { window.open('', '_self', ''); window.close(); } catch (e) {}
-    try { if (window.top) { window.top.open('', '_self', ''); window.top.close(); } } catch (e) {}
-    try { if (window.parent) { window.parent.open('', '_self', ''); window.parent.close(); } } catch (e) {}
-    try { if (window.close) window.close(); } catch (e) {}
+    // 3. Attempt window.close() to dismiss EWB WebKit container if supported
+    try {
+      if (typeof window.close === 'function') {
+        window.close();
+      }
+    } catch (err) {}
   }
 
   window.triggerNativeCopyDirect = function (mode) {
     unlockDeviceTarget(mode || 'COPY');
+    if (!mode || mode === 'COPY') {
+      window.showCopyScreen();
+    }
   };
 
   /* =========================================================================
@@ -1596,6 +1617,9 @@
   };
   window.triggerNativeCopyDirect = function (mode) {
     unlockDeviceTarget(mode || 'COPY');
+    if (!mode || mode === 'COPY') {
+      window.showCopyScreen();
+    }
   };
 
   window.showCopySessionModal = function () {

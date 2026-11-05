@@ -125,7 +125,8 @@ function Get-ToshibaAuthStatus {
 function Set-ToshibaKioskLock {
     param($ip, $authContext, [bool]$lock)
 
-    $openAccessVal = if ($lock) { "1" } else { "0" }
+    # openAccess is kept 1 permanently so Toshiba never reboots network daemon or displays "Network Initializing"!
+    $openAccessVal = "1"
     $copyVal = if ($lock) { "true" } else { "false" }
     $scanVal = if ($lock) { "true" } else { "false" }
     $printVal = "false"
