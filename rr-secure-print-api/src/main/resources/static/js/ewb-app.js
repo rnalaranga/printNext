@@ -116,13 +116,9 @@
 
     function onVisibilityOrSleepChange() {
       if (isPageHidden()) {
-        // If native copy or scan screen is active, hiding EWB is expected behavior!
-        // Do NOT lock the device while user is actively photocopying.
-        if (state.isNativeOperationActive) {
-          return;
-        }
-        // Physical [SLEEP] button was pressed while on EWB terminal UI
-        if (state.currentUser) {
+        // Only lock if user was logged in at PIN/Menu/Queue and NOT in walk-up copy session
+        // (Navigating to native copy hides EWB, which must NOT trigger auto-lock!)
+        if (state.currentUser && !state.isNativeOperationActive) {
           window.emergencyLockAndLogout('HARDWARE_SLEEP_BUTTON');
         }
       }
@@ -137,17 +133,17 @@
     }
 
     // Hardware sleep gap watchdog:
-    // When the MFP enters deep sleep, JavaScript execution halts.
-    // Upon hardware wake, if >2.5s elapsed between ticks, trigger lock & reset to PIN pad!
+    // When the MFP enters deep sleep, JavaScript execution halts completely.
+    // Deep sleep lasts >3.5 seconds. Upon hardware wake, if a user was logged in or in native mode,
+    // immediately enforce copy restriction and return to locked PIN pad!
     var lastHardwareTick = Date.now ? Date.now() : new Date().getTime();
     setInterval(function () {
       var now = Date.now ? Date.now() : new Date().getTime();
       var gap = now - lastHardwareTick;
       lastHardwareTick = now;
-      if (gap > 2500) {
-        if (state.currentUser || state.isNativeOperationActive) {
-          window.emergencyLockAndLogout('HARDWARE_WAKE_AFTER_SLEEP');
-        }
+      if (gap > 3500 && (state.currentUser || state.isNativeOperationActive)) {
+        console.log('[EWB] Hardware sleep gap detected (' + gap + 'ms). Forcing auto-lock.');
+        window.emergencyLockAndLogout('HARDWARE_WAKE_AFTER_SLEEP');
       }
     }, 1000);
 
@@ -166,11 +162,11 @@
       }
     } catch (e) {}
 
+    // Initialize physical release station info first so state.station is set!
+    initStationInfo();
+
     // Check existing session
     checkCurrentSession();
-
-    // Initialize physical release station info
-    initStationInfo();
 
     // Initialize physical MFP touchscreen display scaling
     initMfpScreenScale();
@@ -185,12 +181,16 @@
   /* ------------------------------------------------------------------ */
   window.emergencyLockAndLogout = function (reason) {
     var now = Date.now ? Date.now() : new Date().getTime();
-    if (state.lastEmergencyLockTime && (now - state.lastEmergencyLockTime < 2500)) {
-      return; // Debounce 2.5s: ignore rapid duplicate calls
+    if (state.lastEmergencyLockTime && (now - state.lastEmergencyLockTime < 1500)) {
+      return; // Debounce 1.5s: ignore rapid duplicate calls
     }
     state.lastEmergencyLockTime = now;
 
     var stationCode = (state.station && state.station.printerCode) ? state.station.printerCode : null;
+    if (!stationCode) {
+      var match = (window.location.search || '').match(/[?&]printer=([^&]+)/i);
+      if (match) stationCode = decodeURIComponent(match[1]);
+    }
     var stationIp = (state.station && state.station.ipAddress) ? state.station.ipAddress : null;
     var payload = JSON.stringify({
       printerCode: stationCode,
@@ -198,27 +198,47 @@
       reason: reason || 'SLEEP_MODE'
     });
 
-    // 1. Send via immediate XMLHttpRequest
-    var sent = false;
-    try {
-      var xhr = new XMLHttpRequest();
-      xhr.open('POST', '/api/station/auto-lock', true);
-      xhr.setRequestHeader('Content-Type', 'application/json');
-      xhr.send(payload);
-      sent = true;
-    } catch (e) {
-      sent = false;
-    }
-
-    // 2. Fallback to Beacon
-    if (!sent && navigator.sendBeacon) {
+    // Send lock request with retry to handle wake-up network latency
+    function sendLockPayload(attempt) {
       try {
-        var blob = new Blob([payload], { type: 'application/json' });
-        navigator.sendBeacon('/api/station/auto-lock', blob);
-      } catch (e2) {}
+        var xhr = new XMLHttpRequest();
+        xhr.open('POST', '/api/station/auto-lock', true);
+        xhr.setRequestHeader('Content-Type', 'application/json');
+        xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
+        xhr.onreadystatechange = function () {
+          if (xhr.readyState === 4) {
+            if (xhr.status !== 200 && attempt < 3) {
+              setTimeout(function () { sendLockPayload(attempt + 1); }, 1000);
+            }
+          }
+        };
+        xhr.onerror = function () {
+          if (attempt < 3) {
+            setTimeout(function () { sendLockPayload(attempt + 1); }, 1000);
+          }
+        };
+        xhr.send(payload);
+      } catch (err) {
+        if (attempt < 3) {
+          setTimeout(function () { sendLockPayload(attempt + 1); }, 1000);
+        }
+      }
+    }
+    var beaconSent = false;
+    if (reason === 'HARDWARE_SLEEP_BUTTON' || reason === 'PAGE_UNLOAD') {
+      if (navigator.sendBeacon) {
+        try {
+          var blob = new Blob([payload], { type: 'application/json' });
+          beaconSent = navigator.sendBeacon('/api/station/auto-lock', blob);
+        } catch (e2) {}
+      }
+    }
+    if (!beaconSent) {
+      sendLockPayload(1);
     }
 
     // Reset local UI state to locked PIN pad
+    state.isBusy = false;
     state.isNativeOperationActive = false;
     state.currentUser = null;
     state.pinBuffer = '';
@@ -433,12 +453,19 @@
 
   function sendDiagnostics() {
     try {
+      var extKeys = [];
+      if (window.external) {
+        for (var ek in window.external) {
+          try { extKeys.push(ek + ':' + typeof window.external[ek]); } catch(e){}
+        }
+      }
       var diag = {
         userAgent: navigator.userAgent,
         hasTopaccess: !!window.topaccess,
         topaccessKeys: window.topaccess ? Object.keys(window.topaccess) : [],
         systemKeys: (window.topaccess && window.topaccess.system) ? Object.keys(window.topaccess.system) : [],
-        hasExternal: !!window.external
+        hasExternal: !!window.external,
+        externalKeys: extKeys
       };
       if (window.topaccess && window.topaccess.system) {
         var sm = {};
@@ -508,16 +535,6 @@
       } else {
         sessionRetryCount = 0;
         showAuthScreen();
-        // Unauthenticated state: enforce physical copy restriction
-        var stationCode = (state.station && state.station.printerCode) ? state.station.printerCode : null;
-        var stationIp = (state.station && state.station.ipAddress) ? state.station.ipAddress : null;
-        if (stationCode || stationIp) {
-          apiRequest('POST', '/api/station/auto-lock', {
-            printerCode: stationCode,
-            printerIp: stationIp,
-            reason: 'SESSION_CHECK_SECURE'
-          }, function () {});
-        }
       }
     });
   }
@@ -1159,6 +1176,14 @@
   }
 
   window.showMenuScreen = function () {
+    if (state.isNativeOperationActive) {
+      state.isNativeOperationActive = false;
+      var stationCode = (state.station && state.station.printerCode) ? state.station.printerCode : null;
+      var stationIp = (state.station && state.station.ipAddress) ? state.station.ipAddress : null;
+      try {
+        apiRequest('POST', '/api/station/restore-screen', { printerCode: stationCode, printerIp: stationIp }, function () {});
+      } catch (e) {}
+    }
     screenAuth.className = 'pc-screen pc-auth-screen';
     if (screenMenu) screenMenu.className = 'pc-screen pc-menu-screen pc-active';
     if (screenQueue) screenQueue.className = 'pc-screen pc-queue-screen';
@@ -1197,31 +1222,51 @@
   };
 
   window.openCopyFunction = function () {
+    if (state.isBusy) return;
+    state.isBusy = true;
     state.isNativeOperationActive = true;
-    state.inactivitySeconds = 90;
-    updateTimerText();
+    showAlert('Activating Photocopier hardware (approx 3s)... Please wait.', 'info');
 
-    showAlert('Unlocking Photocopier...', 'info');
-
-    // Trigger physical unlock & CWS DefaultScreen = Copy
-    unlockDeviceTarget('COPY');
-    window.showCopyScreen();
+    unlockDeviceTarget('COPY', function (success, data) {
+      state.isBusy = false;
+      if (success) {
+        state.isNativeOperationActive = true;
+        state.inactivitySeconds = 60;
+        updateTimerText();
+        window.showCopyScreen();
+        showAlert('Photocopier Unlocked! Hardware Ready. You can now press [HOME] or physical [START] key.', 'success');
+      } else {
+        state.isNativeOperationActive = false;
+        var err = (data && data.message) ? data.message : 'Could not unlock photocopier hardware. Please try again.';
+        showAlert(err, 'error');
+      }
+    });
   };
 
   window.openScanFunction = function () {
+    if (state.isBusy) return;
+    state.isBusy = true;
     state.isNativeOperationActive = true;
-    state.inactivitySeconds = 30;
-    updateTimerText();
+    showAlert('Activating Scanner hardware... Please wait.', 'info');
 
-    showAlert('Scanner ready! Press [HOME] or [CLEAR] on panel', 'success');
-
-    // Trigger native unlock & CWS DefaultScreen = Scan
-    unlockDeviceTarget('SCAN');
-    window.showScanScreen();
-    updateScanStationUI();
-    if (typeof window.initScanStation === 'function') {
-      window.initScanStation();
-    }
+    unlockDeviceTarget('SCAN', function (success, data) {
+      state.isBusy = false;
+      if (success) {
+        state.isNativeOperationActive = true;
+        state.inactivitySeconds = 45;
+        updateTimerText();
+        window.showScanScreen();
+        updateScanStationUI();
+        if (typeof window.initScanStation === 'function') {
+          window.initScanStation();
+        }
+        showAlert('Scanner ready! Press [HOME] or [CLEAR] on panel', 'success');
+      } else {
+        state.isNativeOperationActive = false;
+        var err = (data && data.message) ? data.message : 'Could not unlock scanner hardware. Please try again.';
+        showAlert(err, 'error');
+      }
+    });
   };
 
   function updateScanStationUI() {
@@ -1242,7 +1287,7 @@
 
   window.openDeviceHome = function () {
     state.isNativeOperationActive = true;
-    state.inactivitySeconds = 90;
+    state.inactivitySeconds = 45;
     updateTimerText();
 
     var userName = (state.currentUser && (state.currentUser.displayName || state.currentUser.username)) || 'User';
@@ -1257,15 +1302,10 @@
     window.openCopyFunction();
   };
 
-  function unlockDeviceTarget(mode) {
+  function unlockDeviceTarget(mode, callback) {
     var stationCode = (state.station && state.station.printerCode) ? state.station.printerCode : null;
     var stationIp = (state.station && state.station.ipAddress) ? state.station.ipAddress : null;
     var modeLabel = (mode === 'SCAN' ? 'Scanner' : (mode === 'HOME' ? 'Device Home' : 'Photocopier'));
-
-    state.isNativeOperationActive = true;
-    state.inactivitySeconds = 90;
-    updateTimerText();
-    showAlert('Unlocking ' + modeLabel + '... Hardware activating, please wait.', 'info');
 
     try {
       apiRequest('POST', '/api/station/device-functions', {
@@ -1273,18 +1313,20 @@
         printerIp: stationIp,
         mode: mode,
         username: (state.currentUser && (state.currentUser.username || '')) || '',
-        switchScreen: 'true'
+        switchScreen: 'false'
       }, function (status, data) {
-        if (status === 200 && data && data.screenSwitched) {
+        var isOk = (status === 200 && data && (data.success || data.screenSwitched));
+        if (isOk) {
           triggerToshibaNativeHook(mode);
-          showAlert(modeLabel + ' Unlocked! Hardware buttons are active. Press [HOME] on panel or [START] to copy.', 'success');
-        } else {
-          var errText = (data && data.message) ? data.message : ('Failed to unlock ' + modeLabel + '. Please try again.');
-          showAlert(errText, 'error');
+        }
+        if (typeof callback === 'function') {
+          callback(isOk, data);
         }
       });
     } catch (e) {
-      // non-fatal
+      if (typeof callback === 'function') {
+        callback(false, { message: e.message });
+      }
     }
   }
 
@@ -1389,20 +1431,10 @@
         if (typeof window.external.changeScreen === 'function') { window.external.changeScreen(screenName); return; }
       }
     } catch (err) {}
-
-    // 3. Attempt window.close() to dismiss EWB WebKit container if supported
-    try {
-      if (typeof window.close === 'function') {
-        window.close();
-      }
-    } catch (err) {}
   }
 
   window.triggerNativeCopyDirect = function (mode) {
-    unlockDeviceTarget(mode || 'COPY');
-    if (!mode || mode === 'COPY') {
-      window.showCopyScreen();
-    }
+    window.openCopyFunction();
   };
 
   /* =========================================================================
@@ -1616,14 +1648,11 @@
     unlockDeviceTarget('SCAN');
   };
   window.triggerNativeCopyDirect = function (mode) {
-    unlockDeviceTarget(mode || 'COPY');
-    if (!mode || mode === 'COPY') {
-      window.showCopyScreen();
-    }
+    window.openCopyFunction();
   };
 
   window.showCopySessionModal = function () {
-    window.showCopyScreen();
+    window.openCopyFunction();
   };
 
   window.hideCopySessionModal = function () {};
@@ -1897,7 +1926,7 @@
   /* ------------------------------------------------------------------ */
   function startInactivityTimer() {
     stopInactivityTimer();
-    state.inactivitySeconds = 60;
+    state.inactivitySeconds = 45;
     updateTimerText();
 
     state.timerInterval = setInterval(function () {
@@ -1921,7 +1950,7 @@
 
   function resetInactivityTimer() {
     if (state.currentUser) {
-      state.inactivitySeconds = 60;
+      state.inactivitySeconds = 45;
       updateTimerText();
     }
   }

@@ -177,15 +177,10 @@ public class StationController {
             try {
                 request.getSession(true).setAttribute("RR_ACTIVE_PRINTER_IP", p.getIpAddress());
             } catch (Exception ignored) {}
-            // Register as walk-up session with extended watchdog tolerance
-            copyTrackingService.registerWalkUpSession(p.getIpAddress(), username);
-
-            // Dynamically switch DefaultScreen to Copy/Scan only if requested (native jump)
-            if (switchScreen && !"TOSHIBA_OLD".equalsIgnoreCase(p.getDeviceGeneration())) {
+            // Unlock copy/scan functions for authenticated walk-up session
+            if (!"TOSHIBA_OLD".equalsIgnoreCase(p.getDeviceGeneration())) {
                 try {
-                    String targetScreen = "SCAN".equalsIgnoreCase(mode) ? "Scan" : "Copy";
-
-                    // 1. Ensure hardware copy/scan restriction is unlocked FIRST!
+                    // 1. Ensure hardware copy/scan restriction is unlocked FIRST
                     boolean unlockOk = toshibaEwbService.setCopyRestriction(p.getIpAddress(), p.getAdminUsername(), p.getAdminPassword(), false);
                     if (!unlockOk) {
                         log.warn("[STATION CONTROLLER] First unlock attempt returned false on {}, retrying immediately...", p.getIpAddress());
@@ -193,26 +188,17 @@ public class StationController {
                     }
                     log.info("[STATION CONTROLLER] Synchronous setCopyRestriction(false) on {} result: {}", p.getIpAddress(), unlockOk);
 
-                    // 2. Set DefaultScreen to targetScreen SECOND
-                    boolean screenOk = toshibaEwbService.setDefaultScreen(p.getIpAddress(), p.getAdminUsername(), p.getAdminPassword(), targetScreen);
-                    log.info("[STATION CONTROLLER] setDefaultScreen to {} on {} result: {}", targetScreen, p.getIpAddress(), screenOk);
-
-                    if (unlockOk || screenOk) {
+                    // 2. DefaultScreen MUST ALWAYS remain "EWB" across all 08, 18, and 28 series!
+                    // If DefaultScreen is set to "Copy", Toshiba MFPs wake up onto the native Copy screen
+                    // when waking from Sleep or Auto-Clear, bypassing the login kiosk.
+                    // Keeping DefaultScreen = "EWB" ensures the machine ALWAYS wakes up into nexPrint!
+                    if (unlockOk) {
                         unlockedPrinters.add(p.getIpAddress());
                         screenSuccess[0] = true;
-
-                        // 3. Pre-restore DefaultScreen to 'EWB' after 2 seconds in the background.
-                        // By second 2, the MFP panel has already loaded the native Copy screen.
-                        // Pre-restoring DefaultScreen to 'EWB' guarantees that when the user presses SLEEP or walks away,
-                        // the device wakes or auto-clears DIRECTLY into nexPrint EWB!
-                        java.util.concurrent.CompletableFuture.delayedExecutor(2, java.util.concurrent.TimeUnit.SECONDS).execute(() -> {
-                            try {
-                                toshibaEwbService.setDefaultScreen(p.getIpAddress(), p.getAdminUsername(), p.getAdminPassword(), "EWB");
-                                log.info("[STATION CONTROLLER] DefaultScreen successfully pre-restored to 'EWB' on {}", p.getIpAddress());
-                            } catch (Exception ex) {
-                                log.warn("Could not pre-restore DefaultScreen to EWB on {}: {}", p.getIpAddress(), ex.getMessage());
-                            }
-                        });
+                        // Register as walk-up session
+                        copyTrackingService.registerWalkUpSession(p.getIpAddress(), username);
+                        log.info("[STATION CONTROLLER] Device function unlocked: {} on {}. Physical copy engine is open (padlock removed).",
+                                mode, p.getIpAddress());
                     } else {
                         screenSuccess[0] = false;
                         log.error("[STATION CONTROLLER] Failed to unlock copy restriction on {}", p.getIpAddress());
@@ -314,6 +300,41 @@ public class StationController {
         });
 
         return ResponseEntity.ok(Map.of("success", true));
+    }
+
+    /**
+     * Restores the default screen on the Toshiba MFP back to EWB
+     * (e.g. when user returns to main apps menu from copy/scan view).
+     */
+    @PostMapping("/restore-screen")
+    public ResponseEntity<?> restoreScreen(
+            @RequestBody(required = false) Map<String, Object> body,
+            HttpServletRequest request) {
+        String printerCode = (body != null && body.get("printerCode") != null) ? body.get("printerCode").toString() : null;
+        String printerIp = (body != null && body.get("printerIp") != null) ? body.get("printerIp").toString() : null;
+        String clientIp = request.getRemoteAddr();
+
+        Optional<PrinterEntity> printerOpt = Optional.empty();
+        if (printerCode != null && !printerCode.isBlank()) {
+            printerOpt = printerRepository.findByPrinterCode(printerCode.trim().toUpperCase());
+        }
+        if (printerOpt.isEmpty() && printerIp != null && !printerIp.isBlank()) {
+            printerOpt = printerRepository.findByIpAddress(printerIp.trim());
+        }
+        if (printerOpt.isEmpty() && clientIp != null) {
+            printerOpt = printerRepository.findByIpAddress(clientIp.trim());
+        }
+
+        printerOpt.ifPresent(p -> {
+            try {
+                toshibaEwbService.setDefaultScreen(p.getIpAddress(), p.getAdminUsername(), p.getAdminPassword(), "EWB");
+                log.info("[STATION CONTROLLER] DefaultScreen restored to 'EWB' on {}", p.getIpAddress());
+            } catch (Exception ex) {
+                log.warn("Could not restore DefaultScreen to EWB on {}: {}", p.getIpAddress(), ex.getMessage());
+            }
+        });
+
+        return ResponseEntity.ok(Map.of("success", true, "screen", "EWB"));
     }
 
     /**
@@ -453,6 +474,7 @@ public class StationController {
         String printerIp = (body != null && body.get("printerIp") != null) ? body.get("printerIp").toString() : null;
         String clientIp = request.getRemoteAddr();
         String reason = (body != null && body.get("reason") != null) ? body.get("reason").toString() : "SLEEP_MODE";
+        log.info("[AUTO-LOCK] Auto-lock request received: printerCode={}, printerIp={}, reason={}, clientIp={}", printerCode, printerIp, reason, clientIp);
 
         List<PrinterEntity> toLock = new ArrayList<>();
 
@@ -473,9 +495,12 @@ public class StationController {
             }
         }
 
-        // If specific printer was not resolved from request, lock all printers currently in active copy sessions
+        // If specific printer was not resolved from request, lock all printers currently in active copy sessions or unlocked set
         if (toLock.isEmpty()) {
             for (String ip : copyTrackingService.getActiveTerminalIps()) {
+                printerRepository.findByIpAddress(ip).ifPresent(toLock::add);
+            }
+            for (String ip : unlockedPrinters) {
                 printerRepository.findByIpAddress(ip).ifPresent(toLock::add);
             }
         }
@@ -483,6 +508,15 @@ public class StationController {
         for (PrinterEntity p : toLock) {
             unlockedPrinters.remove(p.getIpAddress());
             currentAddressBookUserByPrinter.remove(p.getIpAddress());
+            if (!"TOSHIBA_OLD".equalsIgnoreCase(p.getDeviceGeneration())) {
+                try {
+                    toshibaEwbService.setCopyRestriction(p.getIpAddress(), p.getAdminUsername(), p.getAdminPassword(), true);
+                    toshibaEwbService.setDefaultScreen(p.getIpAddress(), p.getAdminUsername(), p.getAdminPassword(), "EWB");
+                    log.info("[STATION CONTROLLER] Synchronous auto-lock executed on {}: copy padlocked, screen=EWB", p.getIpAddress());
+                } catch (Exception ex) {
+                    log.warn("Synchronous auto-lock error on {}: {}", p.getIpAddress(), ex.getMessage());
+                }
+            }
             copyTrackingService.recordTerminalLogout(p.getIpAddress());
             auditService.logEvent("DEVICE_AUTO_LOCKED", "SYSTEM", "hardware", null,
                     p.getPrinterCode(), p.getIpAddress(),

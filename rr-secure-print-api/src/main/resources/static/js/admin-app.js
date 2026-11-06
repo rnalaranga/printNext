@@ -281,12 +281,34 @@
     renderPrinters();
   };
 
-  function buildSinglePrinterRow(p, showDeptCol) {
-    var isOld = (p.deviceGeneration === 'TOSHIBA_OLD' || (!p.deviceGeneration && p.model && (p.model.indexOf('306') !== -1 || p.model.indexOf('256') !== -1 || p.model.indexOf('356') !== -1 || p.model.indexOf('456') !== -1)));
+  function resolvePrinterSeries(p) {
+    if (!p) return { code: 'TOSHIBA_18', label: '18 Series', browser: 'Chromium 56', color: '#7C3AED', bg: '#EDE9FE', border: '#DDD6FE' };
+    var gen = (p.deviceGeneration || '').toUpperCase();
+    if (gen === 'TOSHIBA_08') return { code: 'TOSHIBA_08', label: '08 Series', browser: 'WebKit Safari', color: '#0284C7', bg: '#E0F2FE', border: '#BAE6FD' };
+    if (gen === 'TOSHIBA_18') return { code: 'TOSHIBA_18', label: '18 Series', browser: 'Chromium 56', color: '#7C3AED', bg: '#EDE9FE', border: '#DDD6FE' };
+    if (gen === 'TOSHIBA_28') return { code: 'TOSHIBA_28', label: '28 Series', browser: 'Chromium 56 (Gen 3)', color: '#16A34A', bg: '#DCFCE7', border: '#BBF7D0' };
+    if (gen === 'TOSHIBA_OLD') return { code: 'TOSHIBA_OLD', label: 'Toshiba Old', browser: 'No EWB', color: '#92400E', bg: '#FEF3C7', border: '#FDE68A' };
 
-    var genBadge = isOld
-      ? '<span class="badge" style="background:#FEF3C7; color:#92400E; border:1px solid #FDE68A; font-weight:600;"><span style="color:#D97706;"></span> Toshiba Old (Legacy)</span>'
-      : '<span class="badge" style="background:#E0F2FE; color:#0369A1; border:1px solid #BAE6FD; font-weight:600;"><span style="color:#0284C7;"></span> e-BRIDGE Next</span>';
+    // Fallback: inspect model
+    var m = (p.model || '').toLowerCase();
+    if (m.indexOf('306') !== -1 || m.indexOf('256') !== -1 || m.indexOf('356') !== -1 || m.indexOf('456') !== -1 || m.indexOf('506') !== -1 || m.indexOf('305') !== -1) {
+      return { code: 'TOSHIBA_OLD', label: 'Toshiba Old', browser: 'No EWB', color: '#92400E', bg: '#FEF3C7', border: '#FDE68A' };
+    }
+    if (m.indexOf('08') !== -1 || m.indexOf('05ac') !== -1) {
+      return { code: 'TOSHIBA_08', label: '08 Series', browser: 'WebKit Safari', color: '#0284C7', bg: '#E0F2FE', border: '#BAE6FD' };
+    }
+    if (m.indexOf('28') !== -1 || m.indexOf('25ac') !== -1 || m.indexOf('20ac') !== -1) {
+      return { code: 'TOSHIBA_28', label: '28 Series', browser: 'Chromium 56 (Gen 3)', color: '#16A34A', bg: '#DCFCE7', border: '#BBF7D0' };
+    }
+    return { code: 'TOSHIBA_18', label: '18 Series', browser: 'Chromium 56', color: '#7C3AED', bg: '#EDE9FE', border: '#DDD6FE' };
+  }
+  window.resolvePrinterSeries = resolvePrinterSeries;
+
+  function buildSinglePrinterRow(p, showDeptCol) {
+    var sInfo = resolvePrinterSeries(p);
+    var isOld = (sInfo.code === 'TOSHIBA_OLD');
+
+    var genBadge = '<span class="badge" style="background:' + sInfo.bg + '; color:' + sInfo.color + '; border:1px solid ' + sInfo.border + '; font-weight:600;" title="' + sInfo.browser + '"><span style="color:' + sInfo.color + ';">●</span> ' + sInfo.label + '</span>';
 
     var statusBadge = p.status === 'ONLINE'
       ? '<span class="badge badge-online">ONLINE</span>'
@@ -502,10 +524,31 @@
     container.innerHTML = outHtml;
   }
 
+  window.handleModelInput = function (val) {
+    if (!val) return;
+    var m = val.toLowerCase();
+    var genEl = document.getElementById('printerDeviceGeneration');
+    if (!genEl) return;
+    if (m.indexOf('306') !== -1 || m.indexOf('256') !== -1 || m.indexOf('356') !== -1 || m.indexOf('456') !== -1 || m.indexOf('506') !== -1 || m.indexOf('305') !== -1) {
+      genEl.value = 'TOSHIBA_OLD';
+    } else if (m.indexOf('08') !== -1 || m.indexOf('05ac') !== -1) {
+      genEl.value = 'TOSHIBA_08';
+    } else if (m.indexOf('28') !== -1 || m.indexOf('25ac') !== -1 || m.indexOf('20ac') !== -1) {
+      genEl.value = 'TOSHIBA_28';
+    } else if (m.indexOf('18') !== -1 || m.indexOf('15ac') !== -1 || m.indexOf('10ac') !== -1) {
+      genEl.value = 'TOSHIBA_18';
+    }
+    window.handleDeviceGenerationChange();
+  };
+
   window.handleDeviceGenerationChange = function () {
     var genEl = document.getElementById('printerDeviceGeneration');
     if (!genEl) return;
-    var isOld = (genEl.value === 'TOSHIBA_OLD');
+    var val = genEl.value;
+    var isOld = (val === 'TOSHIBA_OLD');
+    var is08 = (val === 'TOSHIBA_08');
+    var is18 = (val === 'TOSHIBA_18');
+    var is28 = (val === 'TOSHIBA_28');
     var modelInput = document.getElementById('printerModel');
     var ewbFields = document.getElementById('ewbConfigFields');
     var ewbNotice = document.getElementById('ewbLegacyNotice');
@@ -513,7 +556,7 @@
     var autoEwb = document.getElementById('printerAutoEwb');
 
     if (isOld) {
-      if (modelInput && (!modelInput.value || modelInput.value.indexOf('3518A') !== -1 || modelInput.value.indexOf('4508A') !== -1)) {
+      if (modelInput && (!modelInput.value || modelInput.value.indexOf('3518A') !== -1 || modelInput.value.indexOf('4508A') !== -1 || modelInput.value.indexOf('2528A') !== -1)) {
         modelInput.value = 'Toshiba e-STUDIO 306SE';
       }
       if (ewbFields) {
@@ -522,24 +565,49 @@
       }
       if (ewbNotice) ewbNotice.style.display = 'block';
       if (ewbBadge) {
-        ewbBadge.textContent = 'Toshiba Old (Legacy)';
+        ewbBadge.textContent = 'Toshiba Old (Legacy - RAW Port 9100)';
         ewbBadge.style.background = '#FEF3C7';
         ewbBadge.style.color = '#92400E';
+        ewbBadge.style.border = '1px solid #FDE68A';
       }
       if (autoEwb) autoEwb.checked = false;
     } else {
-      if (modelInput && modelInput.value === 'Toshiba e-STUDIO 306SE') {
-        modelInput.value = 'Toshiba e-STUDIO 3518A';
-      }
       if (ewbFields) {
         ewbFields.style.opacity = '1';
         ewbFields.style.pointerEvents = 'auto';
       }
       if (ewbNotice) ewbNotice.style.display = 'none';
-      if (ewbBadge) {
-        ewbBadge.textContent = 'e-BRIDGE Next Only';
-        ewbBadge.style.background = '#E0F2FE';
-        ewbBadge.style.color = '#0369A1';
+
+      if (is08) {
+        if (modelInput && (modelInput.value === 'Toshiba e-STUDIO 306SE' || modelInput.value === 'Toshiba e-STUDIO 3518A' || modelInput.value === 'Toshiba e-STUDIO 2528A')) {
+          modelInput.value = 'Toshiba e-STUDIO 4508A';
+        }
+        if (ewbBadge) {
+          ewbBadge.textContent = '08 Series (WebKit Safari 538.1)';
+          ewbBadge.style.background = '#E0F2FE';
+          ewbBadge.style.color = '#0369A1';
+          ewbBadge.style.border = '1px solid #BAE6FD';
+        }
+      } else if (is28) {
+        if (modelInput && (modelInput.value === 'Toshiba e-STUDIO 306SE' || modelInput.value === 'Toshiba e-STUDIO 3518A' || modelInput.value === 'Toshiba e-STUDIO 4508A')) {
+          modelInput.value = 'Toshiba e-STUDIO 2528A';
+        }
+        if (ewbBadge) {
+          ewbBadge.textContent = '28 Series (Chromium 56 Gen 3)';
+          ewbBadge.style.background = '#DCFCE7';
+          ewbBadge.style.color = '#15803D';
+          ewbBadge.style.border = '1px solid #BBF7D0';
+        }
+      } else { // 18 Series
+        if (modelInput && (modelInput.value === 'Toshiba e-STUDIO 306SE' || modelInput.value === 'Toshiba e-STUDIO 4508A' || modelInput.value === 'Toshiba e-STUDIO 2528A')) {
+          modelInput.value = 'Toshiba e-STUDIO 3518A';
+        }
+        if (ewbBadge) {
+          ewbBadge.textContent = '18 Series (QtWebEngine Chromium 56)';
+          ewbBadge.style.background = '#EDE9FE';
+          ewbBadge.style.color = '#6D28D9';
+          ewbBadge.style.border = '1px solid #DDD6FE';
+        }
       }
     }
   };
@@ -568,7 +636,7 @@
     document.getElementById('printerLocation').value = '';
     if (document.getElementById('printerDepartment')) document.getElementById('printerDepartment').value = 'Operations';
     document.getElementById('printerModel').value = 'Toshiba e-STUDIO 3518A';
-    document.getElementById('printerDeviceGeneration').value = 'TOSHIBA_NEW';
+    document.getElementById('printerDeviceGeneration').value = 'TOSHIBA_18';
     document.getElementById('printerDuplex').checked = true;
     document.getElementById('printerColor').checked = false;
     document.getElementById('printerActive').checked = true;
@@ -612,8 +680,8 @@
     document.getElementById('printerLocation').value = p.location || '';
     document.getElementById('printerModel').value = p.model || 'Toshiba e-STUDIO 3518A';
 
-    var gen = p.deviceGeneration || (p.model && (p.model.indexOf('306') !== -1 || p.model.indexOf('256') !== -1 || p.model.indexOf('356') !== -1 || p.model.indexOf('456') !== -1 || p.model.indexOf('506') !== -1) ? 'TOSHIBA_OLD' : 'TOSHIBA_NEW');
-    document.getElementById('printerDeviceGeneration').value = gen;
+    var sInfo = resolvePrinterSeries(p);
+    document.getElementById('printerDeviceGeneration').value = sInfo.code;
 
     document.getElementById('printerDuplex').checked = !!p.duplexSupported;
     document.getElementById('printerColor').checked = !!p.colorSupported;
@@ -2699,10 +2767,8 @@
         ? ' <span class="badge" style="background:#EFF6FF; color:#1D4ED8; font-size:10px;"> Default MFP</span>'
         : '';
 
-      var isOldModel = (printer.deviceGeneration === 'TOSHIBA_OLD' || (printer.model && (printer.model.indexOf('306') !== -1 || printer.model.indexOf('256') !== -1 || printer.model.indexOf('356') !== -1 || printer.model.indexOf('456') !== -1)));
-      var genTag = isOldModel
-        ? ' <span class="badge" style="background:#FEF3C7; color:#92400E; font-size:9.5px; border:1px solid #FDE68A;">Toshiba Old</span>'
-        : ' <span class="badge" style="background:#E0F2FE; color:#0369A1; font-size:9.5px; border:1px solid #BAE6FD;">Next</span>';
+      var sInfo = resolvePrinterSeries(printer);
+      var genTag = ' <span class="badge" style="background:' + sInfo.bg + '; color:' + sInfo.color + '; font-size:9.5px; border:1px solid ' + sInfo.border + ';">' + sInfo.label + '</span>';
 
       html += '<tr style="' + (inPool ? 'background:#FAFDFB;' : '') + '">' +
         '<td style="text-align:center;">' +
@@ -3962,7 +4028,8 @@
     sel.innerHTML = '<option value="">-- Choose a Printer --</option>';
     var pList = (typeof state !== 'undefined' && state.printers) ? state.printers : (window.state && window.state.printers ? window.state.printers : []);
     pList.forEach(function (p) {
-      var isOld = (p.deviceGeneration === 'TOSHIBA_OLD' || (!p.deviceGeneration && p.model && (p.model.indexOf('306') !== -1 || p.model.indexOf('256') !== -1 || p.model.indexOf('356') !== -1 || p.model.indexOf('456') !== -1)));
+      var sInfo = resolvePrinterSeries(p);
+      var isOld = (sInfo.code === 'TOSHIBA_OLD');
       if (!isOld) {
         var opt = document.createElement('option');
         opt.value = p.id;

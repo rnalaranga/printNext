@@ -125,6 +125,7 @@ public class CopyTrackingService {
 
                 for (PrinterEntity p : physicalPrinters) {
                     try {
+                        toshibaEwbService.cacheDefaultScreen(p.getIpAddress(), "EWB");
                         String adminUser = (p.getAdminUsername() != null && !p.getAdminUsername().isBlank()) ? p.getAdminUsername() : "admin";
                         String adminPass = (p.getAdminPassword() != null && !p.getAdminPassword().isBlank()) ? p.getAdminPassword() : "123456";
                         boolean locked = toshibaEwbService.setCopyRestriction(p.getIpAddress(), adminUser, adminPass, true);
@@ -513,20 +514,42 @@ public class CopyTrackingService {
                 Long postJobDeadline = postJobAutoLockDeadlineByIp.get(ip);
                 boolean postJobTimeout = postJobDeadline != null && System.currentTimeMillis() >= postJobDeadline;
 
-                // Sleep / Inactivity detection:
+                // Sleep / Inactivity detection calibrated per Toshiba Series Architecture:
                 // Normal heartbeat from active EWB browser is every 2.5s.
-                // When user presses physical [SLEEP] button, display turns off, or machine sleeps:
-                // heartbeat completely halts. Within 10s of sleep, watchdog auto-locks the MFP
-                // and restores DefaultScreen to 'EWB'.
-                long maxHeartbeatGap = 10;
-                long maxSessionSeconds = 120;
+                // - Walk-up copy mode: User is operating the physical ADF/glass panel.
+                //   On 18 & 28-Series (Chromium), background JS timers are throttled/paused by QtWebEngine.
+                //   Therefore, do NOT kill walk-up sessions on missing heartbeats!
+                //   Expire walk-up sessions ONLY if:
+                //     a) A completed copy job triggered the 15s post-job safety deadline, OR
+                //     b) Total walk-up session time exceeded 120s (user walked away without finishing).
+                // - Normal EWB mode (PIN screen / Menu / Print Queue):
+                //   Browser is running in the foreground. If heartbeats halt for > 20s, hardware
+                //   has entered Sleep, or user walked away. Auto-lock immediately.
+                Optional<PrinterEntity> printerOpt = printerRepository.findByIpAddress(ip);
+                String seriesName = printerOpt.map(PrinterEntity::getSeriesName).orElse("18 Series");
 
-                if (postJobTimeout || secondsSinceHeartbeat > maxHeartbeatGap || totalSessionSeconds > maxSessionSeconds) {
+                boolean shouldLock = false;
+                String lockReason = "";
+
+                if (session.isWalkUp()) {
+                    if (postJobTimeout) {
+                        shouldLock = true;
+                        lockReason = "Job completed (15s post-job auto-lock)";
+                    } else if (totalSessionSeconds > 120) {
+                        shouldLock = true;
+                        lockReason = "Walk-up copy session max duration reached (120s elapsed)";
+                    }
+                } else {
+                    if (secondsSinceHeartbeat > 20 || totalSessionSeconds > 180) {
+                        shouldLock = true;
+                        lockReason = secondsSinceHeartbeat + "s without heartbeat (EWB foreground idle/sleep)";
+                    }
+                }
+
+                if (shouldLock) {
                     postJobAutoLockDeadlineByIp.remove(ip);
-                    String reason = postJobTimeout ? "Job completed (15s post-job auto-lock)"
-                            : (secondsSinceHeartbeat + "s without heartbeat, isWalkUp=" + session.isWalkUp());
-                    LOGGER.info("[AUTO-LOCK WATCHDOG] Terminal on IP " + ip + " entered Sleep or Inactivity (" +
-                            reason + ", user: '" + session.username() + "'). Auto-locking physical device now.");
+                    LOGGER.info("[AUTO-LOCK WATCHDOG] Terminal on IP " + ip + " [" + seriesName + "] expired (" +
+                            lockReason + ", user: '" + session.username() + "', isWalkUp=" + session.isWalkUp() + "). Auto-locking physical device now.");
                     ipsToLock.add(ip);
                 }
             }

@@ -87,6 +87,29 @@ public class PrinterService {
         return saved;
     }
 
+    public static String resolveDeviceGeneration(String requestedGen, String model) {
+        if (requestedGen != null && !requestedGen.isBlank()) {
+            String g = requestedGen.trim().toUpperCase();
+            if ("TOSHIBA_08".equals(g) || "TOSHIBA_18".equals(g) || "TOSHIBA_28".equals(g) || "TOSHIBA_OLD".equals(g)) {
+                return g;
+            }
+        }
+        String m = model != null ? model.toLowerCase() : "";
+        if (m.contains("306") || m.contains("256") || m.contains("356") || m.contains("456") || m.contains("506") || m.contains("305") || m.contains("255")) {
+            return "TOSHIBA_OLD";
+        }
+        if (m.contains("08") || m.contains("05ac")) {
+            return "TOSHIBA_08";
+        }
+        if (m.contains("28") || m.contains("25ac") || m.contains("20ac")) {
+            return "TOSHIBA_28";
+        }
+        if (m.contains("18") || m.contains("15ac") || m.contains("10ac")) {
+            return "TOSHIBA_18";
+        }
+        return "TOSHIBA_18";
+    }
+
     @Transactional
     public PrinterEntity createPrinter(PrinterSaveRequest request, String adminActor, String clientIp) {
         String code = request.printerCode().trim().toUpperCase();
@@ -94,17 +117,7 @@ public class PrinterService {
             throw new IllegalArgumentException("Printer code '" + code + "' already registered.");
         }
 
-        String gen = request.deviceGeneration();
-        if (gen == null || gen.isBlank()) {
-            String m = request.model() != null ? request.model().toLowerCase() : "";
-            if (m.contains("306") || m.contains("256") || m.contains("356") || m.contains("456") || m.contains("506") || m.contains("305") || m.contains("255")) {
-                gen = "TOSHIBA_OLD";
-            } else {
-                gen = "TOSHIBA_NEW";
-            }
-        } else {
-            gen = gen.trim().toUpperCase();
-        }
+        String gen = resolveDeviceGeneration(request.deviceGeneration(), request.model());
 
         PrinterEntity printer = new PrinterEntity(
                 code,
@@ -193,9 +206,6 @@ public class PrinterService {
         if (request.name() != null && !request.name().isBlank()) {
             printer.setName(request.name().trim());
         }
-        if (request.deviceGeneration() != null && !request.deviceGeneration().isBlank()) {
-            printer.setDeviceGeneration(request.deviceGeneration().trim());
-        }
         if (request.ipAddress() != null && !request.ipAddress().isBlank()) {
             printer.setIpAddress(request.ipAddress().trim());
         }
@@ -205,8 +215,13 @@ public class PrinterService {
         if (request.location() != null) {
             printer.setLocation(request.location().trim());
         }
-        if (request.model() != null) {
+        if (request.model() != null && !request.model().isBlank()) {
             printer.setModel(request.model().trim());
+        }
+        if (request.deviceGeneration() != null && !request.deviceGeneration().isBlank()) {
+            printer.setDeviceGeneration(resolveDeviceGeneration(request.deviceGeneration(), printer.getModel()));
+        } else if (request.model() != null && !request.model().isBlank()) {
+            printer.setDeviceGeneration(resolveDeviceGeneration(printer.getDeviceGeneration(), printer.getModel()));
         }
         if (request.colorSupported() != null) {
             printer.setColorSupported(request.colorSupported());
@@ -644,7 +659,7 @@ public class PrinterService {
             String loc = locations[(int) (seq % locations.length)];
             String model = models[(int) (seq % models.length)];
             boolean isColor = model.contains("(Color)");
-            String gen = (model.contains("306") || model.contains("256")) ? "TOSHIBA_OLD" : "TOSHIBA_NEW";
+            String gen = resolveDeviceGeneration(null, model);
             String ip = String.format("192.168.1.%d", 20 + (int)(seq % 200));
             String name = model.replace("Toshiba ", "") + " (" + loc.split(" - ")[1] + ")";
 

@@ -160,6 +160,40 @@ public class PrinterEntity {
         this.deviceGeneration = (deviceGeneration != null && !deviceGeneration.isBlank()) ? deviceGeneration.toUpperCase() : "TOSHIBA_NEW";
     }
 
+    public String getSeriesName() {
+        String gen = getDeviceGeneration();
+        if ("TOSHIBA_08".equalsIgnoreCase(gen)) return "08 Series";
+        if ("TOSHIBA_18".equalsIgnoreCase(gen)) return "18 Series";
+        if ("TOSHIBA_28".equalsIgnoreCase(gen)) return "28 Series";
+        if ("TOSHIBA_OLD".equalsIgnoreCase(gen)) return "Toshiba Legacy";
+        String m = model != null ? model.toLowerCase() : "";
+        if (m.contains("08") || m.contains("05ac")) return "08 Series";
+        if (m.contains("28") || m.contains("25ac") || m.contains("20ac")) return "28 Series";
+        if (m.contains("18") || m.contains("15ac") || m.contains("10ac")) return "18 Series";
+        if (m.contains("306") || m.contains("256") || m.contains("356") || m.contains("456") || m.contains("506")) return "Toshiba Legacy";
+        return "18 Series";
+    }
+
+    public boolean is08Series() {
+        return "08 Series".equals(getSeriesName());
+    }
+
+    public boolean is18Series() {
+        return "18 Series".equals(getSeriesName());
+    }
+
+    public boolean is28Series() {
+        return "28 Series".equals(getSeriesName());
+    }
+
+    public boolean isLegacy() {
+        return "Toshiba Legacy".equals(getSeriesName()) || "TOSHIBA_OLD".equalsIgnoreCase(getDeviceGeneration());
+    }
+
+    public boolean isToshibaEwbSupported() {
+        return !isLegacy();
+    }
+
     public boolean isFunctionsLocked() { return functionsLocked; }
     public void setFunctionsLocked(boolean functionsLocked) { this.functionsLocked = functionsLocked; }
 

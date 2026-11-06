@@ -33,6 +33,15 @@ Write-Host "------------------------------------------------------------" -Foreg
 $env:PORT = "$Port"
 $env:ACTIVE_PROFILE = "dev"
 
+# Ensure Windows Spool Monitor daemon is running in background
+$spoolProc = Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object { $_.CommandLine -like "*start-spool-monitor.ps1*" }
+if (-not $spoolProc) {
+    Write-Host "[SPOOL MONITOR] Starting background Windows Spool Monitor..." -ForegroundColor Green
+    Start-Process powershell -ArgumentList '-NoProfile -ExecutionPolicy Bypass -File "' + $scriptDir + '\start-spool-monitor.ps1"' -WindowStyle Hidden
+} else {
+    Write-Host "[SPOOL MONITOR] Background Spool Monitor is active." -ForegroundColor Green
+}
+
 Set-Location $rootDir
 $jarPath = Join-Path $rootDir "rr-secure-print-api\target\rr-secure-print-api-1.0.0-SNAPSHOT.jar"
 

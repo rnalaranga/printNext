@@ -1910,27 +1910,58 @@
 
         <div class="form-row">
           <div class="form-group flex-1">
-            <label class="form-label" for="printerDeviceGeneration">Toshiba MFP Architecture / Generation *</label>
+            <label class="form-label" for="printerDeviceGeneration">Toshiba MFP Series / Generation *</label>
             <select id="printerDeviceGeneration" class="form-input" onchange="handleDeviceGenerationChange()" style="font-weight:600; cursor:pointer;">
-              <option value="TOSHIBA_NEW">Toshiba New (e-BRIDGE Next: 2518A, 3518A, 4508A, AC Series)</option>
-              <option value="TOSHIBA_OLD">Toshiba Old (e-BRIDGE Legacy: e-STUDIO 306SE, 256, 356, 456, 506)</option>
+              <option value="TOSHIBA_08">Toshiba 08 Series (e-BRIDGE Next: 2508A, 3508A, 4508A, 5008A, AC Series - WebKit)</option>
+              <option value="TOSHIBA_18">Toshiba 18 Series (e-BRIDGE Next: 2018A, 2518A, 3518A, 4518A, AC Series - Chromium)</option>
+              <option value="TOSHIBA_28">Toshiba 28 Series (e-BRIDGE Next: 2028A, 2528A, 3528A, 4528A, AC Series - Chromium Gen 3)</option>
+              <option value="TOSHIBA_OLD">Toshiba Old / Legacy (e-BRIDGE Legacy: e-STUDIO 306SE, 256, 356, 456, 506)</option>
             </select>
           </div>
           <div class="form-group flex-1">
             <label class="form-label" for="printerModel">Hardware Model</label>
-            <input type="text" id="printerModel" class="form-input" value="Toshiba e-STUDIO 4508A" list="printerModelSuggestions">
+            <input type="text" id="printerModel" class="form-input" value="Toshiba e-STUDIO 3518A" list="printerModelSuggestions" oninput="window.handleModelInput(this.value)">
             <datalist id="printerModelSuggestions">
+              <!-- 08 Series -->
+              <option value="Toshiba e-STUDIO 2508A">
+              <option value="Toshiba e-STUDIO 3008A">
+              <option value="Toshiba e-STUDIO 3508A">
+              <option value="Toshiba e-STUDIO 4508A">
+              <option value="Toshiba e-STUDIO 5008A">
+              <option value="Toshiba e-STUDIO 2505AC">
+              <option value="Toshiba e-STUDIO 3005AC">
+              <option value="Toshiba e-STUDIO 3505AC">
+              <option value="Toshiba e-STUDIO 4505AC">
+              <option value="Toshiba e-STUDIO 5005AC">
+              <!-- 18 Series -->
+              <option value="Toshiba e-STUDIO 2018A">
+              <option value="Toshiba e-STUDIO 2518A">
+              <option value="Toshiba e-STUDIO 3018A">
+              <option value="Toshiba e-STUDIO 3518A">
+              <option value="Toshiba e-STUDIO 4518A">
+              <option value="Toshiba e-STUDIO 5018A">
+              <option value="Toshiba e-STUDIO 2010AC">
+              <option value="Toshiba e-STUDIO 2515AC">
+              <option value="Toshiba e-STUDIO 3015AC">
+              <option value="Toshiba e-STUDIO 3515AC">
+              <option value="Toshiba e-STUDIO 4515AC">
+              <!-- 28 Series -->
+              <option value="Toshiba e-STUDIO 2028A">
+              <option value="Toshiba e-STUDIO 2528A">
+              <option value="Toshiba e-STUDIO 3028A">
+              <option value="Toshiba e-STUDIO 3528A">
+              <option value="Toshiba e-STUDIO 4528A">
+              <option value="Toshiba e-STUDIO 2020AC">
+              <option value="Toshiba e-STUDIO 2525AC">
+              <option value="Toshiba e-STUDIO 3025AC">
+              <option value="Toshiba e-STUDIO 3525AC">
+              <option value="Toshiba e-STUDIO 4525AC">
+              <!-- Legacy -->
               <option value="Toshiba e-STUDIO 306SE">
               <option value="Toshiba e-STUDIO 256">
               <option value="Toshiba e-STUDIO 356">
               <option value="Toshiba e-STUDIO 456">
               <option value="Toshiba e-STUDIO 506">
-              <option value="Toshiba e-STUDIO 2518A">
-              <option value="Toshiba e-STUDIO 3518A">
-              <option value="Toshiba e-STUDIO 4508A">
-              <option value="Toshiba e-STUDIO 5018A">
-              <option value="Toshiba e-STUDIO 2010AC">
-              <option value="Toshiba e-STUDIO 3015AC">
             </datalist>
           </div>
         </div>

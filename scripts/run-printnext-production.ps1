@@ -17,11 +17,21 @@ if (-not (Test-Path $jarPath)) {
 Write-Host "==========================================================" -ForegroundColor Green
 Write-Host "    printNext - 24/7 High-Availability Service Runner      " -ForegroundColor Green
 Write-Host "==========================================================" -ForegroundColor Green
-Write-Host " Port:         $Port" -ForegroundColor Cyan
-Write-Host " JAR:          $jarPath" -ForegroundColor Cyan
-Write-Host " Auto-Restart: ENABLED" -ForegroundColor Yellow
+Write-Host " Port:          $Port" -ForegroundColor Cyan
+Write-Host " JAR:           $jarPath" -ForegroundColor Cyan
+Write-Host " Auto-Restart:  ENABLED" -ForegroundColor Yellow
+Write-Host " Spool Monitor: AUTO-SUPERVISED" -ForegroundColor Yellow
 Write-Host " Startup Sweep: ALL TOSHIBA MFPs AUTO-LOCKED" -ForegroundColor Yellow
 Write-Host "----------------------------------------------------------" -ForegroundColor Gray
+
+# Ensure Windows Spool Monitor daemon is running in background
+$spoolProc = Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -like "*start-spool-monitor.ps1*" }
+if (-not $spoolProc) {
+    Write-Host "[$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')] Starting background Windows Spool Monitor..." -ForegroundColor Green
+    Start-Process powershell -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$scriptDir\start-spool-monitor.ps1`"" -WindowStyle Hidden
+} else {
+    Write-Host "[$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')] Windows Spool Monitor is already running." -ForegroundColor Green
+}
 
 while ($true) {
     Write-Host "[$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')] Starting printNext server process..." -ForegroundColor White

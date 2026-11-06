@@ -419,10 +419,9 @@ public class ToshibaEwbService {
 
         if (cleanIp.isEmpty()) return false;
 
-        // Skip unnecessary repeated CWS lock commands if already locked
         Boolean current = currentCopyRestrictionByPrinter.get(cleanIp);
-        if (restricted && current != null && current.booleanValue()) {
-            log.info("[TOSHIBA CWS] setCopyRestriction on {} already restricted=true. Instant return (0ms).", cleanIp);
+        if (current != null && current.booleanValue() == restricted) {
+            log.info("[TOSHIBA CWS] setCopyRestriction on {} -> restricted={} already in desired state. Skipping redundant call.", cleanIp, restricted);
             return true;
         }
 
@@ -440,18 +439,24 @@ public class ToshibaEwbService {
                         TopAccessSession session = getOrCreateSession(cleanIp, username, password);
                         String copyVal = restricted ? "true" : "false";
                         String scanVal = restricted ? "true" : "false";
+                        String otherVal = restricted ? "true" : "false";
 
                         // openAccess ALWAYS stays "1" so Toshiba never restarts network daemon or displays "Network Initializing"!
                         // Function-wise authentication is kept active (openAccess=1, functionwise=true),
                         // and access is granted or blocked by toggling AuthenticatedTarget/copy and scan.
-                        // openAccess=1 and functionwiseAuthentication=true are already permanently provisioned.
-                        // We only toggle the specific AuthenticatedTarget copy and scan flags at runtime!
-                        // Omitting openAccess and functionwiseAuthentication prevents the e-BRIDGE Next Gen 2 (28-series)
-                        // security daemon from triggering a full OpenAccess NIC reset ("Network Initializing...").
+                        // Providing the full AuthenticatedTarget set guarantees that 08, 18, and 28-series
+                        // panel security daemons immediately notify the physical touch UI to unlock/lock copy/scan/fax/list icons.
                         String setXml = "<DeviceInformationModel>" +
                                 "<SetValue overrideDelta='false'>" +
+                                "<Payload><path>Authentication/AuthenticationSettings/openAccess</path><value>1</value></Payload>" +
+                                "<Payload><path>Authentication/AuthenticationSettings/functionwiseAuthentication</path><value>true</value></Payload>" +
                                 "<Payload><path>Authentication/AuthenticationSettings/AuthenticatedTarget/copy</path><value>" + copyVal + "</value></Payload>" +
                                 "<Payload><path>Authentication/AuthenticationSettings/AuthenticatedTarget/scan</path><value>" + scanVal + "</value></Payload>" +
+                                "<Payload><path>Authentication/AuthenticationSettings/AuthenticatedTarget/fax</path><value>" + otherVal + "</value></Payload>" +
+                                "<Payload><path>Authentication/AuthenticationSettings/AuthenticatedTarget/print</path><value>false</value></Payload>" +
+                                "<Payload><path>Authentication/AuthenticationSettings/AuthenticatedTarget/list</path><value>" + otherVal + "</value></Payload>" +
+                                "<Payload><path>Authentication/AuthenticationSettings/AuthenticatedTarget/userFunctions</path><value>" + otherVal + "</value></Payload>" +
+                                "<Payload><path>Authentication/AuthenticationSettings/AuthenticatedTarget/EWB</path><value>false</value></Payload>" +
                                 "</SetValue>" +
                                 "<Command>" +
                                 "<AuthSettings><commandNode>Authentication/AuthenticationSettings</commandNode></AuthSettings>" +
@@ -769,6 +774,12 @@ public class ToshibaEwbService {
         return optimizeToshibaScanPerformance(printerIp, adminUsername, adminPassword);
     }
 
+    public void cacheDefaultScreen(String printerIp, String screen) {
+        if (printerIp != null && !printerIp.isBlank()) {
+            currentDefaultScreenByPrinter.put(printerIp.trim(), screen != null ? screen : "EWB");
+        }
+    }
+
     public boolean setDefaultScreen(String printerIp, String adminUsername, String adminPassword, String screenName) {
         String cleanIp = printerIp != null ? printerIp.trim() : "";
         String username = (adminUsername != null && !adminUsername.isBlank()) ? adminUsername.trim() : "admin";
@@ -777,9 +788,9 @@ public class ToshibaEwbService {
 
         if (cleanIp.isEmpty()) return false;
 
-        String currentScreen = currentDefaultScreenByPrinter.get(cleanIp);
-        if (targetScreen.equalsIgnoreCase(currentScreen)) {
-            log.info("[TOSHIBA CWS] setDefaultScreen on {} already {}. Instant return (0ms).", cleanIp, targetScreen);
+        String current = currentDefaultScreenByPrinter.get(cleanIp);
+        if (targetScreen.equalsIgnoreCase(current)) {
+            // Already set to target screen - skip redundant CWS dispatch to prevent 28-series browser reload
             return true;
         }
 
