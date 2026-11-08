@@ -1231,7 +1231,7 @@
       state.isBusy = false;
       if (success) {
         state.isNativeOperationActive = true;
-        state.inactivitySeconds = 60;
+        state.inactivitySeconds = 20;
         updateTimerText();
         window.showCopyScreen();
         showAlert('Photocopier Unlocked! Hardware Ready. You can now press [HOME] or physical [START] key.', 'success');
@@ -1253,7 +1253,7 @@
       state.isBusy = false;
       if (success) {
         state.isNativeOperationActive = true;
-        state.inactivitySeconds = 45;
+        state.inactivitySeconds = 20;
         updateTimerText();
         window.showScanScreen();
         updateScanStationUI();
@@ -1287,7 +1287,7 @@
 
   window.openDeviceHome = function () {
     state.isNativeOperationActive = true;
-    state.inactivitySeconds = 45;
+    state.inactivitySeconds = 20;
     updateTimerText();
 
     var userName = (state.currentUser && (state.currentUser.displayName || state.currentUser.username)) || 'User';

@@ -535,9 +535,9 @@ public class CopyTrackingService {
                     if (postJobTimeout) {
                         shouldLock = true;
                         lockReason = "Job completed (15s post-job auto-lock)";
-                    } else if (totalSessionSeconds > 120) {
+                    } else if (totalSessionSeconds > 25) {
                         shouldLock = true;
-                        lockReason = "Walk-up copy session max duration reached (120s elapsed)";
+                        lockReason = "Walk-up copy session max duration reached (25s idle timeout)";
                     }
                 } else {
                     if (secondsSinceHeartbeat > 20 || totalSessionSeconds > 180) {
