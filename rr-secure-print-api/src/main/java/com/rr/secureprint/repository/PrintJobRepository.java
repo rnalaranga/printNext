@@ -31,6 +31,8 @@ public interface PrintJobRepository extends JpaRepository<PrintJob, UUID> {
 
     List<PrintJob> findByStatusAndExpiresAtBefore(JobStatus status, Instant expirationThreshold);
 
+    boolean existsByChecksumSha256(String checksumSha256);
+
     @Modifying
     @Query("UPDATE PrintJob j SET j.targetPrinter = null WHERE j.targetPrinter.id = :printerId")
     int detachPrinterFromJobs(@Param("printerId") Long printerId);

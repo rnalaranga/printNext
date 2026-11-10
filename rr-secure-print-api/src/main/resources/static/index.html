@@ -556,6 +556,13 @@
       border-color: #10B981 !important;
       box-shadow: 0 6px 20px rgba(16, 185, 129, 0.18);
     }
+    .pc-menu-card-usb {
+      border-top: 5px solid #8B5CF6 !important;
+    }
+    .pc-menu-card-usb:active {
+      border-color: #8B5CF6 !important;
+      box-shadow: 0 6px 20px rgba(139, 92, 246, 0.18);
+    }
 
     .pc-menu-card-badge {
       position: absolute;
@@ -593,6 +600,10 @@
     .pc-menu-card-scan .pc-menu-icon-wrap {
       background: linear-gradient(135deg, #ECFDF5, #D1FAE5);
       border: 1.5px solid #A7F3D0;
+    }
+    .pc-menu-card-usb .pc-menu-icon-wrap {
+      background: linear-gradient(135deg, #F5F3FF, #EDE9FE);
+      border: 1.5px solid #DDD6FE;
     }
 
     .pc-menu-icon {
@@ -1085,11 +1096,11 @@
         <p>Choose an action to proceed on this device</p>
       </div>
 
-      <!-- 3 Primary Application Cards -->
+      <!-- 4 Primary Application Cards -->
       <table class="pc-menu-table" cellpadding="0" cellspacing="0">
         <tr>
           <!-- Tile 1: Print Release -->
-          <td style="width:33.333%;">
+          <td style="width:25%;">
             <div class="pc-menu-card pc-menu-card-print" onclick="window.openPrintRelease()" role="button" tabindex="0">
               <div class="pc-menu-card-badge" id="menuPrintBadge">0 Jobs</div>
               <div class="pc-menu-icon-wrap">
@@ -1104,7 +1115,7 @@
           </td>
 
           <!-- Tile 2: Copy -->
-          <td style="width:33.333%;">
+          <td style="width:25%;">
             <div class="pc-menu-card pc-menu-card-copy" onclick="window.openCopyFunction()" role="button" tabindex="0">
               <div class="pc-menu-icon-wrap">
                 <img src="/img/icon-copy.jpg" class="pc-menu-icon" alt="Copy" onerror="this.style.display='none'; document.getElementById('menuSvgCopy').style.display='flex';">
@@ -1117,8 +1128,28 @@
             </div>
           </td>
 
-          <!-- Tile 3: Scan -->
-          <td style="width:33.333%;">
+          <!-- Tile 3: USB Print -->
+          <td style="width:25%;">
+            <div class="pc-menu-card pc-menu-card-usb" onclick="window.openUsbPrintFunction()" role="button" tabindex="0">
+              <div class="pc-menu-icon-wrap">
+                <div id="menuSvgUsb" class="pc-menu-svg-fallback" style="display:flex;">
+                  <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="#7C3AED" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="8" y="2" width="8" height="6" rx="1"></rect>
+                    <path d="M6 8h12a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-6a2 2 0 0 1 2-2z"></path>
+                    <line x1="10" y1="5" x2="10" y2="5.01"></line>
+                    <line x1="14" y1="5" x2="14" y2="5.01"></line>
+                    <path d="M12 18v4"></path>
+                    <path d="M9 22h6"></path>
+                  </svg>
+                </div>
+              </div>
+              <div class="pc-menu-card-title">USB Print</div>
+              <div class="pc-menu-card-sub">Flash drive direct print</div>
+            </div>
+          </td>
+
+          <!-- Tile 4: Scan -->
+          <td style="width:25%;">
             <div class="pc-menu-card pc-menu-card-scan" onclick="window.openScanFunction()" role="button" tabindex="0">
               <div class="pc-menu-icon-wrap">
                 <img src="/img/icon-scan.jpg" class="pc-menu-icon" alt="Scan" onerror="this.style.display='none'; document.getElementById('menuSvgScan').style.display='flex';">
@@ -1240,7 +1271,7 @@
             <div style="background:#DBEAFE; color:#1D4ED8; width:44px; height:44px; border-radius:10px; display:flex; align-items:center; justify-content:center; font-size:24px;">&#128424;</div>
             <div>
               <div style="font-size:18px; font-weight:900; color:#1E3A8A; line-height:1.2;">Photocopier Unlocked</div>
-              <div style="font-size:11.5px; font-weight:600; color:#64748B;">Walk-up copy session active (auto-locks after 20s idle)</div>
+              <div style="font-size:11.5px; font-weight:600; color:#64748B;">Walk-up copy active &bull; <span id="copyStationTime" style="color:#DC2626; font-weight:800;">60s remaining</span></div>
             </div>
           </div>
           <div style="background:#DCFCE7; color:#15803D; font-size:11.5px; font-weight:800; padding:5px 12px; border-radius:16px; border:1px solid #86EFAC;">
@@ -1275,6 +1306,58 @@
           </button>
           <button type="button" onclick="window.handleFinishCopying()" style="padding:10px 22px; font-size:13px; font-weight:800; background:#EF4444; color:#FFFFFF; border:none; border-radius:8px; cursor:pointer; box-shadow:0 3px 10px rgba(239,68,68,0.25);">
             &#128274; Finish &amp; Lock Copier
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================
+       SCREEN: USB PRINT WALK-UP STATION
+       ============================================================ -->
+  <div id="screenUsb" class="pc-screen pc-copy-screen">
+    <div class="pc-copy-wrapper">
+      <div style="background:#FFFFFF; border:2px solid #8B5CF6; border-radius:16px; padding:20px 24px; box-shadow:0 6px 24px rgba(139,92,246,0.12);">
+        <div style="display:flex; align-items:center; justify-content:space-between; border-bottom:1.5px solid #E2E8F0; padding-bottom:12px; margin-bottom:14px;">
+          <div style="display:flex; align-items:center; gap:10px;">
+            <div style="background:#EDE9FE; color:#7C3AED; width:44px; height:44px; border-radius:10px; display:flex; align-items:center; justify-content:center; font-size:24px;">&#128424;</div>
+            <div>
+              <div style="font-size:18px; font-weight:900; color:#5B21B6; line-height:1.2;">USB Print Unlocked</div>
+              <div style="font-size:11.5px; font-weight:600; color:#64748B;">Direct USB print active &bull; <span id="usbStationTime" style="color:#DC2626; font-weight:800;">60s remaining</span></div>
+            </div>
+          </div>
+          <div style="background:#DCFCE7; color:#15803D; font-size:11.5px; font-weight:800; padding:5px 12px; border-radius:16px; border:1px solid #86EFAC;">
+            &#9679; Print Ready
+          </div>
+        </div>
+
+        <!-- 3 Simple Visual Steps -->
+        <div style="display:grid; grid-template-columns: repeat(3, 1fr); gap:12px; margin-bottom:16px;">
+          <div style="background:#F8FAFC; border:1.5px solid #E2E8F0; border-radius:10px; padding:12px 10px; text-align:center;">
+            <div style="width:26px; height:26px; background:#8B5CF6; color:#FFF; border-radius:50%; font-weight:900; font-size:12px; display:flex; align-items:center; justify-content:center; margin:0 auto 6px auto;">1</div>
+            <div style="font-size:12.5px; font-weight:800; color:#1E293B; margin-bottom:3px;">Open Screen</div>
+            <div style="font-size:10.5px; font-weight:600; color:#64748B; line-height:1.4;">Press <span style="background:#FEF08A; padding:1px 5px; border-radius:3px; color:#854D0E; font-weight:800;">[ HOME ]</span> on physical panel</div>
+          </div>
+
+          <div style="background:#F8FAFC; border:1.5px solid #E2E8F0; border-radius:10px; padding:12px 10px; text-align:center;">
+            <div style="width:26px; height:26px; background:#10B981; color:#FFF; border-radius:50%; font-weight:900; font-size:12px; display:flex; align-items:center; justify-content:center; margin:0 auto 6px auto;">2</div>
+            <div style="font-size:12.5px; font-weight:800; color:#1E293B; margin-bottom:3px;">Insert USB &amp; Print</div>
+            <div style="font-size:10.5px; font-weight:600; color:#64748B; line-height:1.4;">Plug drive, choose file &amp; press <span style="color:#059669; font-weight:800;">[ START ]</span></div>
+          </div>
+
+          <div style="background:#F8FAFC; border:1.5px solid #E2E8F0; border-radius:10px; padding:12px 10px; text-align:center;">
+            <div style="width:26px; height:26px; background:#EF4444; color:#FFF; border-radius:50%; font-weight:900; font-size:12px; display:flex; align-items:center; justify-content:center; margin:0 auto 6px auto;">3</div>
+            <div style="font-size:12.5px; font-weight:800; color:#1E293B; margin-bottom:3px;">Remove &amp; Lock</div>
+            <div style="font-size:10.5px; font-weight:600; color:#64748B; line-height:1.4;">Unplug USB &amp; press lock button below</div>
+          </div>
+        </div>
+
+        <div style="display:flex; justify-content:space-between; align-items:center; border-top:1.5px solid #E2E8F0; padding-top:14px;">
+          <button type="button" onclick="window.showMenuScreen()" style="padding:10px 18px; font-size:12px; font-weight:700; background:#F1F5F9; border:1.5px solid #CBD5E1; color:#334155; border-radius:8px; cursor:pointer;">
+            &larr; Back to Apps
+          </button>
+          <button type="button" onclick="window.handleFinishCopying()" style="padding:10px 22px; font-size:13px; font-weight:800; background:#EF4444; color:#FFFFFF; border:none; border-radius:8px; cursor:pointer; box-shadow:0 3px 10px rgba(239,68,68,0.25);">
+            &#128274; Finish &amp; Lock USB Print
           </button>
         </div>
       </div>

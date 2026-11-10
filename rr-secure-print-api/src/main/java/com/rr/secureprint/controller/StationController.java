@@ -177,31 +177,19 @@ public class StationController {
             try {
                 request.getSession(true).setAttribute("RR_ACTIVE_PRINTER_IP", p.getIpAddress());
             } catch (Exception ignored) {}
-            // Unlock copy/scan functions for authenticated walk-up session
+            // Unlock copy/scan/print functions for authenticated walk-up session
             if (!"TOSHIBA_OLD".equalsIgnoreCase(p.getDeviceGeneration())) {
                 try {
-                    // 1. Ensure hardware copy/scan restriction is unlocked FIRST
-                    boolean unlockOk = toshibaEwbService.setCopyRestriction(p.getIpAddress(), p.getAdminUsername(), p.getAdminPassword(), false);
-                    if (!unlockOk) {
-                        log.warn("[STATION CONTROLLER] First unlock attempt returned false on {}, retrying immediately...", p.getIpAddress());
-                        unlockOk = toshibaEwbService.setCopyRestriction(p.getIpAddress(), p.getAdminUsername(), p.getAdminPassword(), false);
-                    }
-                    log.info("[STATION CONTROLLER] Synchronous setCopyRestriction(false) on {} result: {}", p.getIpAddress(), unlockOk);
-
-                    // 2. DefaultScreen MUST ALWAYS remain "EWB" across all 08, 18, and 28 series!
-                    // If DefaultScreen is set to "Copy", Toshiba MFPs wake up onto the native Copy screen
-                    // when waking from Sleep or Auto-Clear, bypassing the login kiosk.
-                    // Keeping DefaultScreen = "EWB" ensures the machine ALWAYS wakes up into nexPrint!
+                    // Unlock physical copy, scan, and USB print restrictions (AuthenticatedTarget/copy, scan, print = false)
+                    boolean unlockOk = toshibaEwbService.setCopyRestriction(p.getIpAddress(), p.getAdminUsername(), p.getAdminPassword(), false, true);
                     if (unlockOk) {
                         unlockedPrinters.add(p.getIpAddress());
                         screenSuccess[0] = true;
-                        // Register as walk-up session
                         copyTrackingService.registerWalkUpSession(p.getIpAddress(), username);
-                        log.info("[STATION CONTROLLER] Device function unlocked: {} on {}. Physical copy engine is open (padlock removed).",
+                        log.info("[STATION CONTROLLER] Device function unlocked INSTANTLY: {} on {}. Physical engine is open.",
                                 mode, p.getIpAddress());
                     } else {
-                        screenSuccess[0] = false;
-                        log.error("[STATION CONTROLLER] Failed to unlock copy restriction on {}", p.getIpAddress());
+                        log.error("[STATION CONTROLLER] Failed to unlock device functions on {}", p.getIpAddress());
                     }
                 } catch (Exception ex) {
                     screenSuccess[0] = false;
@@ -327,7 +315,7 @@ public class StationController {
 
         printerOpt.ifPresent(p -> {
             try {
-                toshibaEwbService.setDefaultScreen(p.getIpAddress(), p.getAdminUsername(), p.getAdminPassword(), "EWB");
+                toshibaEwbService.setDefaultScreen(p.getIpAddress(), p.getAdminUsername(), p.getAdminPassword(), "EWB", true);
                 log.info("[STATION CONTROLLER] DefaultScreen restored to 'EWB' on {}", p.getIpAddress());
             } catch (Exception ex) {
                 log.warn("Could not restore DefaultScreen to EWB on {}: {}", p.getIpAddress(), ex.getMessage());
@@ -510,9 +498,18 @@ public class StationController {
             currentAddressBookUserByPrinter.remove(p.getIpAddress());
             if (!"TOSHIBA_OLD".equalsIgnoreCase(p.getDeviceGeneration())) {
                 try {
-                    toshibaEwbService.setCopyRestriction(p.getIpAddress(), p.getAdminUsername(), p.getAdminPassword(), true);
-                    toshibaEwbService.setDefaultScreen(p.getIpAddress(), p.getAdminUsername(), p.getAdminPassword(), "EWB");
-                    log.info("[STATION CONTROLLER] Synchronous auto-lock executed on {}: copy padlocked, screen=EWB", p.getIpAddress());
+                    // Revert screen immediately so terminal shows PIN screen (140ms)
+                    toshibaEwbService.setDefaultScreen(p.getIpAddress(), p.getAdminUsername(), p.getAdminPassword(), "EWB", true);
+                    // Lock hardware in background so user doesn't wait
+                    CompletableFuture.runAsync(() -> {
+                        try {
+                            toshibaEwbService.setCopyRestriction(p.getIpAddress(), p.getAdminUsername(), p.getAdminPassword(), true, true);
+                            log.info("[STATION CONTROLLER] Background physical copy lock completed on {}", p.getIpAddress());
+                        } catch (Exception ex) {
+                            log.warn("Background physical copy lock error on {}: {}", p.getIpAddress(), ex.getMessage());
+                        }
+                    });
+                    log.info("[STATION CONTROLLER] Synchronous auto-lock executed on {}: screen=EWB, hardware lock dispatched", p.getIpAddress());
                 } catch (Exception ex) {
                     log.warn("Synchronous auto-lock error on {}: {}", p.getIpAddress(), ex.getMessage());
                 }

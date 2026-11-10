@@ -1,0 +1,65 @@
+<!--
+/* ****************************************************************************
+Author				: Kalyan
+Modified            : Shiva Krishnan
+Date of Creation	:
+Version No.			:
+Purpose   			: 
+***************************************************************************** */
+-->
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN">
+<HTML><HEAD>
+<META http-equiv=Content-Type content=text/html;charset=windows-1252>
+<LINK href="/styles/style.css?v=1611063818ta" type=text/css rel=stylesheet>
+<LINK href="/styles/pagination.css?v=1611063818ta" type="text/css" rel="stylesheet">
+<script language="javascript" type="text/javascript" src="/js/jquery.min.js?v=1611063818ta"></script>
+<script language="javascript" type="text/javascript" src="/js/pagination.js?v=1611063818ta"></script>
+<script language="javascript" type="text/javascript" src="/js/TopAccessUtil.js?v=1611063818ta"></script>
+<script language="javascript" type="text/javascript" src="/js/Logs.js?v=1611063818ta"></script>
+<script language="javascript" type="text/javascript" src="/js/AjaxReqRespHandler.js?v=1611063818ta"></script>
+<SCRIPT language=Javascript>
+    function fnnRefresh()
+    {
+        //self.location.href="PrintLogList.html?v=1611063818ta";
+        $("#Paging-Container").pagination("reload");
+        return;
+    }
+
+    /**********
+     0 - recordId
+     1 - userId
+     2 - timeOfEntry
+     3 - type
+     4 - paper
+     5 - pages
+     6 - sets
+     7 - documentName
+     ***********/
+
+    function fnnOnResize()
+    {
+        if(navigator.appName=="Netscape" &&  parseInt(navigator.appVersion)==4)
+        {
+            self.location.href="PrintLogList.html?v=1611063818ta";
+        }
+        return;
+    }
+
+</SCRIPT>
+
+<script>
+    $(document).ready(function(){
+      initiateLogPagingTable('Log-Print');
+    });
+</script>
+
+
+<META content="MSHTML 6.00.5730.11" name=GENERATOR></HEAD>
+<BODY class=clsMargin onresize=fnnOnResize(); vLink=black aLink=black link=black bgColor=white style="overflow-y:auto;">
+
+<form NAME='frmPrintLogs'>
+    <div id="Paging-Container"></div>
+</form>
+
+</BODY>
+</HTML>

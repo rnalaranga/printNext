@@ -34,6 +34,7 @@ public class JobService {
     private final RawSocketPrinterService rawSocketPrinterService;
     private final WindowsQueueService windowsQueueService;
     private final AuditService auditService;
+    private final ToshibaEwbService toshibaEwbService;
 
     public JobService(PrintJobRepository printJobRepository,
                       PrinterRepository printerRepository,
@@ -42,6 +43,19 @@ public class JobService {
                       RawSocketPrinterService rawSocketPrinterService,
                       WindowsQueueService windowsQueueService,
                       AuditService auditService) {
+        this(printJobRepository, printerRepository, userRepository, spoolStorageService,
+                rawSocketPrinterService, windowsQueueService, auditService, null);
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public JobService(PrintJobRepository printJobRepository,
+                      PrinterRepository printerRepository,
+                      UserRepository userRepository,
+                      SpoolStorageService spoolStorageService,
+                      RawSocketPrinterService rawSocketPrinterService,
+                      WindowsQueueService windowsQueueService,
+                      AuditService auditService,
+                      @org.springframework.beans.factory.annotation.Autowired(required = false) ToshibaEwbService toshibaEwbService) {
         this.printJobRepository = printJobRepository;
         this.printerRepository = printerRepository;
         this.userRepository = userRepository;
@@ -49,6 +63,7 @@ public class JobService {
         this.rawSocketPrinterService = rawSocketPrinterService;
         this.windowsQueueService = windowsQueueService;
         this.auditService = auditService;
+        this.toshibaEwbService = toshibaEwbService;
     }
 
     /**
@@ -173,6 +188,17 @@ public class JobService {
                 return ReleaseResponse.simulatedSuccess(id, job.getDocumentName(),
                         targetPrinter.getPrinterCode(), targetPrinter.getName());
             } else {
+                if (toshibaEwbService != null && targetPrinter != null && targetPrinter.getIpAddress() != null) {
+                    String pIp = targetPrinter.getIpAddress();
+                    String pUser = targetPrinter.getAdminUsername();
+                    String pPass = targetPrinter.getAdminPassword();
+                    java.util.concurrent.CompletableFuture.runAsync(() -> {
+                        try {
+                            Thread.sleep(8000L);
+                            toshibaEwbService.clearJobLogs(pIp, pUser, pPass);
+                        } catch (Exception ignored) {}
+                    });
+                }
                 return ReleaseResponse.physicalSuccess(id, job.getDocumentName(),
                         targetPrinter.getPrinterCode(), targetPrinter.getName());
             }

@@ -44,7 +44,7 @@
     pinBuffer: '',
     jobs: [],
     selectedJobIds: {},
-    inactivitySeconds: 120,
+    inactivitySeconds: 20,
     timerInterval: null,
     isBusy: false,
     isNativeOperationActive: false
@@ -58,6 +58,7 @@
   var screenQueue         = null;
   var screenCopy          = null;
   var screenScan          = null;
+  var screenUsb           = null;
   var userHeaderSection   = null;
   var deviceStatusHeader  = null;
   var userBadgeText       = null;
@@ -84,6 +85,7 @@
     screenQueue         = document.getElementById('screenQueue');
     screenCopy          = document.getElementById('screenCopy');
     screenScan          = document.getElementById('screenScan');
+    screenUsb           = document.getElementById('screenUsb');
     userHeaderSection   = document.getElementById('userHeaderSection');
     deviceStatusHeader  = document.getElementById('deviceStatusHeader');
     userBadgeText       = document.getElementById('userBadgeText');
@@ -1167,6 +1169,7 @@
     if (screenQueue) screenQueue.className = 'pc-screen pc-queue-screen';
     if (screenCopy) screenCopy.className = 'pc-screen pc-copy-screen';
     if (screenScan) screenScan.className = 'pc-screen pc-scan-screen';
+    if (screenUsb) screenUsb.className = 'pc-screen pc-copy-screen';
     state.pinBuffer = '';
     state.pendingCardBadgeId = null;
     window.switchAuthMode('PIN');
@@ -1189,6 +1192,7 @@
     if (screenQueue) screenQueue.className = 'pc-screen pc-queue-screen';
     if (screenCopy) screenCopy.className = 'pc-screen pc-copy-screen';
     if (screenScan) screenScan.className = 'pc-screen pc-scan-screen';
+    if (screenUsb) screenUsb.className = 'pc-screen pc-copy-screen';
     updateMenuJobCount();
   };
 
@@ -1198,6 +1202,7 @@
     if (screenQueue) screenQueue.className = 'pc-screen pc-queue-screen pc-active';
     if (screenCopy) screenCopy.className = 'pc-screen pc-copy-screen';
     if (screenScan) screenScan.className = 'pc-screen pc-scan-screen';
+    if (screenUsb) screenUsb.className = 'pc-screen pc-copy-screen';
   };
 
   window.showCopyScreen = function () {
@@ -1206,6 +1211,7 @@
     if (screenQueue) screenQueue.className = 'pc-screen pc-queue-screen';
     if (screenCopy) screenCopy.className = 'pc-screen pc-copy-screen pc-active';
     if (screenScan) screenScan.className = 'pc-screen pc-scan-screen';
+    if (screenUsb) screenUsb.className = 'pc-screen pc-copy-screen';
   };
 
   window.showScanScreen = function () {
@@ -1214,9 +1220,19 @@
     if (screenQueue) screenQueue.className = 'pc-screen pc-queue-screen';
     if (screenCopy) screenCopy.className = 'pc-screen pc-copy-screen';
     if (screenScan) screenScan.className = 'pc-screen pc-scan-screen pc-active';
+    if (screenUsb) screenUsb.className = 'pc-screen pc-copy-screen';
   };
 
-  /* Action Handlers for the 3 Application Launcher Tiles */
+  window.showUsbPrintScreen = function () {
+    screenAuth.className = 'pc-screen pc-auth-screen';
+    if (screenMenu) screenMenu.className = 'pc-screen pc-menu-screen';
+    if (screenQueue) screenQueue.className = 'pc-screen pc-queue-screen';
+    if (screenCopy) screenCopy.className = 'pc-screen pc-copy-screen';
+    if (screenScan) screenScan.className = 'pc-screen pc-scan-screen';
+    if (screenUsb) screenUsb.className = 'pc-screen pc-copy-screen pc-active';
+  };
+
+  /* Action Handlers for Primary Application Launcher Tiles */
   window.openPrintRelease = function () {
     window.showQueueScreen();
   };
@@ -1225,19 +1241,41 @@
     if (state.isBusy) return;
     state.isBusy = true;
     state.isNativeOperationActive = true;
-    showAlert('Activating Photocopier hardware (approx 3s)... Please wait.', 'info');
+    showAlert('Activating Photocopier hardware... Please wait.', 'info');
 
     unlockDeviceTarget('COPY', function (success, data) {
       state.isBusy = false;
       if (success) {
         state.isNativeOperationActive = true;
-        state.inactivitySeconds = 20;
+        state.inactivitySeconds = 60;
         updateTimerText();
         window.showCopyScreen();
-        showAlert('Photocopier Unlocked! Hardware Ready. You can now press [HOME] or physical [START] key.', 'success');
+        showAlert('✅ Hardware Ready! Press [HOME] on the physical panel now.', 'success');
       } else {
         state.isNativeOperationActive = false;
         var err = (data && data.message) ? data.message : 'Could not unlock photocopier hardware. Please try again.';
+        showAlert(err, 'error');
+      }
+    });
+  };
+
+  window.openUsbPrintFunction = function () {
+    if (state.isBusy) return;
+    state.isBusy = true;
+    state.isNativeOperationActive = true;
+    showAlert('Activating USB Direct Print hardware... Please wait.', 'info');
+
+    unlockDeviceTarget('USB', function (success, data) {
+      state.isBusy = false;
+      if (success) {
+        state.isNativeOperationActive = true;
+        state.inactivitySeconds = 60;
+        updateTimerText();
+        window.showUsbPrintScreen();
+        showAlert('✅ Hardware Ready! Press [HOME] on the physical panel now.', 'success');
+      } else {
+        state.isNativeOperationActive = false;
+        var err = (data && data.message) ? data.message : 'Could not unlock USB print hardware. Please try again.';
         showAlert(err, 'error');
       }
     });
@@ -1253,7 +1291,7 @@
       state.isBusy = false;
       if (success) {
         state.isNativeOperationActive = true;
-        state.inactivitySeconds = 20;
+        state.inactivitySeconds = 60;
         updateTimerText();
         window.showScanScreen();
         updateScanStationUI();
@@ -1287,7 +1325,7 @@
 
   window.openDeviceHome = function () {
     state.isNativeOperationActive = true;
-    state.inactivitySeconds = 20;
+    state.inactivitySeconds = 60;
     updateTimerText();
 
     var userName = (state.currentUser && (state.currentUser.displayName || state.currentUser.username)) || 'User';
@@ -1305,7 +1343,7 @@
   function unlockDeviceTarget(mode, callback) {
     var stationCode = (state.station && state.station.printerCode) ? state.station.printerCode : null;
     var stationIp = (state.station && state.station.ipAddress) ? state.station.ipAddress : null;
-    var modeLabel = (mode === 'SCAN' ? 'Scanner' : (mode === 'HOME' ? 'Device Home' : 'Photocopier'));
+    var modeLabel = (mode === 'SCAN' ? 'Scanner' : (mode === 'USB' || mode === 'PRINT' ? 'USB Print' : (mode === 'HOME' ? 'Device Home' : 'Photocopier')));
 
     try {
       apiRequest('POST', '/api/station/device-functions', {
@@ -1313,7 +1351,7 @@
         printerIp: stationIp,
         mode: mode,
         username: (state.currentUser && (state.currentUser.username || '')) || '',
-        switchScreen: 'false'
+        switchScreen: 'true'
       }, function (status, data) {
         var isOk = (status === 200 && data && (data.success || data.screenSwitched));
         if (isOk) {
@@ -1331,10 +1369,10 @@
   }
 
   function triggerToshibaNativeHook(mode) {
-    var screenName = (mode === 'SCAN') ? 'scan' : 'copy';
-    var screenCapitalized = (mode === 'SCAN') ? 'Scan' : 'Copy';
-    var screenUpper = (mode === 'SCAN') ? 'SCAN' : 'COPY';
-    var funcId = (mode === 'COPY') ? 1 : 2;
+    var screenName = (mode === 'SCAN') ? 'scan' : ((mode === 'USB' || mode === 'PRINT') ? 'print' : 'copy');
+    var screenCapitalized = (mode === 'SCAN') ? 'Scan' : ((mode === 'USB' || mode === 'PRINT') ? 'Print' : 'Copy');
+    var screenUpper = (mode === 'SCAN') ? 'SCAN' : ((mode === 'USB' || mode === 'PRINT') ? 'PRINT' : 'COPY');
+    var funcId = (mode === 'COPY') ? 1 : ((mode === 'USB' || mode === 'PRINT') ? 4 : 2);
 
     // Report what topaccess actually has right at click for diagnostics
     try {
@@ -1366,6 +1404,10 @@
           if (mode === 'COPY') {
             if (typeof ta.system.openCopyScreen === 'function') { ta.system.openCopyScreen(); return; }
             if (typeof ta.system.openCopy === 'function') { ta.system.openCopy(); return; }
+          } else if (mode === 'USB' || mode === 'PRINT') {
+            if (typeof ta.system.openPrintScreen === 'function') { ta.system.openPrintScreen(); return; }
+            if (typeof ta.system.openPrint === 'function') { ta.system.openPrint(); return; }
+            if (typeof ta.system.openDirectPrint === 'function') { ta.system.openDirectPrint(); return; }
           } else {
             if (typeof ta.system.openScanScreen === 'function') { ta.system.openScanScreen(); return; }
             if (typeof ta.system.openScan === 'function') { ta.system.openScan(); return; }
@@ -1561,7 +1603,7 @@
     var stationIp = (state.station && state.station.ipAddress) ? state.station.ipAddress : null;
 
     scanState.isScanning = true;
-    state.inactivitySeconds = 120;
+    state.inactivitySeconds = 20;
 
     var formView = document.getElementById('scanFormView');
     var progView = document.getElementById('scanProgressView');
@@ -1926,7 +1968,7 @@
   /* ------------------------------------------------------------------ */
   function startInactivityTimer() {
     stopInactivityTimer();
-    state.inactivitySeconds = 45;
+    state.inactivitySeconds = 30;
     updateTimerText();
 
     state.timerInterval = setInterval(function () {
@@ -1950,7 +1992,7 @@
 
   function resetInactivityTimer() {
     if (state.currentUser) {
-      state.inactivitySeconds = 45;
+      state.inactivitySeconds = 30;
       updateTimerText();
     }
   }
@@ -1966,6 +2008,10 @@
     var scTime = document.getElementById('scanStationTime');
     if (scTime) {
       scTime.textContent = state.inactivitySeconds + 's remaining';
+    }
+    var usTime = document.getElementById('usbStationTime');
+    if (usTime) {
+      usTime.textContent = state.inactivitySeconds + 's remaining';
     }
   }
 
