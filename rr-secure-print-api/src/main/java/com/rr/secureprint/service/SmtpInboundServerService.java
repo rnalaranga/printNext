@@ -58,6 +58,7 @@ public class SmtpInboundServerService {
     private final SmtpEmailService smtpEmailService;
     private final AuditService auditService;
     private final CopyTrackingService copyTrackingService;
+    private final CryptoService cryptoService;
 
     private ServerSocket serverSocket;
     private ExecutorService threadPool;
@@ -72,7 +73,8 @@ public class SmtpInboundServerService {
             SystemSettingsService systemSettingsService,
             SmtpEmailService smtpEmailService,
             AuditService auditService,
-            CopyTrackingService copyTrackingService) {
+            CopyTrackingService copyTrackingService,
+            CryptoService cryptoService) {
         this.port = port;
         this.enabled = enabled;
         this.printerRepository = printerRepository;
@@ -82,6 +84,7 @@ public class SmtpInboundServerService {
         this.smtpEmailService = smtpEmailService;
         this.auditService = auditService;
         this.copyTrackingService = copyTrackingService;
+        this.cryptoService = cryptoService;
     }
 
     @PostConstruct
@@ -316,13 +319,14 @@ public class SmtpInboundServerService {
                     safeName += ".pdf";
                 }
 
-                // 1. SAVE DOCUMENT ON SERVER DISK (data/scans/<user>/)
+                // 1. SAVE DOCUMENT ON SERVER DISK (AES-256-GCM Encrypted at Rest)
                 Path userScanDir = Paths.get("data", "scans", finalUser);
                 Files.createDirectories(userScanDir);
                 Path localSavedFile = userScanDir.resolve(timeStamp + "_" + safeName);
-                Files.write(localSavedFile, att.data());
+                byte[] encryptedBytes = cryptoService.encrypt(att.data());
+                Files.write(localSavedFile, encryptedBytes);
                 String absoluteStoredPath = localSavedFile.toAbsolutePath().toString();
-                log.info("[SCAN STORED] Captured document saved on server: {}", absoluteStoredPath);
+                log.info("[SCAN ENCRYPTED] Captured document saved AES-256 encrypted on server: {}", absoluteStoredPath);
 
                 // Count pages in PDF
                 int pages = countPagesInPdf(att.data());
@@ -437,6 +441,11 @@ public class SmtpInboundServerService {
             count++;
         }
         return Math.max(count, 1);
+    }
+
+    public byte[] readSavedScanDocument(Path filePath) throws IOException {
+        byte[] raw = Files.readAllBytes(filePath);
+        return cryptoService.decrypt(raw);
     }
 
     public record ScannedAttachment(String filename, byte[] data, String contentType) {}

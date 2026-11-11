@@ -68,7 +68,7 @@ public class ScanService {
         if (recipient == null || recipient.isBlank()) {
             recipient = (request.recipientEmail() != null && !request.recipientEmail().isBlank())
                     ? request.recipientEmail().trim()
-                    : user.getUsername() + "@rrconstruction.lk";
+                    : user.getUsername() + "@nexprint.local";
         }
         recipient = recipient.trim();
 

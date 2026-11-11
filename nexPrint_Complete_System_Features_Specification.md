@@ -198,6 +198,13 @@ Accessible via `http://localhost:8080/admin.html`:
 
 ## 10. Security Architecture & Regulatory Compliance
 
+### Live Document Encryption (AES-256-GCM Authenticated Encryption)
+* **Pull Print Spool Files Encryption at Rest:** Every intercepted print job stored on disk (spool_data/<uuid>.bin) is automatically encrypted with **AES-256-GCM** using a random 12-byte IV per file. Raw document bytes are unreadable on the server disk.
+* **On-the-Fly RAM Decryption:** When the user enters their PIN/Badge at the Toshiba copier to release jobs, the server decrypts the PCL6 stream entirely in memory and streams it directly to Port 9100.
+* **Scan Ingest Encryption at Rest:** Scanned documents captured by the inbound SMTP server from Toshiba MFPs (data/scans/<user>/) are encrypted with AES-256 before disk writing.
+* **Backward Compatible NEXP Header:** Encrypted payloads feature a 4-byte NEXP magic header, preserving seamless backward compatibility with any legacy unencrypted archives.
+
+
 * **Cryptographic Spool Quarantine:** Spool files are isolated in `spool_data/<uuid>.bin` and verified via SHA-256 before socket transmission to prevent file tampering.
 * **Credential Protection:** PINs and passwords are protected using industry-standard BCrypt and SHA hashing; plaintext PINs are never stored in database tables.
 * **Brute-Force & Rate-Limiting Defense:** Throttles failed authentication attempts, triggering exponential backoff and temporary terminal lockout.

@@ -14,7 +14,7 @@ import java.util.logging.Logger;
 
 /**
  * Manages secure file storage for printer-ready spool files (.SPL / RAW data).
- * Isolates spool files from the web root and database, enforces directory traversal prevention,
+ * Enforces AES-256-GCM encryption at rest, directory traversal prevention,
  * and maintains SHA-256 cryptographic checksums for document integrity.
  */
 @Service
@@ -22,10 +22,21 @@ public class SpoolStorageService {
 
     private static final Logger LOGGER = Logger.getLogger(SpoolStorageService.class.getName());
 
+    private final CryptoService cryptoService;
+
     @Value("${app.spool.storage-dir:spool_data}")
     private String configuredStorageDir;
 
     private Path rootStoragePath;
+
+    public SpoolStorageService() {
+        this.cryptoService = new CryptoService();
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public SpoolStorageService(CryptoService cryptoService) {
+        this.cryptoService = cryptoService;
+    }
 
     @PostConstruct
     public void init() throws IOException {
@@ -40,7 +51,8 @@ public class SpoolStorageService {
 
     /**
      * Stores spool bytes safely into a uniquely named binary file.
-     * Prevents path traversal and returns the relative path and SHA-256 checksum.
+     * Enforces AES-256-GCM encryption at rest and path traversal protection.
+     * Computes and returns the SHA-256 checksum of the original document.
      */
     public StoredFileResult storeSpoolData(byte[] data, String filePrefix) throws IOException {
         String safePrefix = (filePrefix != null && !filePrefix.isBlank())
@@ -54,15 +66,23 @@ public class SpoolStorageService {
             throw new SecurityException("Potential directory traversal attempt detected in spool filename!");
         }
 
-        Files.write(targetPath, data, StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE);
+        // 1. Calculate integrity SHA-256 on the authentic plaintext data
         String sha256 = calculateSha256(data);
 
-        LOGGER.info("Stored spool file: " + targetPath.getFileName() + " (" + data.length + " bytes, SHA256: " + sha256 + ")");
+        // 2. Encrypt the spool data using AES-256-GCM before writing to disk
+        byte[] encryptedData = cryptoService.encrypt(data);
+
+        // 3. Write encrypted payload to disk
+        Files.write(targetPath, encryptedData, StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE);
+
+        LOGGER.info("[SPOOL ENCRYPTED] Stored spool file: " + targetPath.getFileName() +
+                " (" + data.length + " bytes plain -> " + encryptedData.length + " bytes AES-256-GCM, SHA256: " + sha256 + ")");
         return new StoredFileResult(targetPath.toString(), sha256, data.length);
     }
 
     /**
-     * Reads the spool file bytes while verifying its SHA-256 checksum against database records.
+     * Reads the spool file from disk, decrypts the AES-256-GCM payload in RAM,
+     * and verifies its SHA-256 checksum against database records before release.
      */
     public byte[] readAndVerifySpoolData(String filePathString, String expectedSha256) throws IOException {
         Path filePath = Paths.get(filePathString).toAbsolutePath().normalize();
@@ -76,14 +96,22 @@ public class SpoolStorageService {
             throw new FileNotFoundException("Spool file not found on disk: " + filePath.getFileName());
         }
 
-        byte[] bytes = Files.readAllBytes(filePath);
-        String actualSha256 = calculateSha256(bytes);
+        // 1. Read raw bytes from disk (encrypted payload or legacy plaintext)
+        byte[] rawBytes = Files.readAllBytes(filePath);
+
+        // 2. Decrypt in memory (auto-detects NEXP header; backward compatible)
+        byte[] plaintext = cryptoService.decrypt(rawBytes);
+
+        // 3. Verify SHA-256 checksum on the authentic plaintext
+        String actualSha256 = calculateSha256(plaintext);
 
         if (expectedSha256 != null && !expectedSha256.equalsIgnoreCase(actualSha256)) {
             throw new SecurityException("Spool integrity violation: SHA-256 mismatch! File may have been altered.");
         }
 
-        return bytes;
+        LOGGER.fine("[SPOOL DECRYPTED] Successfully decrypted and verified spool file: " + filePath.getFileName() +
+                " (" + plaintext.length + " bytes decrypted)");
+        return plaintext;
     }
 
     /**

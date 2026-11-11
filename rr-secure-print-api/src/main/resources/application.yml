@@ -22,6 +22,9 @@ spring:
           must-revalidate: true
 
 app:
+  crypto:
+    enabled: ${CRYPTO_ENABLED:true}
+    secret-key: ${CRYPTO_SECRET_KEY:nexPrint-Enterprise-Master-Secret-2026-AES256-GCM-Key}
   spool:
     storage-dir: spool_data
   printer:
