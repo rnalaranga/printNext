@@ -42,10 +42,15 @@ public class RawSocketPrinterService {
             socket.connect(new InetSocketAddress(printer.getIpAddress(), printer.getRawPort()), connectionTimeoutMs);
             socket.setSoTimeout(15000);
 
-            try (OutputStream out = socket.getOutputStream()) {
-                out.write(spoolData);
-                out.flush();
-            }
+            OutputStream out = socket.getOutputStream();
+            out.write(spoolData);
+            out.flush();
+
+            try {
+                // Orderly TCP FIN signals the end of the print stream to the printer rasterizer/engine
+                socket.shutdownOutput();
+                Thread.sleep(400);
+            } catch (Exception ignored) {}
 
             LOGGER.info("[LIVE TRANSMISSION SUCCESS] Bytes written to " + printer.getIpAddress());
             return new PrintTransmissionResult(true, false, "Live print data successfully delivered to printer buffer.");

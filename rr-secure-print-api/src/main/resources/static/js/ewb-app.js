@@ -1724,15 +1724,19 @@
   /* ------------------------------------------------------------------ */
   /* Print Queue Management                                              */
   /* ------------------------------------------------------------------ */
-  window.loadJobs = function () {
-    showAlert('Loading held print jobs...', 'info');
+  window.loadJobs = function (keepAlert) {
+    if (!keepAlert) {
+      showAlert('Loading held print jobs...', 'info');
+    }
     apiRequest('GET', '/api/jobs', null, function (status, data) {
       if (status === 200 && data) {
         state.jobs = data;
         state.selectedJobIds = {};
         try {
           renderJobs();
-          hideAlert();
+          if (!keepAlert) {
+            hideAlert();
+          }
         } catch (e) {
           showAlert('Render error: ' + (e.message || e), 'error');
         }
@@ -1784,6 +1788,7 @@
         '</td>' +
         '<td>' +
           '<div class="pc-doc-title" title="' + esc(job.documentName) + '">' + esc(job.documentName) + '</div>' +
+          (job.errorMessage ? '<div style="color:#DC2626; font-size:11px; margin-top:2px; font-weight:600;">⚠ ' + esc(job.errorMessage) + '</div>' : '') +
         '</td>' +
         '<td class="pc-col-hide-sm" style="color:#5E678A; font-size:11.5px;">' + timeStr + '</td>' +
         '<td style="text-align:center; font-weight:bold;">' + job.pageCount + ' ' + (job.pageCount === 1 ? 'pg' : 'pgs') + '</td>' +
@@ -1909,26 +1914,43 @@
     var successCount = 0;
     var failCount = 0;
     var completed = 0;
+    var lastErrorMsg = null;
+
+    var drawerEl = document.getElementById('drawerSelect');
+    var selectedDrawer = (drawerEl && drawerEl.value) ? drawerEl.value : 'AUTO';
+    var paperSizeEl = document.getElementById('paperSizeSelect');
+    var selectedPaperSize = (paperSizeEl && paperSizeEl.value) ? paperSizeEl.value : 'AUTO';
 
     for (var i = 0; i < ids.length; i++) {
       (function (jobId) {
         var stationCode = (state.station && state.station.printerCode) ? state.station.printerCode : null;
-        apiRequest('POST', '/api/jobs/' + jobId + '/release', { printerCode: stationCode }, function (status, data) {
+        var payload = {
+          printerCode: stationCode,
+          drawer: selectedDrawer,
+          paperSize: selectedPaperSize
+        };
+        apiRequest('POST', '/api/jobs/' + jobId + '/release', payload, function (status, data) {
           if (status === 200 && data && data.success) {
             successCount++;
           } else {
             failCount++;
+            if (data && data.message) {
+              lastErrorMsg = data.message;
+            }
           }
           completed++;
 
           if (completed === ids.length) {
             state.isBusy = false;
-            var summary = successCount + ' document(s) printed at ' + ((state.station && state.station.name) ? state.station.name : 'Toshiba MFP') + '!';
-            if (failCount > 0) {
-              summary += ' (' + failCount + ' failed)';
+            if (failCount > 0 && successCount === 0) {
+              showAlert(lastErrorMsg || 'Print release failed. Please check printer.', 'error');
+            } else if (failCount > 0) {
+              showAlert(successCount + ' printed, ' + failCount + ' failed: ' + (lastErrorMsg || ''), 'warning');
+            } else {
+              var summary = successCount + ' document(s) printed at ' + ((state.station && state.station.name) ? state.station.name : 'Toshiba MFP') + '!';
+              showAlert(summary, 'success');
             }
-            showAlert(summary, successCount > 0 ? 'success' : 'error');
-            window.loadJobs();
+            window.loadJobs(true);
             apiRequest('GET', '/api/auth/current', null, function (s, u) {
               if (s === 200 && u) updateUserCounters(u);
             });
@@ -1956,7 +1978,7 @@
           if (completed === ids.length) {
             state.isBusy = false;
             showAlert('Deleted ' + ids.length + ' job(s) from secure queue.', 'info');
-            window.loadJobs();
+            window.loadJobs(true);
           }
         });
       })(ids[i]);

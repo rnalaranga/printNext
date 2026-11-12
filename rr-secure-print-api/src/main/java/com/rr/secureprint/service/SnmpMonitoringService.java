@@ -21,6 +21,9 @@ public class SnmpMonitoringService {
     private final PrinterRepository printerRepository;
     private final ExecutorService executor = Executors.newFixedThreadPool(16);
 
+    @org.springframework.beans.factory.annotation.Value("${app.printer.simulation-mode:false}")
+    private boolean simulationMode;
+
     private volatile FleetMonitoringSummaryDto cachedFleetData = null;
     private volatile long lastPollTime = 0L;
     private static final long CACHE_TTL_MS = 15_000L; // 15 seconds cache
@@ -53,6 +56,220 @@ public class SnmpMonitoringService {
             return null;
         }
         return pollPhysicalPrinter(opt.get());
+    }
+
+    public record HardwareReadiness(boolean isReady, String reason, String errorCode, List<String> errorList) {
+        public static HardwareReadiness ready() {
+            return new HardwareReadiness(true, null, null, Collections.emptyList());
+        }
+        public static HardwareReadiness notReady(String reason, String errorCode, List<String> errorList) {
+            return new HardwareReadiness(false, reason, errorCode, errorList != null ? errorList : Collections.emptyList());
+        }
+    }
+
+    /**
+     * Rapid pre-release hardware readiness verification via SNMP (RFC 3805 / RFC 2790).
+     * Prevents releasing print jobs when the target printer is out of paper, paper jammed,
+     * cover/door open, or offline.
+     */
+    public HardwareReadiness checkPrinterHardwareReadiness(PrinterEntity printer) {
+        return checkPrinterHardwareReadiness(printer, "AUTO");
+    }
+
+    /**
+     * Rapid pre-release hardware readiness verification via SNMP (RFC 3805 / RFC 2790).
+     * Prevents releasing print jobs when the target printer is out of paper, paper jammed,
+     * cover/door open, or offline. If a specific drawer is requested, validates that specific drawer.
+     */
+    public HardwareReadiness checkPrinterHardwareReadiness(PrinterEntity printer, String targetDrawer) {
+        if (simulationMode) {
+            return HardwareReadiness.ready();
+        }
+        if (printer == null || printer.getIpAddress() == null || printer.getIpAddress().isBlank()) {
+            return HardwareReadiness.ready();
+        }
+        String ip = printer.getIpAddress().trim();
+        if ("127.0.0.1".equals(ip) || "localhost".equalsIgnoreCase(ip)) {
+            return HardwareReadiness.ready();
+        }
+
+        String comm = "public";
+        try {
+            // 1. Check hrPrinterDetectedErrorState (1.3.6.1.2.1.25.3.5.1.2.1)
+            SnmpClient.SnmpItem errItem = SnmpClient.query(ip, comm, "1.3.6.1.2.1.25.3.5.1.2.1", false, 800);
+
+            // 2. Query active alert table (1.3.6.1.2.1.43.18.1.1)
+            List<SnmpClient.SnmpItem> alertItems = SnmpClient.walk(ip, comm, "1.3.6.1.2.1.43.18.1.1", 15, 800);
+
+            // If neither responded, check sysDescr to detect whether printer is offline
+            if (errItem == null && alertItems.isEmpty()) {
+                SnmpClient.SnmpItem sysDescr = SnmpClient.query(ip, comm, "1.3.6.1.2.1.1.1.0", false, 800);
+                if (sysDescr == null || sysDescr.getValue() == null) {
+                    return HardwareReadiness.notReady("Printer is offline or unreachable on the network (" + ip + ").", "OFFLINE", List.of("Printer Offline"));
+                }
+                return HardwareReadiness.ready();
+            }
+
+            String paperEmptyDesc = null;
+            String jamDesc = null;
+            String doorDesc = null;
+            List<String> detected = new ArrayList<>();
+
+            if (!alertItems.isEmpty()) {
+                Map<String, Integer> codeMap = new HashMap<>();
+                Map<String, String> descMap = new HashMap<>();
+                for (SnmpClient.SnmpItem item : alertItems) {
+                    String oid = item.getOid();
+                    if (oid.startsWith("1.3.6.1.2.1.43.18.1.1.7.1.")) {
+                        String sub = oid.substring("1.3.6.1.2.1.43.18.1.1.7.1.".length());
+                        if (item.getValue().matches("\\d+")) codeMap.put(sub, Integer.parseInt(item.getValue()));
+                    } else if (oid.startsWith("1.3.6.1.2.1.43.18.1.1.8.1.")) {
+                        String sub = oid.substring("1.3.6.1.2.1.43.18.1.1.8.1.".length());
+                        descMap.put(sub, item.getValue());
+                    }
+                }
+
+                for (String sub : descMap.keySet()) {
+                    String desc = descMap.get(sub);
+                    int code = codeMap.getOrDefault(sub, 0);
+                    String lower = desc.toLowerCase();
+                    if (code == 808 || lower.contains("paper empty") || lower.contains("out of paper")) {
+                        paperEmptyDesc = desc;
+                        detected.add(desc);
+                    } else if (code == 801 || lower.contains("tray missing") || lower.contains("cassette")) {
+                        paperEmptyDesc = desc;
+                        detected.add(desc);
+                    } else if (code == 8 || code == 809 || lower.contains("jam")) {
+                        jamDesc = desc;
+                        detected.add(desc);
+                    } else if (code == 501 || code == 3 || code == 4 || lower.contains("door") || lower.contains("cover open")) {
+                        doorDesc = desc;
+                        detected.add(desc);
+                    }
+                }
+            }
+
+            boolean bitPaperEmpty = false;
+            boolean bitJam = false;
+            boolean bitDoor = false;
+
+            if (errItem != null && errItem.getValue() != null && !errItem.getValue().isEmpty()) {
+                String val = errItem.getValue();
+                if (!val.startsWith("SNMP_ERR_") && !val.equals("NULL") && !val.contains("\uFFFD")) {
+                    int b0 = val.charAt(0) & 0xFF;
+                    if ((b0 & 0x40) != 0) {
+                        bitPaperEmpty = true;
+                        detected.add("Paper Empty / Cassette Out");
+                    }
+                    if ((b0 & 0x04) != 0) {
+                        bitJam = true;
+                        detected.add("Paper Jam in Transport Path");
+                    }
+                    if ((b0 & 0x08) != 0) {
+                        bitDoor = true;
+                        detected.add("Door / Cover Open");
+                    }
+                }
+            }
+
+            // 1. Paper Jam Check
+            if (jamDesc != null) {
+                return HardwareReadiness.notReady(jamDesc + ". Please clear paper jam and tap Print again.", "PAPER_JAM", detected);
+            }
+            if (bitJam) {
+                return HardwareReadiness.notReady("Paper Jam detected in printer. Please clear paper jam and tap Print again.", "PAPER_JAM", detected);
+            }
+
+            // 2. Door Open Check
+            if (doorDesc != null) {
+                return HardwareReadiness.notReady(doorDesc + ". Please close the printer cover/door.", "DOOR_OPEN", detected);
+            }
+            if (bitDoor) {
+                return HardwareReadiness.notReady("Printer Cover or Door is open. Please close cover to continue.", "DOOR_OPEN", detected);
+            }
+
+            // 3. Tray & Paper Empty Check
+            Map<String, String> trayNames = new HashMap<>();
+            List<SnmpClient.SnmpItem> nameItems = SnmpClient.walk(ip, comm, "1.3.6.1.2.1.43.8.2.1.13.1", 10, 800);
+            if (nameItems != null) {
+                for (SnmpClient.SnmpItem item : nameItems) {
+                    String sub = item.getOid().substring("1.3.6.1.2.1.43.8.2.1.13.1.".length());
+                    if (item.getValue() != null && !item.getValue().isBlank()) {
+                        trayNames.put(sub, item.getValue());
+                    }
+                }
+            }
+            // Standard Toshiba fallback tray names if MIB .13 model strings are empty
+            trayNames.putIfAbsent("1", "Drawer 1");
+            trayNames.putIfAbsent("2", "Drawer 2");
+            trayNames.putIfAbsent("3", "Drawer 3");
+            trayNames.putIfAbsent("4", "Drawer 4");
+            trayNames.putIfAbsent("5", "LCF Tray");
+            trayNames.putIfAbsent("6", "Bypass Tray");
+
+            Map<String, Integer> trayLevels = new HashMap<>();
+            List<SnmpClient.SnmpItem> levelItems = SnmpClient.walk(ip, comm, "1.3.6.1.2.1.43.8.2.1.10.1", 10, 800);
+            boolean hasAnyPaper = false;
+            boolean checkedTrays = false;
+            if (levelItems != null && !levelItems.isEmpty()) {
+                checkedTrays = true;
+                for (SnmpClient.SnmpItem tray : levelItems) {
+                    String sub = tray.getOid().substring("1.3.6.1.2.1.43.8.2.1.10.1.".length());
+                    if (tray.getValue() != null && tray.getValue().matches("-?\\d+")) {
+                        int level = Integer.parseInt(tray.getValue());
+                        trayLevels.put(sub, level);
+                        if (level > 0 || level == -3) {
+                            hasAnyPaper = true;
+                        }
+                    }
+                }
+            }
+
+            // If a specific drawer was selected, validate that specific drawer
+            if (targetDrawer != null && !"AUTO".equalsIgnoreCase(targetDrawer.trim())) {
+                String targetLower = targetDrawer.trim().toLowerCase();
+                for (String sub : trayNames.keySet()) {
+                    String name = trayNames.get(sub).toLowerCase();
+                    boolean match = false;
+                    if (targetLower.contains("drawer1") || targetLower.contains("tray1")) {
+                        match = name.contains("drawer 1") || name.contains("tray 1") || sub.equals("1");
+                    } else if (targetLower.contains("drawer2") || targetLower.contains("tray2")) {
+                        match = name.contains("drawer 2") || name.contains("tray 2") || sub.equals("2");
+                    } else if (targetLower.contains("bypass") || targetLower.contains("manual")) {
+                        match = name.contains("bypass") || name.contains("manual") || sub.equals("6");
+                    }
+                    if (match) {
+                        int lvl = trayLevels.getOrDefault(sub, -1);
+                        if (lvl == 0) {
+                            String displayName = trayNames.get(sub);
+                            return HardwareReadiness.notReady(displayName + " is out of paper. Please load paper into " + displayName + " or choose another tray.", "PAPER_EMPTY", detected);
+                        } else if (lvl > 0 || lvl == -3) {
+                            return HardwareReadiness.ready();
+                        }
+                    }
+                }
+            }
+
+            // For AUTO / Default tray mode:
+            if (checkedTrays && !hasAnyPaper) {
+                return HardwareReadiness.notReady("All paper cassettes are empty. Please load paper into the tray and tap Print again.", "PAPER_EMPTY", detected);
+            }
+            if (checkedTrays && hasAnyPaper) {
+                return HardwareReadiness.ready();
+            }
+
+            if (paperEmptyDesc != null) {
+                return HardwareReadiness.notReady(paperEmptyDesc + ". Please load paper and tap Print again.", "PAPER_EMPTY", detected);
+            }
+            if (bitPaperEmpty) {
+                return HardwareReadiness.notReady("Paper Cassette Empty or Out. Please load paper into the tray and tap Print again.", "PAPER_EMPTY", detected);
+            }
+
+            return HardwareReadiness.ready();
+        } catch (Exception e) {
+            log.warn("Error during SNMP hardware readiness check for {}: {}", ip, e.getMessage());
+            return HardwareReadiness.ready();
+        }
     }
 
     private FleetMonitoringSummaryDto pollFleet() {

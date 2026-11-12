@@ -58,15 +58,13 @@ public class JobController {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         }
 
-        String printerCode = (request != null) ? request.printerCode() : null;
+        String printerCode = (request != null && request.printerCode() != null) ? request.printerCode() : null;
+        String drawer = (request != null && request.drawer() != null) ? request.drawer() : "AUTO";
+        String paperSize = (request != null && request.paperSize() != null) ? request.paperSize() : "AUTO";
         String clientIp = httpRequest.getRemoteAddr();
 
-        ReleaseResponse response = jobService.releaseJob(id, printerCode, userOpt.get(), clientIp);
-        if (response.success()) {
-            return ResponseEntity.ok(response);
-        } else {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
-        }
+        ReleaseResponse response = jobService.releaseJob(id, printerCode, userOpt.get(), clientIp, drawer, paperSize);
+        return ResponseEntity.ok(response);
     }
 
     @DeleteMapping("/{id}")

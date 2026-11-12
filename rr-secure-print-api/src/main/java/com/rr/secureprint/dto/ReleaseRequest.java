@@ -1,8 +1,11 @@
 package com.rr.secureprint.dto;
 
-import java.time.Instant;
-import java.util.UUID;
-
 public record ReleaseRequest(
-        String printerCode
-) {}
+        String printerCode,
+        String drawer,
+        String paperSize
+) {
+    public ReleaseRequest(String printerCode) {
+        this(printerCode, "AUTO", "AUTO");
+    }
+}

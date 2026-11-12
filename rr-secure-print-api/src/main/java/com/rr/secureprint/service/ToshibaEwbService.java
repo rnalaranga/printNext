@@ -485,7 +485,7 @@ public class ToshibaEwbService {
                             "<Payload><path>Authentication/AuthenticationSettings/AuthenticatedTarget/copy</path><value>" + copyVal + "</value></Payload>" +
                             "<Payload><path>Authentication/AuthenticationSettings/AuthenticatedTarget/scan</path><value>" + scanVal + "</value></Payload>" +
                             "<Payload><path>Authentication/AuthenticationSettings/AuthenticatedTarget/fax</path><value>" + otherVal + "</value></Payload>" +
-                            "<Payload><path>Authentication/AuthenticationSettings/AuthenticatedTarget/print</path><value>" + (restricted ? "true" : "false") + "</value></Payload>" +
+                            "<Payload><path>Authentication/AuthenticationSettings/AuthenticatedTarget/print</path><value>false</value></Payload>" +
                             "<Payload><path>Authentication/AuthenticationSettings/AuthenticatedTarget/list</path><value>" + otherVal + "</value></Payload>" +
                             "<Payload><path>Authentication/AuthenticationSettings/AuthenticatedTarget/userFunctions</path><value>" + otherVal + "</value></Payload>" +
                             "<Payload><path>Authentication/AuthenticationSettings/AuthenticatedTarget/EWB</path><value>false</value></Payload>" +

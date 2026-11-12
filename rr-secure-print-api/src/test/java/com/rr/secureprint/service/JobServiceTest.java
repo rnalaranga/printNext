@@ -144,4 +144,27 @@ class JobServiceTest {
 
         verify(printJobRepository).atomicTransitionStatus(heldJob.getId(), JobStatus.HELD, JobStatus.CANCELLED);
     }
+
+    @Test
+    void shouldBlockReleaseWhenPrinterReportsPaperEmpty() {
+        SnmpMonitoringService mockSnmp = mock(SnmpMonitoringService.class);
+        when(mockSnmp.checkPrinterHardwareReadiness(any(), any())).thenReturn(
+                SnmpMonitoringService.HardwareReadiness.notReady("Paper Empty in Drawer2. Please load paper and tap Print again.", "PAPER_EMPTY", java.util.List.of("Paper Empty in Drawer2"))
+        );
+
+        JobService snmpJobService = new JobService(printJobRepository, printerRepository, userRepository,
+                fakeSpoolStorageService, fakePrinterService, new WindowsQueueService(), fakeAuditService, null, mockSnmp);
+
+        when(printJobRepository.findById(heldJob.getId())).thenReturn(Optional.of(heldJob));
+        when(printJobRepository.atomicTransitionStatus(heldJob.getId(), JobStatus.HELD, JobStatus.RELEASING)).thenReturn(1);
+        when(printerRepository.findByPrinterCode(any())).thenReturn(Optional.of(defaultPrinter));
+
+        ReleaseResponse response = snmpJobService.releaseJob(heldJob.getId(), "TOSHIBA-3518A-HQ", authorizedUser, "127.0.0.1");
+
+        assertFalse(response.success());
+        assertTrue(response.message().contains("Paper Empty in Drawer2"));
+        // Verified job kept in HELD state
+        assertEquals(JobStatus.HELD, heldJob.getStatus());
+        verify(printJobRepository).save(heldJob);
+    }
 }

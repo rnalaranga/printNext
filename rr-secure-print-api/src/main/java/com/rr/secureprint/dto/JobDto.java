@@ -25,7 +25,8 @@ public record JobDto(
         Instant expiresAt,
         String targetPrinterCode,
         String targetPrinterName,
-        boolean simulated
+        boolean simulated,
+        String errorMessage
 ) {
     public static JobDto fromEntity(PrintJob job) {
         String printerCode = job.getTargetPrinter() != null ? job.getTargetPrinter().getPrinterCode() : "VIRTUAL-QUEUE";
@@ -51,7 +52,8 @@ public record JobDto(
                 job.getExpiresAt(),
                 printerCode,
                 printerName,
-                isSimulated
+                isSimulated,
+                job.getErrorMessage()
         );
     }
 

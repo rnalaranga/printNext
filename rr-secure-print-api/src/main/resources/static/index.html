@@ -1236,12 +1236,25 @@
       <table style="width:100%; border-collapse:collapse;" cellpadding="0" cellspacing="0">
         <tr>
           <td style="vertical-align:middle; text-align:left; white-space:nowrap;">
-            <div class="pc-selection-summary">
+            <div class="pc-selection-summary" style="display:flex; align-items:center; flex-wrap:wrap; gap:4px;">
               <span id="selectedSummaryText" style="color:#1D4ED8; font-weight:800;">0 selected</span>
               <span class="pc-summary-sep">|</span>
               <span id="selectedPagesText">0 pgs</span>
-              <span class="pc-summary-sep pc-col-hide-sm">|</span>
-              <span id="selectedCostText" class="pc-col-hide-sm">LKR 0.00</span>
+              <span class="pc-summary-sep">|</span>
+              <span style="font-size:11px; font-weight:700; color:#475569;">Tray:</span>
+              <select id="drawerSelect" style="padding:3px 6px; font-size:11px; font-weight:700; border-radius:6px; border:1px solid #94A3B8; background:#FFFFFF; color:#0F172A; cursor:pointer;">
+                <option value="DRAWER1" selected>Drawer 1 (A4)</option>
+                <option value="DRAWER2">Drawer 2 (A3)</option>
+                <option value="BYPASS">Bypass Tray</option>
+                <option value="AUTO">Auto Select</option>
+              </select>
+              <span style="font-size:11px; font-weight:700; color:#475569;">Size:</span>
+              <select id="paperSizeSelect" style="padding:3px 6px; font-size:11px; font-weight:700; border-radius:6px; border:1px solid #94A3B8; background:#FFFFFF; color:#0F172A; cursor:pointer;">
+                <option value="AUTO" selected>Auto</option>
+                <option value="A4">A4</option>
+                <option value="A3">A3</option>
+                <option value="LETTER">Letter</option>
+              </select>
             </div>
           </td>
           <td style="vertical-align:middle; text-align:right; white-space:nowrap;">
