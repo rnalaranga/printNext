@@ -1,0 +1,8 @@
+CREATE TABLE IF NOT EXISTS technicians (
+    id BIGSERIAL PRIMARY KEY,
+    name VARCHAR(120) NOT NULL,
+    pin VARCHAR(32) NOT NULL,
+    phone VARCHAR(40),
+    vendor VARCHAR(120),
+    active BOOLEAN NOT NULL DEFAULT TRUE
+);

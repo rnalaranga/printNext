@@ -989,6 +989,7 @@
     </div>
     <!-- Real-time Hardware I/O Debug Status Bar hidden -->
     <div id="rawKeyDebug" style="display:none;"></div>
+    <button type="button" id="btnTechLoginOpen" onclick="if(window.openTechLoginModal){window.openTechLoginModal();}else{document.getElementById('modalTechLogin').style.display='block';}" style="position:fixed; bottom:8px; left:10px; z-index:2147483000; background:#FFFFFF; border:1px solid #CBD5E1; color:#1E3A8A; font-size:11.5px; font-weight:700; padding:6px 12px; min-height:34px; cursor:pointer;">Technician Login</button>
 
     <div class="pc-auth-wrapper">
 
@@ -1197,6 +1198,14 @@
           <span style="vertical-align:middle;">Access Toshiba Device Home</span>
         </button>
       </div>
+      <div id="userMonthlyCountsStrip" style="margin-top:10px; text-align:center; font-size:12px; font-weight:700; color:#1E293B; background:#F8FAFC; border:1px solid #CBD5E1; padding:6px 14px;">
+        <span style="color:#64748B; text-transform:uppercase; font-size:10.5px; letter-spacing:0.04em; margin-right:8px;">Current Month:</span>
+        <span>Print <strong id="homeMonthPrint" style="color:#1D4ED8; font-family:monospace;">0</strong></span>
+        <span style="color:#CBD5E1; margin:0 8px;">|</span>
+        <span>Copy <strong id="homeMonthCopy" style="color:#0F172A; font-family:monospace;">0</strong></span>
+        <span style="color:#CBD5E1; margin:0 8px;">|</span>
+        <span>Scan <strong id="homeMonthScan" style="color:#059669; font-family:monospace;">0</strong></span>
+      </div>
     </div>
   </div>
 
@@ -1367,6 +1376,84 @@
     </div>
   </div>
 
-  <script src="/js/ewb-app.js?v=20261118_1"></script>
+  <script src="/js/ewb-app.js?v=20261120_2"></script>
+<!-- MODAL: MFP TECHNICIAN LOGIN & QUICK TONER/REPAIR (TOSHIBA EMBEDDED WEBKIT SAFE) -->
+<div id="modalTechLogin" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; z-index:2147483647; background:rgba(15,23,42,0.65); overflow:auto;">
+  <div style="background:#FFFFFF; border:2px solid #CBD5E1; padding:20px; width:340px; max-width:90%; margin:60px auto 0 auto;">
+    <div style="font-size:15px; font-weight:800; color:#0F172A; margin-bottom:10px;">Technician Login</div>
+    <input type="password" id="techMfpPinInput" placeholder="Enter Technician PIN" readonly style="width:100%; padding:10px; font-size:18px; text-align:center; letter-spacing:4px; border:1px solid #CBD5E1; margin-bottom:10px;">
+    <table style="width:100%; border-collapse:separate; border-spacing:4px; margin-bottom:10px;">
+      <tr>
+        <td><button type="button" onclick="document.getElementById('techMfpPinInput').value+='1'" style="width:100%; padding:10px; font-size:16px; font-weight:800; background:#F8FAFC; border:1px solid #CBD5E1;">1</button></td>
+        <td><button type="button" onclick="document.getElementById('techMfpPinInput').value+='2'" style="width:100%; padding:10px; font-size:16px; font-weight:800; background:#F8FAFC; border:1px solid #CBD5E1;">2</button></td>
+        <td><button type="button" onclick="document.getElementById('techMfpPinInput').value+='3'" style="width:100%; padding:10px; font-size:16px; font-weight:800; background:#F8FAFC; border:1px solid #CBD5E1;">3</button></td>
+      </tr>
+      <tr>
+        <td><button type="button" onclick="document.getElementById('techMfpPinInput').value+='4'" style="width:100%; padding:10px; font-size:16px; font-weight:800; background:#F8FAFC; border:1px solid #CBD5E1;">4</button></td>
+        <td><button type="button" onclick="document.getElementById('techMfpPinInput').value+='5'" style="width:100%; padding:10px; font-size:16px; font-weight:800; background:#F8FAFC; border:1px solid #CBD5E1;">5</button></td>
+        <td><button type="button" onclick="document.getElementById('techMfpPinInput').value+='6'" style="width:100%; padding:10px; font-size:16px; font-weight:800; background:#F8FAFC; border:1px solid #CBD5E1;">6</button></td>
+      </tr>
+      <tr>
+        <td><button type="button" onclick="document.getElementById('techMfpPinInput').value+='7'" style="width:100%; padding:10px; font-size:16px; font-weight:800; background:#F8FAFC; border:1px solid #CBD5E1;">7</button></td>
+        <td><button type="button" onclick="document.getElementById('techMfpPinInput').value+='8'" style="width:100%; padding:10px; font-size:16px; font-weight:800; background:#F8FAFC; border:1px solid #CBD5E1;">8</button></td>
+        <td><button type="button" onclick="document.getElementById('techMfpPinInput').value+='9'" style="width:100%; padding:10px; font-size:16px; font-weight:800; background:#F8FAFC; border:1px solid #CBD5E1;">9</button></td>
+      </tr>
+      <tr>
+        <td><button type="button" onclick="document.getElementById('techMfpPinInput').value=''" style="width:100%; padding:10px; font-size:12px; font-weight:800; background:#FEF2F2; color:#DC2626; border:1px solid #FECACA;">CLR</button></td>
+        <td><button type="button" onclick="document.getElementById('techMfpPinInput').value+='0'" style="width:100%; padding:10px; font-size:16px; font-weight:800; background:#F8FAFC; border:1px solid #CBD5E1;">0</button></td>
+        <td><button type="button" onclick="var el=document.getElementById('techMfpPinInput');el.value=el.value.slice(0,-1);" style="width:100%; padding:10px; font-size:14px; font-weight:800; background:#F1F5F9; border:1px solid #CBD5E1;">&larr;</button></td>
+      </tr>
+    </table>
+    <div id="techLoginErr" style="display:none; color:#DC2626; font-size:12px; font-weight:700; margin-bottom:8px;"></div>
+    <div style="text-align:right;">
+      <button type="button" onclick="document.getElementById('modalTechLogin').style.display='none'" style="padding:8px 14px; background:#F1F5F9; border:1px solid #CBD5E1; font-weight:700; margin-right:6px;">Cancel</button>
+      <button type="button" onclick="window.submitTechLogin()" style="padding:8px 16px; background:#1D4ED8; color:#FFFFFF; border:1px solid #1D4ED8; font-weight:700;">Login</button>
+    </div>
+  </div>
+</div>
+
+<div id="modalTechPanel" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; z-index:2147483647; background:rgba(15,23,42,0.65); overflow:auto;">
+  <div style="background:#FFFFFF; border:2px solid #CBD5E1; padding:16px; width:760px; max-width:96%; margin:18px auto 0 auto;">
+    <div style="overflow:hidden; margin-bottom:10px; border-bottom:1px solid #E2E8F0; padding-bottom:8px;">
+      <div style="float:left;">
+        <div style="font-size:15px; font-weight:800; color:#0F172A;">Technician Service Entry</div>
+        <div id="techPanelUserLabel" style="font-size:11.5px; color:#1D4ED8; font-weight:700;">--</div>
+      </div>
+      <button type="button" onclick="document.getElementById('modalTechPanel').style.display='none'" style="float:right; padding:4px 12px; background:#F1F5F9; border:1px solid #CBD5E1; font-weight:700;">Close</button>
+    </div>
+    <table style="width:100%; border-collapse:collapse;">
+      <tr>
+        <td style="width:56%; vertical-align:top; padding-right:12px;">
+          <div style="font-size:12px; font-weight:700; color:#334155; margin-bottom:6px;">Quick Toner Replacement</div>
+          <table style="width:100%; border-collapse:separate; border-spacing:4px; margin-bottom:10px;">
+            <tr id="techTonerBtnsRow">
+              <td><button type="button" onclick="window.submitQuickTechToner('BLACK')" style="width:100%; padding:10px 4px; background:#0F172A; color:#FFFFFF; border:none; font-weight:700; font-size:11.5px;">Black</button></td>
+            </tr>
+          </table>
+          <div style="font-size:12px; font-weight:700; color:#334155; margin-bottom:4px;">Service / Part Replacement / Request</div>
+          <select id="techServiceTypeSelect" style="width:100%; height:48px; min-height:48px; padding:10px 12px; font-size:15px; font-weight:700; border:1px solid #CBD5E1; margin-bottom:8px; background:#FFFFFF;"></select>
+          <input type="text" id="techQuickPart" onfocus="window._techActiveField=this; document.getElementById('techOskWrap').style.display='block';" placeholder="Tap to type Part / Service title..." style="width:100%; padding:8px; font-size:13px; border:1px solid #CBD5E1; margin-bottom:6px;">
+          <textarea id="techQuickNotes" rows="2" onfocus="window._techActiveField=this; document.getElementById('techOskWrap').style.display='block';" placeholder="Tap to type Description / Fault details..." style="width:100%; padding:8px; font-size:12.5px; border:1px solid #CBD5E1; margin-bottom:8px;"></textarea>
+          <table style="width:100%; border-collapse:separate; border-spacing:4px; margin-bottom:6px;">
+            <tr>
+              <td style="width:50%;"><button type="button" onclick="window.submitQuickTechRepair('COMPLETED')" style="width:100%; padding:10px; background:#1D4ED8; color:#FFFFFF; border:none; font-weight:700; font-size:12.5px;">Log Completed</button></td>
+              <td style="width:50%;"><button type="button" onclick="window.submitQuickTechRepair('IN_PROGRESS')" style="width:100%; padding:10px; background:#F59E0B; color:#FFFFFF; border:none; font-weight:700; font-size:12.5px;">Start / Service Request</button></td>
+            </tr>
+          </table>
+          <div id="techOskWrap" style="display:none; background:#F1F5F9; border:1px solid #CBD5E1; padding:6px;">
+            <div id="techOskKeys"></div>
+          </div>
+        </td>
+        <td style="width:44%; vertical-align:top; border-left:1px solid #E2E8F0; padding-left:12px;">
+          <div id="techPendingWrap" style="display:none; background:#FFFBEB; border:1px solid #FDE68A; padding:10px;">
+            <div style="font-size:11.5px; font-weight:800; color:#92400E; margin-bottom:6px; border-bottom:1px solid #FDE68A; padding-bottom:4px;">PENDING / IN-PROGRESS SERVICES</div>
+            <div id="techPendingList" style="max-height:280px; overflow:auto;"></div>
+          </div>
+        </td>
+      </tr>
+    </table>
+  </div>
+</div>
+
 </body>
 </html>

@@ -8,7 +8,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>nexPrint - Administration Console</title>
   <link rel="stylesheet" href="/css/bootstrap.min.css">
-  <link rel="stylesheet" href="/css/admin.css?v=20261119_215">
+  <link rel="stylesheet" href="/css/admin.css?v=20261120_217">
   <script>
     /* Instant Pre-Render Theme & Sidebar State (100% Offline, Zero FOUC) */
     (function () {
@@ -160,6 +160,12 @@
       </span>
       <span class="sidebar-label">Printer Monitoring</span>
       <span id="sidebarMonitoringBadge" style="margin-left:auto; background:#ECFDF5; color:#059669; font-size:10px; font-weight:800; padding:1px 6px; border-radius:10px; border:1px solid #A7F3D0;">LIVE</span>
+    </a>
+    <a class="sidebar-item" data-page="maintenance" data-tooltip="Printer Maintenance" onclick="navigatePage('maintenance')">
+      <span class="sidebar-icon">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
+      </span>
+      <span class="sidebar-label">Printer Maintenance</span>
     </a>
     <a class="sidebar-item" data-page="users" data-tooltip="User Management" onclick="navigatePage('users')">
       <span class="sidebar-icon">
@@ -1207,7 +1213,7 @@
         </div>
         <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
           <input type="search" id="copyLogsSearch" class="form-input" style="width:200px; padding:6px 10px; font-size:12.5px;" placeholder="Filter copy logs..." oninput="window.filterAdminTable('copyJobsTableBody', this.value)">
-          <button type="button" class="btn btn-secondary" onclick="window.exportAdminTableCsv(this, 'photocopy-logs.csv')">Export CSV</button>
+          <button type="button" class="btn btn-secondary" onclick="window.exportAdminTableCsv(this, 'photocopy-logs.csv')">Export Excel</button>
           <button type="button" class="btn btn-primary" onclick="pollFleetCopyJobs()" id="btnPollCopyFleetLogs">Poll MFPs Now</button>
           <div class="action-dropdown-wrap" style="position:relative;">
             <button type="button" class="btn btn-secondary btn-action-dropdown" onclick="window.toggleGenericDropdown(event, 'copy-log-dropdown-menu', 'copy-log-dropdown-btn', 210, 140)" id="copy-log-dropdown-btn" style="font-weight:700;">
@@ -1260,7 +1266,7 @@
          PAGE: REPORTS & ANALYTICS (ENTERPRISE PAPERCUT MF ARCHITECTURE)
          ===================================================================== -->
     <div id="page-reports" class="page-view" style="display:none;">
-      <div class="page-head" style="margin-bottom:16px;">
+      <div class="section-header">
         <div>
           <h2>Reports &amp; Analytics</h2>
           <p>ISO 9241-110 structured reporting hub. All dates use ISO 8601 (<code style="font-family:monospace;">YYYY-MM-DD</code>).</p>
@@ -1292,7 +1298,7 @@
                   </div>
                   <div class="d-flex gap-2 flex-wrap">
                     <button type="button" id="rhBtnRun" class="btn btn-primary btn-sm fw-semibold" onclick="window.rhRun()">Run Report</button>
-                    <button type="button" id="rhBtnCsv" class="btn btn-secondary btn-sm fw-semibold" onclick="window.rhExportCsv()">Export CSV</button>
+                    <button type="button" id="rhBtnCsv" class="btn btn-secondary btn-sm fw-semibold" onclick="window.rhExportCsv()">Export Excel</button>
                     <button type="button" id="rhBtnPrint" class="btn btn-secondary btn-sm fw-semibold" onclick="window.rhPrint()">Print / PDF</button>
                     <button type="button" class="btn btn-outline-primary btn-sm fw-semibold" onclick="window.openAdvReportBuilder()">Report Builder</button>
                     <button type="button" class="btn btn-danger btn-sm fw-semibold" onclick="window.openResetCountersModal()">Reset Counters</button>
@@ -1384,7 +1390,7 @@
               </div>
               <div class="d-flex gap-2">
                 <button type="button" class="btn btn-primary btn-sm fw-semibold" onclick="window.sapExecuteQuery()">Execute (F8)</button>
-                <button type="button" class="btn btn-secondary btn-sm" onclick="window.sapExportCsv()">Export CSV</button>
+                <button type="button" class="btn btn-secondary btn-sm" onclick="window.sapExportCsv()">Export Excel</button>
                 <button type="button" class="btn btn-secondary btn-sm" onclick="window.sapClearQuery()">Clear</button>
               </div>
             </div>
@@ -1720,7 +1726,99 @@
     <!-- =====================================================================
          PAGE 5: SECURITY AUDIT TRAIL
          ===================================================================== -->
-    <div id="page-audit" class="page-view" style="display:none;">
+        <!-- =========================================================================
+         PAGE: PRINTER MAINTENANCE & CONSUMABLES LOGBOOK
+         ========================================================================= -->
+    <div id="page-maintenance" class="page-view" style="display:none;">
+      <div class="section-header">
+        <div>
+          <h2>Printer Maintenance &amp; Consumables Logbook</h2>
+          <p>Track toner replacements, hardware repairs, drum/fuser servicing, meter readings, and maintenance costs.</p>
+        </div>
+        <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+          
+          <button type="button" class="btn btn-secondary" onclick="window.exportAdminTableCsv('maintTableBody', 'nexPrint-maintenance-log.xlsx', 'Printer Maintenance & Consumables Logbook')">Export Excel</button>
+          <button type="button" class="btn btn-primary" onclick="window.openMaintenanceModal()">+ Log Maintenance / Toner</button>
+        </div>
+      </div>
+
+      <div class="row g-2 mb-3">
+        <div class="col-6 col-xl-3"><div class="rh-kpi-card"><div class="rh-kpi-label">Total Service Records</div><div class="rh-kpi-val" id="maintStatTotal">0</div><div class="rh-kpi-sub">All logged entries</div></div></div>
+        <div class="col-6 col-xl-3"><div class="rh-kpi-card"><div class="rh-kpi-label">Toner Replacements</div><div class="rh-kpi-val" id="maintStatToner">0</div><div class="rh-kpi-sub">Black &amp; color cartridges</div></div></div>
+        <div class="col-6 col-xl-3"><div class="rh-kpi-card"><div class="rh-kpi-label">Repairs &amp; Parts</div><div class="rh-kpi-val" id="maintStatRepairs">0</div><div class="rh-kpi-sub">Drum, fuser &amp; hardware</div></div></div>
+        <div class="col-6 col-xl-3"><div class="rh-kpi-card"><div class="rh-kpi-label">Total Spend (LKR)</div><div class="rh-kpi-val" id="maintStatCost">LKR 0.00</div><div class="rh-kpi-sub">Parts &amp; technician fees</div></div></div>
+      </div>
+
+      <!-- Printer Repair & Toner Analytics Strip -->
+      <div class="row g-2 mb-3">
+        <div class="col-12 col-md-4"><div class="rh-kpi-card" style="border-left:3px solid #EF4444;"><div class="rh-kpi-label">Most Repaired Printer</div><div class="fw-bold text-dark small" id="maintTopRepaired">None</div></div></div>
+        <div class="col-12 col-md-4"><div class="rh-kpi-card" style="border-left:3px solid #1D4ED8;"><div class="rh-kpi-label">Most Toner Replaced Printer</div><div class="fw-bold text-dark small" id="maintTopToner">None</div></div></div>
+        <div class="col-12 col-md-4"><div class="rh-kpi-card" style="border-left:3px solid #F59E0B;"><div class="rh-kpi-label">Highest Maintenance Spend</div><div class="fw-bold text-dark small" id="maintTopSpend">None</div></div></div>
+      </div>
+
+      <div class="card border-0 mb-3">
+        <div class="card-body py-2">
+          <div class="row g-2 align-items-end">
+            <div class="col-6 col-md-3">
+              <label for="maintPrinterFilter" class="form-label small fw-semibold mb-1">Printer</label>
+              <select id="maintPrinterFilter" class="form-select form-select-sm" onchange="window.loadMaintenance()"><option value="">All Printers</option></select>
+            </div>
+            <div class="col-6 col-md-3">
+              <label for="maintTypeFilter" class="form-label small fw-semibold mb-1">Service Type</label>
+              <select id="maintTypeFilter" class="form-select form-select-sm" onchange="window.loadMaintenance()">
+                <option value="">All Types</option>
+                <option value="TONER_REPLACEMENT">Toner Replacement</option>
+                <option value="REPAIR">Hardware Repair</option>
+                <option value="DRUM_UNIT">Drum Unit</option>
+                <option value="FUSER_UNIT">Fuser Unit</option>
+                <option value="PREVENTIVE_SERVICE">Preventive Service</option>
+                <option value="FIRMWARE_UPDATE">Firmware Update</option>
+                <option value="OTHER">Other</option>
+              </select>
+            </div>
+            <div class="col-6 col-md-3">
+              <label for="maintStatusFilter" class="form-label small fw-semibold mb-1">Status</label>
+              <select id="maintStatusFilter" class="form-select form-select-sm" onchange="window.loadMaintenance()">
+                <option value="">All Statuses</option>
+                <option value="COMPLETED">Completed</option>
+                <option value="IN_PROGRESS">In Progress</option>
+                <option value="SCHEDULED">Scheduled</option>
+              </select>
+            </div>
+            <div class="col-6 col-md-3 text-end">
+              <button type="button" class="btn btn-secondary btn-sm" onclick="window.loadMaintenance()">Refresh</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card table-card">
+        <div class="table-responsive" style="max-height:480px; overflow:auto;">
+          <table class="table table-sm table-hover align-middle mb-0" style="font-size:12.5px;">
+            <thead class="table-light" style="position:sticky; top:0; z-index:2;">
+              <tr>
+                <th>Date (ISO)</th>
+                <th>Printer</th>
+                <th>Type</th>
+                <th>Toner / Part</th>
+                <th class="text-end">Odometer</th>
+                <th class="text-end">Cost (LKR)</th>
+                <th>Technician / Vendor</th>
+                <th>Status</th>
+                <th>Next Service</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="maintTableBody">
+              <tr><td colspan="10" class="text-center py-4 text-muted">Loading maintenance records...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+
+<div id="page-audit" class="page-view" style="display:none;">
       <div class="section-header">
         <div>
           <h2>Security Audit Trail</h2>
@@ -1728,7 +1826,7 @@
         </div>
         <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
           <input type="search" id="auditSearch" class="form-input" style="width:220px; padding:6px 10px; font-size:12.5px;" placeholder="Filter audit events..." oninput="window.filterAdminTable('auditTableBody', this.value)">
-          <button type="button" class="btn btn-secondary" onclick="window.exportAdminTableCsv(this, 'security-audit-trail.csv')">Export CSV</button>
+          <button type="button" class="btn btn-secondary" onclick="window.exportAdminTableCsv(this, 'security-audit-trail.csv')">Export Excel</button>
           <button type="button" class="btn btn-secondary" onclick="loadAudit()">Refresh Trail</button>
         </div>
       </div>
@@ -1884,7 +1982,39 @@
           </form>
         </div>
 
+        <!-- Maintenance Service Types Configuration -->
+        <div class="card" style="padding: 20px; margin-top: 16px;">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; border-bottom:1px solid var(--border); padding-bottom:10px;">
+            <div>
+              <h3 style="margin:0; font-size:15px; font-weight:700;">Maintenance &amp; Repair Service Types</h3>
+              <div class="small text-secondary">Define custom service categories available in the Printer Maintenance logbook.</div>
+            </div>
+          </div>
+          <div class="d-flex gap-2 mb-3">
+            <input type="text" id="newMaintTypeInput" class="form-control form-control-sm" style="max-width:280px;" placeholder="e.g. ROLLER_REPLACEMENT or BELT_KIT">
+            <button type="button" class="btn btn-primary btn-sm" onclick="window.addMaintServiceType()">+ Add Service Type</button>
+          </div>
+          <div id="maintServiceTypesList" class="d-flex flex-wrap gap-2"></div>
+        </div>
+
       </div>
+
+        <!-- Technicians Directory (For MFP Technician Login) -->
+        <div class="card" style="padding: 20px; margin-top: 16px;">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; border-bottom:1px solid var(--border); padding-bottom:10px;">
+            <div>
+              <h3 style="margin:0; font-size:15px; font-weight:700;">Technicians Directory</h3>
+              <div class="small text-secondary">Register technicians with a PIN so they can log in directly on any MFP touchscreen to record toner replacements &amp; repairs.</div>
+            </div>
+          </div>
+          <div class="d-flex gap-2 mb-3 flex-wrap">
+            <input type="text" id="techNameInput" class="form-control form-control-sm" style="max-width:200px;" placeholder="Technician Name">
+            <input type="text" id="techPinInput" class="form-control form-control-sm" style="max-width:130px;" placeholder="PIN (e.g. 7788)">
+            <input type="text" id="techVendorInput" class="form-control form-control-sm" style="max-width:180px;" placeholder="Vendor (optional)">
+            <button type="button" class="btn btn-primary btn-sm" onclick="window.handleAddTechnician()">+ Add Technician</button>
+          </div>
+          <div id="techListContainer" class="d-flex flex-wrap gap-2"></div>
+        </div>
 
       <!-- ROW 2: DIRECTORY & IDENTITY INTEGRATION STATUS (ISO 9241-110 COMPLIANT) -->
       <div class="card" style="margin-top: 24px; border: 1px solid var(--border); box-shadow: var(--shadow-sm);">
@@ -2034,7 +2164,7 @@
         </div>
         <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
           <input type="search" id="scanLogsSearch" class="form-input" style="width:210px; padding:6px 10px; font-size:12.5px;" placeholder="Filter scan logs..." oninput="window.filterAdminTable('scanLogsTableBody', this.value)">
-          <button type="button" class="btn btn-secondary" onclick="window.exportAdminTableCsv(this, 'scan-activity-logs.csv')">Export CSV</button>
+          <button type="button" class="btn btn-secondary" onclick="window.exportAdminTableCsv(this, 'scan-activity-logs.csv')">Export Excel</button>
           <button type="button" class="btn btn-secondary" onclick="window.loadScanActivity()"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg> <span>Refresh</span></button>
         </div>
       </div>
@@ -2768,7 +2898,7 @@
 </div>
 
 <script src="/js/bootstrap.bundle.min.js"></script>
-<script src="/js/admin-app.js?v=20261119_212"></script>
+<script src="/js/admin-app.js?v=20261120_219"></script>
 
 <!-- =========================================================================
      MODAL: ACTIVE DIRECTORY & LDAP SETTINGS MODAL
@@ -2966,6 +3096,7 @@
       <button type="button" class="btn btn-secondary" onclick="window.closeNocDeviceModal()">Close</button>
     </div>
   </div>
+
 </div>
 
 <!-- MODAL: RESET COUNTERS -->
@@ -3042,5 +3173,140 @@
   </div>
 </div>
 
+<!-- MODAL: LOG PRINTER MAINTENANCE / TONER REPLACEMENT (CLEAN SECTIONED UX) -->
+<div id="modalAddMaintenance" class="modal-backdrop" style="display:none; z-index:99999;">
+  <div class="modal-box mm-modal">
+    <div class="mm-head">
+      <div class="mm-head-icon">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
+      </div>
+      <div class="mm-head-text">
+        <h3>Log Maintenance / Toner Replacement</h3>
+        <p>Record a service, repair, or consumable change for a printer</p>
+      </div>
+      <button type="button" class="modal-close-btn" onclick="document.getElementById('modalAddMaintenance').style.display='none'">&times;</button>
+    </div>
+
+    <form onsubmit="window.handleSaveMaintenance(event); return false;">
+      <div class="mm-body">
+        <div class="mm-grid">
+          <!-- LEFT: FORM SECTIONS -->
+          <div class="mm-form-col">
+
+            <section class="mm-section">
+              <div class="mm-section-title"><span class="mm-step">1</span> Machine &amp; Service</div>
+              <div class="mm-field mm-picker" id="maintPrinterPickerWrap">
+                <label for="maintFormPrinterSearch">Printer / MFP <b>*</b></label>
+                <input type="hidden" id="maintFormPrinter" required>
+                <input type="search" id="maintFormPrinterSearch" class="mm-input" placeholder="Search by code, model, IP or location..." autocomplete="off" onfocus="window.openMaintPrinterDropdown()" oninput="window.filterMaintPrinterDropdown(this.value)">
+                <div id="maintPrinterDropdown" class="mm-dropdown" style="display:none;"></div>
+              </div>
+              <div class="mm-row">
+                <div class="mm-field">
+                  <label for="maintFormType">Service Type <b>*</b></label>
+                  <select id="maintFormType" class="mm-input" onchange="window.maintTypeChanged()"></select>
+                </div>
+                <div class="mm-field" id="maintTonerColorGroup">
+                  <label for="maintFormTonerColor">Toner Color</label>
+                  <select id="maintFormTonerColor" class="mm-input">
+                    <option value="">-- Select --</option>
+                    <option value="BLACK">Black (K)</option>
+                    <option value="CYAN">Cyan (C)</option>
+                    <option value="MAGENTA">Magenta (M)</option>
+                    <option value="YELLOW">Yellow (Y)</option>
+                    <option value="N/A">N/A</option>
+                  </select>
+                </div>
+                <div class="mm-field">
+                  <label for="maintFormStatus">Status</label>
+                  <select id="maintFormStatus" class="mm-input">
+                    <option value="">-- Select --</option>
+                    <option value="COMPLETED">Completed</option>
+                    <option value="IN_PROGRESS">In Progress</option>
+                    <option value="SCHEDULED">Scheduled</option>
+                  </select>
+                </div>
+              </div>
+            </section>
+
+            <section class="mm-section">
+              <div class="mm-section-title"><span class="mm-step">2</span> Part Details</div>
+              <div class="mm-field">
+                <label for="maintFormPart">Part / Consumable Replaced</label>
+                <input type="text" id="maintFormPart" class="mm-input" placeholder="e.g. T-4508D Black Toner, Pickup Roller">
+              </div>
+              <div class="mm-row">
+                <div class="mm-field">
+                  <label for="maintFormPartNum">Part Number / SKU</label>
+                  <input type="text" id="maintFormPartNum" class="mm-input" placeholder="e.g. 6LE54401000">
+                </div>
+                <div class="mm-field">
+                  <label for="maintFormPartSerial">Serial / Warranty</label>
+                  <input type="text" id="maintFormPartSerial" class="mm-input" placeholder="e.g. SN-99210 / 6 Months">
+                </div>
+              </div>
+            </section>
+
+            <section class="mm-section">
+              <div class="mm-section-title"><span class="mm-step">3</span> Cost, People &amp; Schedule</div>
+              <div class="mm-row">
+                <div class="mm-field">
+                  <label for="maintFormOdometer">Meter Reading (pages)</label>
+                  <input type="number" id="maintFormOdometer" class="mm-input" min="0" value="0">
+                </div>
+                <div class="mm-field">
+                  <label for="maintFormCost">Cost (LKR)</label>
+                  <input type="number" id="maintFormCost" class="mm-input" min="0" step="0.01" value="0">
+                </div>
+              </div>
+              <div class="mm-row">
+                <div class="mm-field">
+                  <label for="maintFormTech">Technician</label>
+                  <input type="text" id="maintFormTech" class="mm-input" placeholder="e.g. Kasun / IT Support">
+                </div>
+                <div class="mm-field">
+                  <label for="maintFormVendor">Vendor / Supplier</label>
+                  <input type="text" id="maintFormVendor" class="mm-input" placeholder="e.g. Metropolitan">
+                </div>
+              </div>
+              <div class="mm-row">
+                <div class="mm-field">
+                  <label for="maintFormDate">Service Date <b>*</b></label>
+                  <input type="date" id="maintFormDate" class="mm-input" required>
+                </div>
+                <div class="mm-field">
+                  <label for="maintFormNextDate">Next Service Date</label>
+                  <input type="date" id="maintFormNextDate" class="mm-input">
+                </div>
+              </div>
+              <div class="mm-field">
+                <label for="maintFormNotes">Issue &amp; Repair Notes</label>
+                <textarea id="maintFormNotes" class="mm-input" rows="2" placeholder="Fault symptoms, error codes cleared, work performed..."></textarea>
+              </div>
+            </section>
+          </div>
+
+          <!-- RIGHT: PREVIOUS HISTORY -->
+          <aside class="mm-history-col">
+            <div class="mm-history">
+              <div class="mm-history-head">
+                <span>Previous Repair History</span>
+                <span class="mm-count" id="maintPrevCountBadge">0 records</span>
+              </div>
+              <div id="maintPrevSnapshot" class="mm-history-body">
+                Select a printer to see its earlier repairs, toner changes, and total maintenance spend.
+              </div>
+            </div>
+          </aside>
+        </div>
+      </div>
+
+      <div class="mm-foot">
+        <button type="button" class="btn btn-secondary" onclick="document.getElementById('modalAddMaintenance').style.display='none'">Cancel</button>
+        <button type="submit" class="btn btn-primary">Save Maintenance Record</button>
+      </div>
+    </form>
+  </div>
+</div>
 </body>
 </html>

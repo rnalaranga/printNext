@@ -50,7 +50,7 @@
 
       // Determine page from URL hash (e.g. #printers, #users, #virtual-queue)
       var hash = (window.location.hash || '').replace('#', '').toLowerCase();
-      var validPages = ['dashboard', 'virtual-queue', 'printers', 'monitoring', 'users', 'directory', 'queue', 'copy-logs', 'scan-logs', 'reports', 'audit', 'settings'];
+      var validPages = ['dashboard', 'virtual-queue', 'printers', 'monitoring', 'maintenance', 'users', 'directory', 'queue', 'copy-logs', 'scan-logs', 'reports', 'audit', 'settings'];
       var targetPage = validPages.indexOf(hash) !== -1 ? hash : 'dashboard';
       window.navigatePage(targetPage);
 
@@ -124,6 +124,12 @@
       topbarSub.textContent   = 'Real-Time RFC 3805 SNMP Telemetry • Active Hardware Fleet';
       if (typeof window.initNocMonitoring === 'function') {
         window.initNocMonitoring();
+      }
+    } else if (pageId === 'maintenance') {
+      topbarTitle.textContent = 'Printer Maintenance';
+      topbarSub.textContent   = 'Toner Replacements, Hardware Repairs & Service Cost Logbook';
+      if (typeof window.loadMaintenance === 'function') {
+        window.loadMaintenance();
       }
     } else if (pageId === 'directory') {
       topbarTitle.textContent = 'Active Directory & LDAP Management';
@@ -3341,6 +3347,8 @@
   }
 
   window.loadSettings = function () {
+    if (window.renderMaintServiceTypesSettings) window.renderMaintServiceTypesSettings();
+    if (window.loadTechniciansSettings) window.loadTechniciansSettings();
     fetch('/api/admin/settings')
       .then(function (res) {
         if (!res.ok) throw new Error('HTTP ' + res.status);
@@ -5252,29 +5260,8 @@
   // EXPORT & PRINT HANDLERS
   // -------------------------------------------------------------------------
   window.exportCurrentReportCsv = function () {
-    var tab = state.reports.activeTab;
-    var csvType = 'departments';
-    if (tab === 'costCenters') csvType = 'cost-centers';
-    if (tab === 'printers') csvType = 'printers';
-    if (tab === 'users') csvType = 'users';
-    if (tab === 'scans') csvType = 'scans';
-    if (tab === 'esg') csvType = 'esg';
-    if (tab === 'transactions') csvType = 'transactions';
-
-    var dept = encodeURIComponent(state.reports.filterDept || '');
-    var cc = encodeURIComponent(state.reports.filterCostCenter || '');
-    var prn = encodeURIComponent(state.reports.filterPrinter || '');
-    var start = encodeURIComponent(state.reports.startDate || '');
-    var end = encodeURIComponent(state.reports.endDate || '');
-
-    var url = '/api/admin/reports/export-csv?type=' + csvType;
-    if (dept) url += '&department=' + dept;
-    if (cc) url += '&costCenter=' + cc;
-    if (prn) url += '&printer=' + prn;
-    if (start) url += '&startDate=' + start;
-    if (end) url += '&endDate=' + end;
-
-    window.location.href = url;
+    var tab = state.reports.activeTab || 'reports';
+    window.exportAdminTableCsv('reportsMainTable', 'nexPrint_' + tab + '_report.xls', 'Enterprise Cost Center Report (' + tab + ')');
   };
 
   window.printReportView = function () {
@@ -6797,32 +6784,78 @@
     return '"' + s.replace(/"/g, '""') + '"';
   }
 
+  var _nexPrintLogoDataUri = '';
+  (function preloadExcelLogo() {
+    try {
+      fetch('/img/nexprint-logo.png')
+        .then(function (r) { return r.ok ? r.blob() : null; })
+        .then(function (blob) {
+          if (!blob) return;
+          var reader = new FileReader();
+          reader.onloadend = function () { if (reader.result) _nexPrintLogoDataUri = String(reader.result); };
+          reader.readAsDataURL(blob);
+        })
+        .catch(function () {});
+    } catch (e) {}
+  })();
+
+  window.exportStyledExcel = function (opts) {
+    opts = opts || {};
+    var cols = Array.isArray(opts.columns) ? opts.columns : [];
+    var rows = Array.isArray(opts.rows) ? opts.rows : [];
+    var footer = Array.isArray(opts.footer) ? opts.footer : [];
+    var kpis = Array.isArray(opts.kpis) ? opts.kpis : [];
+    var outName = String(opts.filename || 'nexprint-report').replace(/\.(csv|xls|xlsx)$/i, '') + '.xlsx';
+
+    fetch('/api/admin/reports/export-excel', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        filename: outName,
+        title: opts.title || 'nexPrint Report',
+        subtitle: opts.subtitle || ('Generated: ' + window.formatIsoDateTime(new Date()) + ' (ISO 8601) | nexPrint Enterprise Secure Print Management'),
+        kpis: kpis,
+        columns: cols,
+        rows: rows,
+        footer: footer
+      })
+    })
+    .then(function (res) {
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      return res.blob();
+    })
+    .then(function (blob) {
+      var link = document.createElement('a');
+      var url = URL.createObjectURL(blob);
+      link.href = url;
+      link.download = outName;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+    })
+    .catch(function (err) {
+      if (typeof showToast === 'function') showToast('Excel export failed: ' + err.message, 'error');
+    });
+  };
+
   window.rhExportCsv = function () {
     var data = rhState.data;
     if (!data || !Array.isArray(data.columns)) {
-      if (typeof showToast === 'function') showToast('Run a report before exporting CSV.', 'error');
+      if (typeof showToast === 'function') showToast('Run a report before exporting.', 'error');
       return;
     }
     var visible = rhGetVisibleRows();
-    var lines = [];
-    lines.push(data.columns.map(rhCsvCell).join(','));
-    for (var i = 0; i < visible.length; i++) {
-      lines.push(visible[i].map(rhCsvCell).join(','));
-    }
-    if (Array.isArray(data.footer) && data.footer.length) {
-      lines.push(data.footer.map(rhCsvCell).join(','));
-    }
-    var csvContent = '\uFEFF' + lines.join('\r\n');
-    var blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    var link = document.createElement('a');
-    var url = URL.createObjectURL(blob);
-    var fileId = (data.code ? data.code + '-' : '') + (rhState.activeId || 'report') + '-' + rhToIsoDate(new Date()) + '.csv';
-    link.href = url;
-    link.download = fileId;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+    var fileId = (data.code ? data.code + '-' : '') + (rhState.activeId || 'report') + '-' + rhToIsoDate(new Date()) + '.xls';
+    window.exportStyledExcel({
+      filename: fileId,
+      title: (data.code ? data.code + ' — ' : '') + (data.title || 'Report'),
+      subtitle: (data.description ? data.description + ' | ' : '') + 'Generated: ' + (data.generatedAt || window.formatIsoDateTime(new Date())),
+      kpis: data.kpis,
+      columns: data.columns,
+      rows: visible,
+      footer: data.footer
+    });
   };
 
   window.rhPrint = function () {
@@ -6926,7 +6959,7 @@
     }
   };
 
-  window.exportAdminTableCsv = function (triggerOrId, filename) {
+  window.exportAdminTableCsv = function (triggerOrId, filename, customTitle) {
     var table = null;
     if (typeof triggerOrId === 'string') {
       var el = document.getElementById(triggerOrId);
@@ -6940,19 +6973,17 @@
       return;
     }
 
-    var lines = [];
+    var cols = [];
     var headRows = table.querySelectorAll('thead tr');
-    for (var h = 0; h < headRows.length; h++) {
-      var ths = headRows[h].querySelectorAll('th, td');
-      var hArr = [];
+    if (headRows.length > 0) {
+      var ths = headRows[headRows.length - 1].querySelectorAll('th, td');
       for (var c = 0; c < ths.length; c++) {
-        hArr.push(rhCsvCell((ths[c].textContent || '').replace(/\s+/g, ' ').trim()));
+        cols.push((ths[c].textContent || '').replace(/[\u25B2\u25BC]/g, '').replace(/\s+/g, ' ').trim());
       }
-      if (hArr.length) lines.push(hArr.join(','));
     }
 
+    var rows = [];
     var bodyRows = table.querySelectorAll('tbody tr');
-    var exportedCount = 0;
     for (var b = 0; b < bodyRows.length; b++) {
       var br = bodyRows[b];
       if (br.style.display === 'none') continue;
@@ -6960,28 +6991,29 @@
       if (tds.length === 1 && tds[0].colSpan > 1) continue;
       var bArr = [];
       for (var d = 0; d < tds.length; d++) {
-        bArr.push(rhCsvCell((tds[d].textContent || '').replace(/\s+/g, ' ').trim()));
+        bArr.push((tds[d].textContent || '').replace(/\s+/g, ' ').trim());
       }
-      if (bArr.length) {
-        lines.push(bArr.join(','));
-        exportedCount++;
-      }
+      if (bArr.length) rows.push(bArr);
     }
 
-    if (exportedCount === 0) {
+    if (rows.length === 0) {
       if (typeof showToast === 'function') showToast('No visible rows to export.', 'error');
       return;
     }
 
-    var blob = new Blob(['\uFEFF' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8;' });
-    var link = document.createElement('a');
-    var url = URL.createObjectURL(blob);
-    link.href = url;
-    link.download = filename || 'export.csv';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+    var footer = [];
+    var footTds = table.querySelectorAll('tfoot tr td, tfoot tr th');
+    for (var f = 0; f < footTds.length; f++) {
+      footer.push((footTds[f].textContent || '').replace(/\s+/g, ' ').trim());
+    }
+
+    window.exportStyledExcel({
+      filename: filename || 'nexprint-export.xls',
+      title: customTitle || ('nexPrint Export — ' + String(filename || 'Report').replace(/\.(csv|xls|xlsx)$/i, '')),
+      columns: cols,
+      rows: rows,
+      footer: footer
+    });
   };
 
   document.addEventListener('DOMContentLoaded', function () {
@@ -7296,7 +7328,356 @@
   };
 
   window.sapExportCsv = function () {
-    window.exportAdminTableCsv('sapAlvTable', 'sap-report-builder.csv');
+    window.exportAdminTableCsv('sapAlvTable', 'nexPrint-sap-report-builder.xls', 'SAP ALV Ad-Hoc Report');
+  };
+
+  /* =========================================================================
+     PRINTER MAINTENANCE & CONSUMABLES LOGBOOK
+     ========================================================================= */
+  var DEFAULT_MAINT_TYPES = [
+    'TONER_REPLACEMENT', 'REPAIR', 'DRUM_UNIT', 'FUSER_UNIT', 'PREVENTIVE_SERVICE', 'FIRMWARE_UPDATE', 'OTHER'
+  ];
+  var maintRecordsCache = [];
+  var maintPrintersCache = [];
+
+  window.getMaintServiceTypes = function () {
+    try {
+      var raw = localStorage.getItem('nexprint_maint_service_types');
+      if (raw) {
+        var parsed = JSON.parse(raw);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch (e) {}
+    return DEFAULT_MAINT_TYPES.slice();
+  };
+
+  window.renderMaintServiceTypesSettings = function () {
+    var box = document.getElementById('maintServiceTypesList');
+    if (!box) return;
+    var types = window.getMaintServiceTypes();
+    box.innerHTML = types.map(function (t) {
+      return '<span class="badge bg-light text-dark border d-inline-flex align-items-center gap-2 px-2 py-1">' +
+        '<span>' + esc(t) + '</span>' +
+        '<button type="button" class="btn btn-sm p-0 text-danger fw-bold" style="border:none;background:transparent;line-height:1;" onclick="window.removeMaintServiceType(\'' + esc(t) + '\')">&times;</button>' +
+        '</span>';
+    }).join('');
+    window.populateMaintServiceTypeDropdowns();
+  };
+
+  window.addMaintServiceType = function () {
+    var inp = document.getElementById('newMaintTypeInput');
+    var val = inp ? inp.value.trim().toUpperCase().replace(/\s+/g, '_') : '';
+    if (!val) return;
+    var types = window.getMaintServiceTypes();
+    if (types.indexOf(val) === -1) types.push(val);
+    localStorage.setItem('nexprint_maint_service_types', JSON.stringify(types));
+    if (inp) inp.value = '';
+    window.renderMaintServiceTypesSettings();
+    if (typeof showToast === 'function') showToast('Service type added: ' + val, 'success');
+  };
+
+  window.removeMaintServiceType = function (val) {
+    var types = window.getMaintServiceTypes().filter(function (t) { return t !== val; });
+    if (types.length === 0) types = DEFAULT_MAINT_TYPES.slice();
+    localStorage.setItem('nexprint_maint_service_types', JSON.stringify(types));
+    window.renderMaintServiceTypesSettings();
+  };
+
+  window.populateMaintServiceTypeDropdowns = function () {
+    var types = window.getMaintServiceTypes();
+    var fSel = document.getElementById('maintTypeFilter');
+    if (fSel) {
+      var curr = fSel.value || '';
+      fSel.innerHTML = '<option value="">All Types</option>' + types.map(function (t) {
+        return '<option value="' + esc(t) + '"' + (t === curr ? ' selected' : '') + '>' + esc(t.replace(/_/g, ' ')) + '</option>';
+      }).join('');
+    }
+    var mSel = document.getElementById('maintFormType');
+    if (mSel) {
+      var mCurr = mSel.value || '';
+      mSel.innerHTML = '<option value="">-- Select --</option>' + types.map(function (t) {
+        return '<option value="' + esc(t) + '"' + (t === mCurr ? ' selected' : '') + '>' + esc(t.replace(/_/g, ' ')) + '</option>';
+      }).join('');
+    }
+  };
+
+  window.openMaintPrinterDropdown = function () {
+    window.filterMaintPrinterDropdown((document.getElementById('maintFormPrinterSearch') || {}).value || '');
+    var dd = document.getElementById('maintPrinterDropdown');
+    if (dd) dd.style.display = 'block';
+  };
+
+  window.filterMaintPrinterDropdown = function (query) {
+    var dd = document.getElementById('maintPrinterDropdown');
+    if (!dd) return;
+    var q = (query || '').trim().toLowerCase();
+    var matches = maintPrintersCache.filter(function (p) {
+      if (!q) return true;
+      var hay = ((p.printerCode || '') + ' ' + (p.name || '') + ' ' + (p.ipAddress || '') + ' ' + (p.location || '')).toLowerCase();
+      return hay.indexOf(q) !== -1;
+    });
+    if (matches.length === 0) {
+      dd.innerHTML = '<div class="p-2 small text-muted">No matching printers.</div>';
+      dd.style.display = 'block';
+      return;
+    }
+    dd.innerHTML = matches.map(function (p) {
+      var code = p.printerCode || '';
+      return '<div class="px-2 py-2 border-bottom" style="cursor:pointer; font-size:12px;" onmouseover="this.style.background=\'#EFF6FF\'" onmouseout="this.style.background=\'#FFFFFF\'" onclick="window.selectMaintPrinter(\'' + esc(code) + '\')">' +
+        '<div><strong>' + esc(code) + '</strong> &bull; ' + esc(p.name || '') + '</div>' +
+        '<div class="small text-muted font-monospace">' + esc(p.ipAddress || '') + ' &bull; ' + esc(p.location || 'Office') + '</div>' +
+        '</div>';
+    }).join('');
+    dd.style.display = 'block';
+  };
+
+  window.selectMaintPrinter = function (code) {
+    var p = maintPrintersCache.filter(function (x) { return (x.printerCode || '') === code; })[0];
+    var hid = document.getElementById('maintFormPrinter');
+    var srch = document.getElementById('maintFormPrinterSearch');
+    var dd = document.getElementById('maintPrinterDropdown');
+    if (hid) hid.value = code;
+    if (srch) srch.value = p ? (p.printerCode + ' - ' + p.name + ' (' + p.ipAddress + ')') : code;
+    if (dd) dd.style.display = 'none';
+    window.onMaintPrinterInput(code);
+  };
+
+  window.onMaintPrinterInput = function (explicitCode) {
+    var hid = document.getElementById('maintFormPrinter');
+    var box = document.getElementById('maintPrevSnapshot');
+    var cntBadge = document.getElementById('maintPrevCountBadge');
+    if (!box) return;
+    var code = (explicitCode || (hid ? hid.value : '') || '').trim().toUpperCase();
+    if (!code) {
+      if (cntBadge) cntBadge.textContent = '0 records';
+      box.innerHTML = 'Select a printer on the left to inspect its previous repairs, toner replacements, and total maintenance spend.';
+      return;
+    }
+
+    var prev = maintRecordsCache.filter(function (m) {
+      return (m.printerCode || '').toUpperCase() === code;
+    });
+    if (cntBadge) cntBadge.textContent = prev.length + (prev.length === 1 ? ' record' : ' records');
+    if (prev.length === 0) {
+      box.innerHTML = '<div class="text-muted py-2">No previous service records found for <strong>' + esc(code) + '</strong>.</div>';
+      return;
+    }
+    var totalSpend = prev.reduce(function (acc, m) { return acc + (Number(m.costLkr) || 0); }, 0);
+    var itemsHtml = prev.slice(0, 6).map(function (m) {
+      return '<div class="bg-white border p-2 mb-2">' +
+        '<div class="d-flex justify-content-between"><strong class="text-dark">' + esc(m.maintenanceType || '') + '</strong><span class="font-monospace text-muted">' + esc(m.serviceDate || '') + '</span></div>' +
+        '<div class="text-dark mt-1">' + esc(m.partReplaced || m.notes || '-') + '</div>' +
+        '<div class="d-flex justify-content-between small text-muted mt-1"><span>' + esc(m.technician || '-') + '</span><strong class="font-monospace text-primary">LKR ' + Number(m.costLkr || 0).toLocaleString(undefined, { minimumFractionDigits: 2 }) + '</strong></div>' +
+        '</div>';
+    }).join('');
+    box.innerHTML = '<div class="bg-white border p-2 mb-2 d-flex justify-content-between"><span>Total Spend (' + esc(code) + ')</span><strong class="text-primary font-monospace">LKR ' + totalSpend.toLocaleString(undefined, { minimumFractionDigits: 2 }) + '</strong></div>' + itemsHtml;
+  };
+
+  window.loadMaintenance = function () {
+    window.populateMaintServiceTypeDropdowns();
+    var pFilter = document.getElementById('maintPrinterFilter');
+    var tFilter = document.getElementById('maintTypeFilter');
+    var sFilter = document.getElementById('maintStatusFilter');
+
+    if (pFilter && pFilter.options.length <= 1) {
+      fetch('/api/admin/printers')
+        .then(function (r) { return r.ok ? r.json() : []; })
+        .then(function (printers) {
+          if (!Array.isArray(printers)) return;
+          maintPrintersCache = printers;
+          var opts = '<option value="">All Printers</option>';
+          printers.forEach(function (p) {
+            var lbl = (p.printerCode || '') + ' - ' + (p.name || '') + (p.ipAddress ? ' (' + p.ipAddress + ')' : '');
+            opts += '<option value="' + esc(p.printerCode || '') + '">' + esc(lbl) + '</option>';
+          });
+          pFilter.innerHTML = opts;
+        })
+        .catch(function () {});
+    }
+
+    var params = [];
+    if (pFilter && pFilter.value) params.push('printerCode=' + encodeURIComponent(pFilter.value));
+    if (tFilter && tFilter.value) params.push('type=' + encodeURIComponent(tFilter.value));
+    if (sFilter && sFilter.value) params.push('status=' + encodeURIComponent(sFilter.value));
+
+    var url = '/api/admin/maintenance' + (params.length ? '?' + params.join('&') : '');
+    fetch(url)
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        var el;
+        el = document.getElementById('maintStatTotal'); if (el) el.textContent = (data.totalRecords || 0).toLocaleString();
+        el = document.getElementById('maintStatToner'); if (el) el.textContent = (data.tonerReplacements || 0).toLocaleString();
+        el = document.getElementById('maintStatRepairs'); if (el) el.textContent = (data.repairsCount || 0).toLocaleString();
+        el = document.getElementById('maintStatCost'); if (el) el.textContent = window.formatLkr(data.totalCostLkr || 0);
+        el = document.getElementById('maintTopRepaired'); if (el) el.textContent = data.topRepairedPrinter || 'None';
+        el = document.getElementById('maintTopToner'); if (el) el.textContent = data.topTonerPrinter || 'None';
+        el = document.getElementById('maintTopSpend'); if (el) el.textContent = data.topSpendPrinter || 'None';
+
+        var list = Array.isArray(data.records) ? data.records : [];
+        maintRecordsCache = list;
+        var tbody = document.getElementById('maintTableBody');
+        if (!tbody) return;
+        if (list.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="10" class="text-center py-4 text-muted">No maintenance or toner replacement records found. Click <strong>+ Log Maintenance / Toner</strong> to add one.</td></tr>';
+          return;
+        }
+        tbody.innerHTML = list.map(function (m) {
+          var stClass = m.status === 'COMPLETED' ? 'badge-completed' : (m.status === 'IN_PROGRESS' ? 'badge-held' : 'badge-expired');
+          var partMeta = [m.partNumber ? 'SKU: ' + m.partNumber : '', m.partSerial ? 'SN: ' + m.partSerial : ''].filter(Boolean).join(' | ');
+          var partInfo = (m.tonerColor && m.tonerColor !== 'N/A' ? '[' + esc(m.tonerColor) + '] ' : '') + esc(m.partReplaced || m.notes || '-') +
+            (partMeta ? '<div class="small text-muted font-monospace">' + esc(partMeta) + '</div>' : '');
+          var techVendor = [m.technician, m.vendor].filter(Boolean).map(esc).join(' / ') || '-';
+          var completeBtn = m.status !== 'COMPLETED'
+            ? '<button type="button" class="btn btn-outline-primary btn-sm py-0 px-2 me-1" onclick="window.completeMaintenance(' + m.id + ')">Done</button>'
+            : '';
+          return '<tr>' +
+            '<td class="font-monospace">' + esc(m.serviceDate || '') + '</td>' +
+            '<td><strong>' + esc(m.printerCode || '') + '</strong><div class="small text-muted">' + esc(m.printerName || '') + '</div></td>' +
+            '<td><span class="badge bg-light text-dark border">' + esc(m.maintenanceType || '') + '</span></td>' +
+            '<td>' + partInfo + '</td>' +
+            '<td class="text-end font-monospace">' + Number(m.odometerPages || 0).toLocaleString() + '</td>' +
+            '<td class="text-end font-monospace">' + Number(m.costLkr || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + '</td>' +
+            '<td>' + techVendor + '</td>' +
+            '<td><span class="badge ' + stClass + '">' + esc(m.status || '') + '</span>' + (m.durationMinutes ? '<div class="small text-muted font-monospace">' + m.durationMinutes + ' min</div>' : '') + '</td>' +
+            '<td class="font-monospace">' + esc(m.nextServiceDate || '-') + '</td>' +
+            '<td>' + completeBtn + '<button type="button" class="btn btn-secondary btn-sm py-0 px-2" onclick="window.deleteMaintenance(' + m.id + ')">Del</button></td>' +
+            '</tr>';
+        }).join('');
+      })
+      .catch(function (err) {
+        var tbody = document.getElementById('maintTableBody');
+        if (tbody) tbody.innerHTML = '<tr><td colspan="10" class="text-center py-4 text-danger">Failed to load maintenance logs: ' + esc(err.message) + '</td></tr>';
+      });
+  };
+
+  window.maintTypeChanged = function () {
+    var t = (document.getElementById('maintFormType') || {}).value || '';
+    var grp = document.getElementById('maintTonerColorGroup');
+    if (grp) grp.style.display = (t === 'TONER_REPLACEMENT') ? '' : 'none';
+  };
+
+  window.openMaintenanceModal = function () {
+    window.populateMaintServiceTypeDropdowns();
+    var dEl = document.getElementById('maintFormDate');
+    if (dEl && !dEl.value) {
+      var now = new Date();
+      var mm = String(now.getMonth() + 1).padStart(2, '0');
+      var dd = String(now.getDate()).padStart(2, '0');
+      dEl.value = now.getFullYear() + '-' + mm + '-' + dd;
+    }
+    window.maintTypeChanged();
+    window.onMaintPrinterInput();
+    var m = document.getElementById('modalAddMaintenance');
+    if (m) m.style.display = 'flex';
+  };
+
+  window.handleSaveMaintenance = function (event) {
+    if (event) event.preventDefault();
+    var rawPrinter = ((document.getElementById('maintFormPrinter') || {}).value || '').trim();
+    var pCode = rawPrinter.split(' - ')[0].trim();
+    var payload = {
+      printerCode: pCode,
+      maintenanceType: (document.getElementById('maintFormType') || {}).value || 'REPAIR',
+      tonerColor: (document.getElementById('maintFormTonerColor') || {}).value || 'N/A',
+      partReplaced: ((document.getElementById('maintFormPart') || {}).value || '').trim(),
+      partNumber: ((document.getElementById('maintFormPartNum') || {}).value || '').trim(),
+      partSerial: ((document.getElementById('maintFormPartSerial') || {}).value || '').trim(),
+      odometerPages: parseInt((document.getElementById('maintFormOdometer') || {}).value, 10) || 0,
+      costLkr: parseFloat((document.getElementById('maintFormCost') || {}).value) || 0,
+      status: (document.getElementById('maintFormStatus') || {}).value || 'COMPLETED',
+      technician: ((document.getElementById('maintFormTech') || {}).value || '').trim(),
+      vendor: ((document.getElementById('maintFormVendor') || {}).value || '').trim(),
+      serviceDate: (document.getElementById('maintFormDate') || {}).value || '',
+      nextServiceDate: (document.getElementById('maintFormNextDate') || {}).value || '',
+      notes: ((document.getElementById('maintFormNotes') || {}).value || '').trim()
+    };
+    fetch('/api/admin/maintenance', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    })
+    .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+    .then(function () {
+      var m = document.getElementById('modalAddMaintenance');
+      if (m) m.style.display = 'none';
+      ['maintFormPrinter', 'maintFormPrinterSearch', 'maintFormType', 'maintFormTonerColor', 'maintFormStatus', 'maintFormPart', 'maintFormPartNum', 'maintFormPartSerial', 'maintFormTech', 'maintFormVendor', 'maintFormNextDate', 'maintFormNotes'].forEach(function (id) {
+        var el = document.getElementById(id); if (el) el.value = '';
+      });
+      var odo = document.getElementById('maintFormOdometer'); if (odo) odo.value = '0';
+      var cst = document.getElementById('maintFormCost'); if (cst) cst.value = '0';
+      window.onMaintPrinterInput('');
+      if (typeof showToast === 'function') showToast('Maintenance record saved!', 'success');
+      window.loadMaintenance();
+    })
+    .catch(function (err) {
+      if (typeof showToast === 'function') showToast('Save failed: ' + err.message, 'error');
+    });
+  };
+
+  window.completeMaintenance = function (id) {
+    fetch('/api/admin/maintenance/' + id + '/complete', { method: 'PUT' })
+      .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+      .then(function () {
+        if (typeof showToast === 'function') showToast('Marked as COMPLETED.', 'success');
+        window.loadMaintenance();
+      });
+  };
+
+  window.deleteMaintenance = function (id) {
+    fetch('/api/admin/maintenance/' + id, { method: 'DELETE' })
+      .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); })
+      .then(function () {
+        if (typeof showToast === 'function') showToast('Record deleted.', 'success');
+        window.loadMaintenance();
+      });
+  };
+
+  window.loadTechniciansSettings = function () {
+    var box = document.getElementById('techListContainer');
+    if (!box) return;
+    fetch('/api/admin/technicians')
+      .then(function (r) { return r.ok ? r.json() : []; })
+      .then(function (list) {
+        if (!Array.isArray(list) || list.length === 0) {
+          box.innerHTML = '<div class="small text-muted">No technicians registered yet.</div>';
+          return;
+        }
+        box.innerHTML = list.map(function (t) {
+          return '<span class="badge bg-light text-dark border d-inline-flex align-items-center gap-2 px-2 py-1">' +
+            '<strong>' + esc(t.name) + '</strong> <span class="font-monospace text-primary">PIN:' + esc(t.pin) + '</span>' +
+            (t.vendor ? ' <span class="text-muted">(' + esc(t.vendor) + ')</span>' : '') +
+            '<button type="button" class="btn btn-sm p-0 text-danger fw-bold" style="border:none;background:transparent;line-height:1;" onclick="window.deleteTechnician(' + t.id + ')">&times;</button>' +
+            '</span>';
+        }).join('');
+      });
+  };
+
+  window.handleAddTechnician = function () {
+    var name = ((document.getElementById('techNameInput') || {}).value || '').trim();
+    var pin = ((document.getElementById('techPinInput') || {}).value || '').trim();
+    var vendor = ((document.getElementById('techVendorInput') || {}).value || '').trim();
+    if (!name || !pin) {
+      if (typeof showToast === 'function') showToast('Technician name and PIN are required.', 'error');
+      return;
+    }
+    fetch('/api/admin/technicians', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: name, pin: pin, vendor: vendor })
+    })
+    .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+    .then(function () {
+      ['techNameInput', 'techPinInput', 'techVendorInput'].forEach(function (id) {
+        var el = document.getElementById(id); if (el) el.value = '';
+      });
+      if (typeof showToast === 'function') showToast('Technician saved!', 'success');
+      window.loadTechniciansSettings();
+    });
+  };
+
+  window.deleteTechnician = function (id) {
+    fetch('/api/admin/technicians/' + id, { method: 'DELETE' })
+      .then(function () { window.loadTechniciansSettings(); });
   };
 
 })();

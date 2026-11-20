@@ -3541,3 +3541,229 @@ body.noc-fullscreen-active .admin-body {
   height: 7px !important;
   border-radius: 50% !important;
 }
+
+/* ==========================================================================
+   PRINTER MAINTENANCE MODAL - CLEAN SECTIONED UX
+   ========================================================================== */
+.mm-modal {
+  width: 96% !important;
+  max-width: 1020px !important;
+  padding: 0 !important;
+  background: #FFFFFF !important;
+  border: 1px solid #CBD5E1 !important;
+  box-shadow: 0 24px 60px rgba(15, 23, 42, 0.28) !important;
+  display: flex;
+  flex-direction: column;
+  max-height: 92vh;
+}
+
+.mm-head {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 16px 22px;
+  background: linear-gradient(180deg, #F8FAFC 0%, #F1F5F9 100%);
+  border-bottom: 1px solid #E2E8F0;
+}
+
+.mm-head-icon {
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #1D4ED8;
+  color: #FFFFFF;
+  flex-shrink: 0;
+}
+
+.mm-head-text { flex: 1; min-width: 0; }
+.mm-head-text h3 { margin: 0; font-size: 16px; font-weight: 800; color: #0F172A; letter-spacing: -0.01em; }
+.mm-head-text p { margin: 2px 0 0 0; font-size: 12px; color: #64748B; }
+
+.mm-body {
+  padding: 20px 22px;
+  overflow-y: auto;
+  background: #F8FAFC;
+}
+
+.mm-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.65fr) minmax(0, 1fr);
+  gap: 18px;
+  align-items: start;
+}
+
+@media (max-width: 900px) {
+  .mm-grid { grid-template-columns: minmax(0, 1fr); }
+}
+
+.mm-form-col { display: flex; flex-direction: column; gap: 14px; }
+
+.mm-section {
+  background: #FFFFFF;
+  border: 1px solid #E2E8F0;
+  padding: 16px 18px 14px 18px;
+}
+
+.mm-section-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #1E3A8A;
+  padding-bottom: 10px;
+  margin-bottom: 12px;
+  border-bottom: 1px solid #EEF2F7;
+}
+
+.mm-step {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  background: #1D4ED8;
+  color: #FFFFFF;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.mm-row {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  gap: 12px;
+}
+
+@media (max-width: 600px) {
+  .mm-row { grid-auto-flow: row; }
+}
+
+.mm-field { display: flex; flex-direction: column; gap: 5px; margin-bottom: 12px; min-width: 0; }
+.mm-field:last-child { margin-bottom: 0; }
+.mm-row .mm-field { margin-bottom: 12px; }
+.mm-section .mm-row:last-child .mm-field,
+.mm-section .mm-field:last-child { margin-bottom: 0; }
+
+.mm-field label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #334155;
+  margin: 0;
+}
+.mm-field label b { color: #DC2626; }
+
+.mm-input {
+  width: 100%;
+  min-height: 38px;
+  padding: 8px 11px;
+  font-size: 13px;
+  color: #0F172A;
+  background: #FFFFFF;
+  border: 1px solid #CBD5E1;
+  outline: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.mm-input::placeholder { color: #94A3B8; }
+.mm-input:hover { border-color: #94A3B8; }
+.mm-input:focus {
+  border-color: #1D4ED8;
+  box-shadow: 0 0 0 3px rgba(29, 78, 216, 0.14);
+}
+textarea.mm-input { resize: vertical; min-height: 76px; line-height: 1.45; }
+
+.mm-picker { position: relative; }
+.mm-dropdown {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc(100% + 2px);
+  z-index: 1100;
+  max-height: 230px;
+  overflow-y: auto;
+  background: #FFFFFF;
+  border: 1px solid #94A3B8;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.16);
+}
+
+.mm-history-col { position: sticky; top: 0; }
+.mm-history {
+  background: #FFFFFF;
+  border: 1px solid #E2E8F0;
+  display: flex;
+  flex-direction: column;
+  min-height: 300px;
+}
+.mm-history-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 13px 16px;
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #1E3A8A;
+  border-bottom: 1px solid #EEF2F7;
+  background: #F8FAFC;
+}
+.mm-count {
+  font-size: 11px;
+  font-weight: 700;
+  color: #475569;
+  background: #FFFFFF;
+  border: 1px solid #CBD5E1;
+  padding: 2px 8px;
+  text-transform: none;
+  letter-spacing: 0;
+}
+.mm-history-body {
+  padding: 14px 16px;
+  font-size: 12.5px;
+  color: #64748B;
+  line-height: 1.5;
+  overflow-y: auto;
+  max-height: 480px;
+}
+.mm-history-body .bg-white.border { background: #F8FAFC !important; border: 1px solid #E2E8F0 !important; }
+
+.mm-foot {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 14px 22px;
+  background: #FFFFFF;
+  border-top: 1px solid #E2E8F0;
+}
+.mm-foot .btn { min-height: 38px; padding: 8px 20px; font-size: 13px; }
+/* ==========================================================================
+   MAINTENANCE MODAL - COMPACT FIT (no clipped footer, tighter spacing)
+   ========================================================================== */
+.mm-modal { max-height: 94vh !important; overflow: hidden !important; max-width: 960px !important; }
+.mm-modal > form { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; margin: 0; }
+.mm-head { padding: 10px 18px; gap: 12px; flex-shrink: 0; }
+.mm-head-icon { width: 32px; height: 32px; }
+.mm-head-icon svg { width: 17px; height: 17px; }
+.mm-head-text h3 { font-size: 14.5px; }
+.mm-head-text p { font-size: 11.5px; margin-top: 1px; }
+.mm-body { padding: 12px 18px; flex: 1 1 auto; min-height: 0; overflow-y: auto; }
+.mm-grid { gap: 12px; }
+.mm-form-col { gap: 10px; }
+.mm-section { padding: 10px 14px 10px 14px; }
+.mm-section-title { font-size: 11px; padding-bottom: 7px; margin-bottom: 9px; gap: 8px; }
+.mm-step { width: 17px; height: 17px; font-size: 10px; }
+.mm-row { gap: 10px; }
+.mm-field { gap: 3px; margin-bottom: 9px; }
+.mm-row .mm-field { margin-bottom: 9px; }
+.mm-field label { font-size: 11.5px; }
+.mm-input { min-height: 32px; padding: 5px 9px; font-size: 12.5px; }
+textarea.mm-input { min-height: 52px; rows: 2; }
+.mm-history { min-height: 0; }
+.mm-history-head { padding: 9px 13px; font-size: 11px; }
+.mm-history-body { padding: 10px 13px; font-size: 12px; max-height: 360px; }
+.mm-foot { padding: 10px 18px; flex-shrink: 0; }
+.mm-foot .btn { min-height: 32px; padding: 5px 16px; font-size: 12.5px; }

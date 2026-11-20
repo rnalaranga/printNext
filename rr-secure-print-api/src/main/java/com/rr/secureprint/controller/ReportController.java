@@ -2,6 +2,7 @@ package com.rr.secureprint.controller;
 
 import java.util.Map;
 
+import com.rr.secureprint.service.ExcelExportService;
 import com.rr.secureprint.service.ReportService;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -18,9 +19,11 @@ import java.util.List;
 public class ReportController {
 
     private final ReportService reportService;
+    private final ExcelExportService excelExportService;
 
-    public ReportController(ReportService reportService) {
+    public ReportController(ReportService reportService, ExcelExportService excelExportService) {
         this.reportService = reportService;
+        this.excelExportService = excelExportService;
     }
 
     @GetMapping("/hub/{reportType}")
@@ -124,5 +127,17 @@ public class ReportController {
     @PostMapping("/builder")
     public ResponseEntity<Map<String, Object>> buildCustomReport(@RequestBody Map<String, Object> body) {
         return ResponseEntity.ok(reportService.buildCustomReport(body != null ? body : Map.of()));
+    }
+
+    @PostMapping("/export-excel")
+    public ResponseEntity<byte[]> exportExcel(@RequestBody Map<String, Object> body) throws Exception {
+        Map<String, Object> req = body != null ? body : Map.of();
+        String rawName = req.get("filename") != null ? String.valueOf(req.get("filename")) : "nexprint-report";
+        String safeName = rawName.replaceAll("[^a-zA-Z0-9._-]", "_").replaceAll("\\.(csv|xls|xlsx)$", "") + ".xlsx";
+        byte[] bytes = excelExportService.buildWorkbook(req);
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + safeName + "\"")
+                .contentType(MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+                .body(bytes);
     }
 }

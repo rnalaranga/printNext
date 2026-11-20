@@ -277,12 +277,12 @@ public class JobService {
                 });
             }
 
-            // Increment user's central print count (A4/smaller=1, A3=2; duplex=x2)
+            // Increment user's central print count (pageCount * copies; A4/smaller=1x, A3=2x)
             int basePages = job.getPageCount() > 0 ? job.getPageCount() : 1;
+            int copies = Math.max(1, job.getCopies());
             int sizeMult = ((paperSize != null && paperSize.toUpperCase().contains("A3"))
                     || (drawer != null && drawer.toUpperCase().contains("DRAWER2"))) ? 2 : 1;
-            int duplexMult = job.isDuplex() ? 2 : 1;
-            int countedPages = basePages * sizeMult * duplexMult;
+            int countedPages = basePages * copies * sizeMult;
             user.setPrintCount(user.getPrintCount() + countedPages);
             userRepository.save(user);
 

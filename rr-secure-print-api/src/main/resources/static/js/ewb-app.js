@@ -1176,6 +1176,9 @@
     if (copyStationCount) copyStationCount.textContent = (user.copyCount != null) ? user.copyCount : '0';
     var scanStationCount = document.getElementById('scanStationCount');
     if (scanStationCount) scanStationCount.textContent = (user.scanCount != null) ? user.scanCount : '0';
+    var hp = document.getElementById('homeMonthPrint'); if (hp) hp.textContent = (user.printCount != null) ? user.printCount : '0';
+    var hc = document.getElementById('homeMonthCopy'); if (hc) hc.textContent = (user.copyCount != null) ? user.copyCount : '0';
+    var hs = document.getElementById('homeMonthScan'); if (hs) hs.textContent = (user.scanCount != null) ? user.scanCount : '0';
   }
 
   function onLoginSuccess(user) {
@@ -2171,5 +2174,163 @@
       .replace(/>/g, '&gt;')
       .replace(/"/g, '&quot;');
   }
+
+  window._activeTech = null;
+
+  window.openTechLoginModal = function () {
+    var inp = document.getElementById('techMfpPinInput');
+    var err = document.getElementById('techLoginErr');
+    if (inp) inp.value = '';
+    if (err) err.style.display = 'none';
+    var m = document.getElementById('modalTechLogin');
+    if (m) m.style.display = 'block';
+  };
+
+  window.submitTechLogin = function () {
+    var pin = (document.getElementById('techMfpPinInput') || {}).value || '';
+    var err = document.getElementById('techLoginErr');
+    apiRequest('POST', '/api/admin/technicians/auth', { pin: pin }, function (status, data) {
+      if (status === 200 && data && data.authenticated) {
+        window._activeTech = data;
+        document.getElementById('modalTechLogin').style.display = 'none';
+        var lbl = document.getElementById('techPanelUserLabel');
+        if (lbl) lbl.textContent = data.name + (state.station ? (' • ' + state.station.printerCode) : '');
+
+        var tonerRow = document.getElementById('techTonerBtnsRow');
+        if (tonerRow) {
+          var isColorMfp = !!(state.station && (state.station.color || state.station.isColor));
+          var tHtml = '<td><button type="button" onclick="window.submitQuickTechToner(\'BLACK\')" style="width:100%; padding:10px 4px; background:#0F172A; color:#FFFFFF; border:none; font-weight:700; font-size:11.5px;">Black</button></td>';
+          if (isColorMfp) {
+            tHtml += '<td><button type="button" onclick="window.submitQuickTechToner(\'CYAN\')" style="width:100%; padding:10px 4px; background:#0284C7; color:#FFFFFF; border:none; font-weight:700; font-size:11.5px;">Cyan</button></td>';
+            tHtml += '<td><button type="button" onclick="window.submitQuickTechToner(\'MAGENTA\')" style="width:100%; padding:10px 4px; background:#DB2777; color:#FFFFFF; border:none; font-weight:700; font-size:11.5px;">Magenta</button></td>';
+            tHtml += '<td><button type="button" onclick="window.submitQuickTechToner(\'YELLOW\')" style="width:100%; padding:10px 4px; background:#D97706; color:#FFFFFF; border:none; font-weight:700; font-size:11.5px;">Yellow</button></td>';
+          }
+          tonerRow.innerHTML = tHtml;
+        }
+
+        var stSel = document.getElementById('techServiceTypeSelect');
+        if (stSel) {
+          var types = ['REPAIR', 'DRUM_UNIT', 'FUSER_UNIT', 'PREVENTIVE_SERVICE', 'FIRMWARE_UPDATE', 'OTHER'];
+          try {
+            var raw = localStorage.getItem('nexprint_maint_service_types');
+            if (raw) {
+              var parsed = JSON.parse(raw);
+              if (Array.isArray(parsed) && parsed.length > 0) types = parsed;
+            }
+          } catch (e) {}
+          stSel.innerHTML = types.map(function (t) {
+            return '<option value="' + esc(t) + '">' + esc(t.replace(/_/g, ' ')) + '</option>';
+          }).join('');
+        }
+
+        document.getElementById('modalTechPanel').style.display = 'block';
+        window.renderTechOsk();
+        window.loadTechPendingServices();
+      } else if (err) {
+        err.textContent = (data && data.error) || 'Invalid Technician PIN';
+        err.style.display = 'block';
+      }
+    });
+  };
+
+  window.submitQuickTechToner = function (color) {
+    if (!window._activeTech) return;
+    apiRequest('POST', '/api/admin/maintenance', {
+      printerCode: state.station ? state.station.printerCode : '',
+      maintenanceType: 'TONER_REPLACEMENT',
+      tonerColor: color,
+      partReplaced: color + ' Toner Cartridge',
+      technician: window._activeTech.name,
+      vendor: window._activeTech.vendor || '',
+      status: 'COMPLETED'
+    }, function (status) {
+      if (status === 200) {
+        document.getElementById('modalTechPanel').style.display = 'none';
+        alert(color + ' Toner Replacement logged!');
+      }
+    });
+  };
+
+  window.submitQuickTechRepair = function (reqStatus) {
+    if (!window._activeTech) return;
+    var sType = (document.getElementById('techServiceTypeSelect') || {}).value || 'REPAIR';
+    var part = ((document.getElementById('techQuickPart') || {}).value || '').trim() || 'General Service';
+    var notes = ((document.getElementById('techQuickNotes') || {}).value || '').trim();
+    apiRequest('POST', '/api/admin/maintenance', {
+      printerCode: state.station ? state.station.printerCode : '',
+      maintenanceType: sType,
+      partReplaced: part,
+      notes: notes,
+      technician: window._activeTech.name,
+      vendor: window._activeTech.vendor || '',
+      status: reqStatus || 'COMPLETED'
+    }, function (status) {
+      if (status === 200) {
+        document.getElementById('techQuickPart').value = '';
+        var nEl = document.getElementById('techQuickNotes'); if (nEl) nEl.value = '';
+        document.getElementById('modalTechPanel').style.display = 'none';
+        alert(reqStatus === 'IN_PROGRESS' ? 'Service Request logged!' : 'Maintenance logged!');
+      }
+    });
+  };
+
+  window._techActiveField = null;
+
+  window.renderTechOsk = function () {
+    var box = document.getElementById('techOskKeys');
+    if (!box || box.children.length > 0) return;
+    var rows = [
+      ['1','2','3','4','5','6','7','8','9','0'],
+      ['Q','W','E','R','T','Y','U','I','O','P'],
+      ['A','S','D','F','G','H','J','K','L','-'],
+      ['Z','X','C','V','B','N','M','SPACE','BKSP','HIDE']
+    ];
+    box.innerHTML = rows.map(function (r) {
+      return '<table style="width:100%;border-collapse:separate;border-spacing:2px;"><tr>' + r.map(function (k) {
+        if (k === 'SPACE') return '<td style="width:18%;"><button type="button" onclick="window.techOskPress(\' \')" style="width:100%;padding:6px 2px;font-size:10px;font-weight:700;background:#FFFFFF;border:1px solid #CBD5E1;">SPACE</button></td>';
+        if (k === 'BKSP') return '<td style="width:12%;"><button type="button" onclick="window.techOskBksp()" style="width:100%;padding:6px 2px;font-size:10px;font-weight:700;background:#FEE2E2;color:#DC2626;border:1px solid #FECACA;">DEL</button></td>';
+        if (k === 'HIDE') return '<td style="width:12%;"><button type="button" onclick="document.getElementById(\'techOskWrap\').style.display=\'none\'" style="width:100%;padding:6px 2px;font-size:10px;font-weight:700;background:#E2E8F0;border:1px solid #CBD5E1;">OK</button></td>';
+        return '<td><button type="button" onclick="window.techOskPress(\'' + k + '\')" style="width:100%;padding:6px 2px;font-size:11px;font-weight:700;background:#FFFFFF;border:1px solid #CBD5E1;">' + k + '</button></td>';
+      }).join('') + '</tr></table>';
+    }).join('');
+  };
+
+  window.techOskPress = function (ch) {
+    var el = window._techActiveField || document.getElementById('techQuickPart');
+    if (el) el.value += ch;
+  };
+
+  window.techOskBksp = function () {
+    var el = window._techActiveField || document.getElementById('techQuickPart');
+    if (el && el.value.length > 0) el.value = el.value.slice(0, -1);
+  };
+
+  window.loadTechPendingServices = function () {
+    var wrap = document.getElementById('techPendingWrap');
+    var listEl = document.getElementById('techPendingList');
+    if (!wrap || !listEl || !state.station) return;
+    apiRequest('GET', '/api/admin/maintenance?printerCode=' + encodeURIComponent(state.station.printerCode) + '&status=IN_PROGRESS', null, function (status, data) {
+      if (status !== 200 || !data || !Array.isArray(data.records) || data.records.length === 0) {
+        wrap.style.display = 'none';
+        return;
+      }
+      wrap.style.display = 'block';
+      listEl.innerHTML = data.records.map(function (m) {
+        return '<div style="display:block; padding:4px 0; border-bottom:1px solid #FDE68A; font-size:11.5px; overflow:hidden;">' +
+          '<span style="float:left;"><strong>' + esc(m.maintenanceType) + '</strong>: ' + esc(m.partReplaced || m.notes || '-') + '</span>' +
+          '<button type="button" onclick="window.completeTechPending(' + m.id + ')" style="float:right; padding:2px 8px; background:#059669; color:#FFFFFF; border:none; font-weight:700; font-size:10.5px;">Complete</button>' +
+          '</div>';
+      }).join('');
+    });
+  };
+
+  window.completeTechPending = function (id) {
+    apiRequest('PUT', '/api/admin/maintenance/' + id + '/complete', null, function (status, res) {
+      if (status === 200) {
+        alert('Service completed! Time logged: ' + (res && res.durationMinutes ? res.durationMinutes : 1) + ' min');
+        window.loadTechPendingServices();
+      }
+    });
+  };
 
 })();
