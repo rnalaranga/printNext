@@ -8,19 +8,14 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>nexPrint - Administration Console</title>
   <link rel="stylesheet" href="/css/bootstrap.min.css">
-  <link rel="stylesheet" href="/css/admin.css?v=20261026_108">
+  <link rel="stylesheet" href="/css/admin.css?v=20261119_215">
   <script>
     /* Instant Pre-Render Theme & Sidebar State (100% Offline, Zero FOUC) */
     (function () {
       try {
-        var savedTheme = localStorage.getItem('nexprint_theme');
-        if (savedTheme === 'dark') {
-          document.documentElement.setAttribute('data-theme', 'dark');
-          document.documentElement.setAttribute('data-bs-theme', 'dark');
-        } else {
-          document.documentElement.setAttribute('data-theme', 'light');
-          document.documentElement.setAttribute('data-bs-theme', 'light');
-        }
+        localStorage.removeItem('nexprint_theme');
+        document.documentElement.setAttribute('data-theme', 'light');
+        document.documentElement.setAttribute('data-bs-theme', 'light');
         if (localStorage.getItem('nexprint_sidebar_collapsed') === 'true') {
           document.documentElement.classList.add('sidebar-collapsed');
         }
@@ -240,13 +235,6 @@
       <span class="sidebar-label collapse-label-text">Collapse Menu</span>
     </button>
   </div>
-
-  <div class="sidebar-bottom">
-    <div class="printer-label">
-      <span class="printer-dot"></span><span id="sidebarPrinterIp">192.168.1.11:9100</span>
-    </div>
-    <div class="printer-sub" id="sidebarPrinterModel">Toshiba e-STUDIO 4508A</div>
-  </div>
 </div>
 
 <!-- =========================================================================
@@ -282,10 +270,6 @@
           <button type="button" class="action-dropdown-item" onclick="navigatePage('settings')"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg> System Settings</button>
         </div>
       </div>
-      <button type="button" class="theme-toggle-btn shadow-sm" id="themeToggleBtn" onclick="window.toggleAppTheme()" title="Switch Light / Dark Theme">
-        <span id="themeToggleIcon" style="display:inline-flex; align-items:center;"></span>
-        <span id="themeToggleText">Dark Mode</span>
-      </button>
       <button class="nav-btn active" onclick="refreshCurrentPage()">Refresh Page</button>
       <a class="nav-btn" href="/" target="_blank">Open Touchscreen</a>
     </div>
@@ -1221,7 +1205,9 @@
           <h2>Walk-Up Photocopy Logs</h2>
           <p>Real-time hardware copy accounting captured from Toshiba e-BRIDGE Next MFPs via TopAccess XML.</p>
         </div>
-        <div style="display:flex; gap:8px; align-items:center;">
+        <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+          <input type="search" id="copyLogsSearch" class="form-input" style="width:200px; padding:6px 10px; font-size:12.5px;" placeholder="Filter copy logs..." oninput="window.filterAdminTable('copyJobsTableBody', this.value)">
+          <button type="button" class="btn btn-secondary" onclick="window.exportAdminTableCsv(this, 'photocopy-logs.csv')">Export CSV</button>
           <button type="button" class="btn btn-primary" onclick="pollFleetCopyJobs()" id="btnPollCopyFleetLogs">Poll MFPs Now</button>
           <div class="action-dropdown-wrap" style="position:relative;">
             <button type="button" class="btn btn-secondary btn-action-dropdown" onclick="window.toggleGenericDropdown(event, 'copy-log-dropdown-menu', 'copy-log-dropdown-btn', 210, 140)" id="copy-log-dropdown-btn" style="font-weight:700;">
@@ -1274,7 +1260,194 @@
          PAGE: REPORTS & ANALYTICS (ENTERPRISE PAPERCUT MF ARCHITECTURE)
          ===================================================================== -->
     <div id="page-reports" class="page-view" style="display:none;">
-      
+      <div class="page-head" style="margin-bottom:16px;">
+        <div>
+          <h2>Reports &amp; Analytics</h2>
+          <p>ISO 9241-110 structured reporting hub. All dates use ISO 8601 (<code style="font-family:monospace;">YYYY-MM-DD</code>).</p>
+        </div>
+        <div class="btn-group" role="group" aria-label="Reports workspace mode" style="display:flex; gap:8px;">
+          <button type="button" id="btnModeIsoHub" class="btn btn-primary btn-sm" onclick="window.switchReportsWorkspaceMode('iso')">20 Standard ISO Reports Catalog</button>
+          <button type="button" id="btnModeSapBuilder" class="btn btn-secondary btn-sm" onclick="window.switchReportsWorkspaceMode('sap')">SAP Report Builder</button>
+          <button type="button" id="btnModeLegacyExplorer" class="btn btn-secondary btn-sm" onclick="window.switchReportsWorkspaceMode('explorer')">Cost Center Explorer</button>
+        </div>
+      </div>
+
+      <!-- MODE 1: 20 STANDARD ISO REPORTS HUB (FULL VIEW) -->
+      <div id="isoReportsHubView">
+        <div class="row g-3 mb-4">
+          <!-- Full-Width Report Workspace -->
+          <div class="col-12">
+            <div class="card border-0 shadow-sm">
+              <div class="card-body">
+                <!-- Report Title & Action Strip -->
+                <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 pb-3 mb-3 border-bottom">
+                  <div>
+                    <div class="d-flex align-items-center gap-2 mb-1">
+                      <span id="rhCodeBadge" class="badge bg-primary-subtle text-primary border border-primary-subtle font-monospace fw-bold">RPT-01</span>
+                      <span id="rhCategoryBadge" class="badge bg-light text-secondary border">Users &amp; Cost Centers</span>
+                    </div>
+                    <h3 id="rhTitle" class="h5 fw-bold mb-1 text-dark">Select a Report</h3>
+                    <div id="rhDesc" class="small text-secondary">Choose a report from the dropdown below to inspect fleet metrics.</div>
+                    <div id="rhMeta" class="small text-muted mt-1 font-monospace"></div>
+                  </div>
+                  <div class="d-flex gap-2 flex-wrap">
+                    <button type="button" id="rhBtnRun" class="btn btn-primary btn-sm fw-semibold" onclick="window.rhRun()">Run Report</button>
+                    <button type="button" id="rhBtnCsv" class="btn btn-secondary btn-sm fw-semibold" onclick="window.rhExportCsv()">Export CSV</button>
+                    <button type="button" id="rhBtnPrint" class="btn btn-secondary btn-sm fw-semibold" onclick="window.rhPrint()">Print / PDF</button>
+                    <button type="button" class="btn btn-outline-primary btn-sm fw-semibold" onclick="window.openAdvReportBuilder()">Report Builder</button>
+                    <button type="button" class="btn btn-danger btn-sm fw-semibold" onclick="window.openResetCountersModal()">Reset Counters</button>
+                  </div>
+                </div>
+
+                <!-- ISO Filter Bar -->
+                <div class="row g-2 align-items-end mb-3 pb-3 border-bottom">
+                  <div class="col-12 col-md-4">
+                    <label for="rhReportSelect" class="form-label small fw-semibold mb-1">Report (20 ISO Catalog)</label>
+                    <select id="rhReportSelect" class="form-select form-select-sm fw-semibold" onchange="window.rhSelect(this.value)"></select>
+                  </div>
+                  <div class="col-6 col-md-2">
+                    <label for="rhPeriod" class="form-label small fw-semibold mb-1">Period (ISO 8601)</label>
+                    <select id="rhPeriod" class="form-select form-select-sm" onchange="window.rhPeriodChanged()">
+                      <option value="all">All time</option>
+                      <option value="today">Today</option>
+                      <option value="7d">Last 7 days</option>
+                      <option value="30d">Last 30 days</option>
+                      <option value="month">This month</option>
+                      <option value="custom">Custom range</option>
+                    </select>
+                  </div>
+                  <div class="col-6 col-md-2 rh-custom" style="display:none;">
+                    <label for="rhFrom" class="form-label small fw-semibold mb-1">From</label>
+                    <input type="date" id="rhFrom" class="form-control form-control-sm">
+                  </div>
+                  <div class="col-6 col-md-2 rh-custom" style="display:none;">
+                    <label for="rhTo" class="form-label small fw-semibold mb-1">To</label>
+                    <input type="date" id="rhTo" class="form-control form-control-sm">
+                  </div>
+                  <div class="col-6 col-md-3">
+                    <label for="rhDeptFilter" class="form-label small fw-semibold mb-1">Department</label>
+                    <select id="rhDeptFilter" class="form-select form-select-sm" onchange="window.rhRun()">
+                      <option value="">All Departments</option>
+                    </select>
+                  </div>
+                  <div class="col-6 col-md-3">
+                    <label for="rhPrinterFilter" class="form-label small fw-semibold mb-1">Printer / MFP</label>
+                    <select id="rhPrinterFilter" class="form-select form-select-sm" onchange="window.rhRun()">
+                      <option value="">All Printers</option>
+                    </select>
+                  </div>
+                  <div class="col-12 col-md-3">
+                    <label for="rhSearch" class="form-label small fw-semibold mb-1">Quick Row Filter</label>
+                    <input type="search" id="rhSearch" class="form-control form-control-sm" placeholder="Filter visible rows..." oninput="window.rhRender()">
+                  </div>
+                </div>
+
+                <!-- Empty / Status Placeholder -->
+                <div id="rhEmpty" class="text-center text-muted py-5">
+                  <div class="fw-semibold mb-1">Loading ISO Reports Catalog...</div>
+                  <div class="small">Select any report from the categorized list to generate real-time analytics.</div>
+                </div>
+
+                <!-- Report Result Container -->
+                <div id="rhResult" style="display:none;">
+                  <!-- 4-KPI Summary Strip -->
+                  <div id="rhKpiRow" class="row g-2 mb-3"></div>
+
+                  <!-- Data Table -->
+                  <div class="table-responsive border" style="max-height:460px; overflow:auto;">
+                    <table class="table table-sm table-hover align-middle mb-0" id="rhTable" style="font-size:12.5px;">
+                      <thead class="table-light" style="position:sticky; top:0; z-index:2; border-bottom:2px solid #CBD5E1;">
+                        <tr id="rhHead"></tr>
+                      </thead>
+                      <tbody id="rhBody"></tbody>
+                      <tfoot class="table-light fw-bold" style="position:sticky; bottom:0; z-index:2; border-top:2px solid #CBD5E1;">
+                        <tr id="rhFoot"></tr>
+                      </tfoot>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- MODE 3: SAP-STYLE FULL-PAGE REPORT BUILDER (SELECTION SCREEN + ALV GRID) -->
+      <div id="sapReportBuilderView" style="display:none;">
+        <div class="card border-0 mb-3">
+          <div class="card-body">
+            <div class="d-flex justify-content-between align-items-center pb-2 mb-3 border-bottom flex-wrap gap-2">
+              <div>
+                <span class="badge bg-primary-subtle text-primary border border-primary-subtle font-monospace fw-bold">SAP-ALV</span>
+                <strong class="ms-2 text-dark">Ad-Hoc Query &amp; Report Builder</strong>
+                <span class="small text-secondary ms-2">Define selection criteria, choose output columns, and execute (F8).</span>
+              </div>
+              <div class="d-flex gap-2">
+                <button type="button" class="btn btn-primary btn-sm fw-semibold" onclick="window.sapExecuteQuery()">Execute (F8)</button>
+                <button type="button" class="btn btn-secondary btn-sm" onclick="window.sapExportCsv()">Export CSV</button>
+                <button type="button" class="btn btn-secondary btn-sm" onclick="window.sapClearQuery()">Clear</button>
+              </div>
+            </div>
+
+            <div class="row g-2 mb-3">
+              <div class="col-12 col-md-3">
+                <label for="sapGroupBy" class="form-label small fw-semibold mb-1">Aggregation / Dimension</label>
+                <select id="sapGroupBy" class="form-select form-select-sm fw-semibold">
+                  <option value="USER_PRINTER">User &times; Printer (Prints, Copies &amp; Scans)</option>
+                  <option value="USER">User-Wise Summary</option>
+                  <option value="PRINTER">Printer-Wise Utilization</option>
+                  <option value="DEPARTMENT">Department Allocation</option>
+                </select>
+              </div>
+              <div class="col-6 col-md-2">
+                <label for="sapFrom" class="form-label small fw-semibold mb-1">From (ISO Date)</label>
+                <input type="date" id="sapFrom" class="form-control form-control-sm">
+              </div>
+              <div class="col-6 col-md-2">
+                <label for="sapTo" class="form-label small fw-semibold mb-1">To (ISO Date)</label>
+                <input type="date" id="sapTo" class="form-control form-control-sm">
+              </div>
+              <div class="col-6 col-md-2">
+                <label for="sapDept" class="form-label small fw-semibold mb-1">Department</label>
+                <input type="text" id="sapDept" class="form-control form-control-sm" placeholder="All">
+              </div>
+              <div class="col-6 col-md-3">
+                <label for="sapPrinter" class="form-label small fw-semibold mb-1">Printer / IP</label>
+                <input type="text" id="sapPrinter" class="form-control form-control-sm" placeholder="All">
+              </div>
+            </div>
+
+            <div class="pt-2 border-top">
+              <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-2">
+                <div class="d-flex align-items-center gap-2 flex-wrap small">
+                  <strong class="text-secondary">SAP ALV Custom Columns:</strong>
+                  <button type="button" class="btn btn-secondary btn-sm py-0 px-2" onclick="window.sapSelectAllCols(true)">All</button>
+                  <button type="button" class="btn btn-secondary btn-sm py-0 px-2" onclick="window.sapSelectAllCols(false)">Minimal</button>
+                  <button type="button" class="btn btn-outline-primary btn-sm py-0 px-2" onclick="window.sapApplyPreset('copy')">Copy Audit</button>
+                  <button type="button" class="btn btn-outline-primary btn-sm py-0 px-2" onclick="window.sapApplyPreset('cost')">Cost &amp; Billing</button>
+                </div>
+                <input type="search" id="sapQuickFilter" class="form-control form-control-sm" style="width:220px;" placeholder="Filter ALV grid rows..." oninput="window.sapRenderGrid()">
+              </div>
+              <div id="sapColChooser" class="d-flex align-items-center flex-wrap gap-2 small"></div>
+            </div>
+          </div>
+        </div>
+
+        <div id="sapKpiRow" class="row g-2 mb-3"></div>
+
+        <div class="card border-0">
+          <div class="table-responsive" style="max-height:480px; overflow:auto;">
+            <table class="table table-sm table-hover align-middle mb-0" id="sapAlvTable" style="font-size:12.5px;">
+              <thead class="table-light" style="position:sticky; top:0; z-index:2;"><tr id="sapHead"></tr></thead>
+              <tbody id="sapBody"><tr><td class="text-center text-muted py-4">Set selection criteria above and click <strong>Execute (F8)</strong> to generate SAP ALV Grid.</td></tr></tbody>
+              <tfoot class="table-light fw-bold" style="position:sticky; bottom:0; z-index:2;"><tr id="sapFoot"></tr></tfoot>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- MODE 2: COST CENTER EXPLORER (EXISTING 5-KPI + 7-TAB VIEW) -->
+      <div id="legacyReportsExplorerView" style="display:none;">
       <!-- Top Action Bar -->
       <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
         <div>
@@ -1472,6 +1645,7 @@
           </table>
         </div>
       </div>
+      </div>
     </div>
 
     <!-- =========================================================================
@@ -1552,8 +1726,10 @@
           <h2>Security Audit Trail</h2>
           <p>Complete regulatory tracking of print events, releases, PIN authentications, and configuration changes.</p>
         </div>
-        <div>
-          <button class="btn btn-secondary" onclick="loadAudit()">Refresh Trail</button>
+        <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+          <input type="search" id="auditSearch" class="form-input" style="width:220px; padding:6px 10px; font-size:12.5px;" placeholder="Filter audit events..." oninput="window.filterAdminTable('auditTableBody', this.value)">
+          <button type="button" class="btn btn-secondary" onclick="window.exportAdminTableCsv(this, 'security-audit-trail.csv')">Export CSV</button>
+          <button type="button" class="btn btn-secondary" onclick="loadAudit()">Refresh Trail</button>
         </div>
       </div>
 
@@ -1690,6 +1866,14 @@
                 <input type="text" id="settingSupportContact" class="form-input" placeholder="e.g. IT Helpdesk (helpdesk@company.com / Ext 4357)">
                 <div class="form-hint">Shown on physical touch terminals during assistance prompts.</div>
               </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group flex-1">
+                <label class="form-label" for="settingJobExpiryMinutes">Held Print Job Auto-Delete (Minutes) *</label>
+                <input type="number" id="settingJobExpiryMinutes" class="form-input" min="1" max="10080" value="60" required>
+                <div class="form-hint">Unreleased held print jobs are automatically purged after this duration to prevent paper waste (default: 60 minutes, max: 10,080 minutes).</div>
+              </div>
+              <div class="form-group flex-1"></div>
             </div>
 
             <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; padding-top: 14px; border-top: 1px solid var(--border);">
@@ -1848,8 +2032,10 @@
           <h2>Scan to Email Activity</h2>
           <p>Real-time audit trail of documents scanned and dispatched to recipient inboxes from Toshiba MFPs.</p>
         </div>
-        <div style="display: flex; gap: 10px;">
-          <button class="btn btn-secondary" onclick="window.loadScanActivity()"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg> <span>Refresh</span></button>
+        <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+          <input type="search" id="scanLogsSearch" class="form-input" style="width:210px; padding:6px 10px; font-size:12.5px;" placeholder="Filter scan logs..." oninput="window.filterAdminTable('scanLogsTableBody', this.value)">
+          <button type="button" class="btn btn-secondary" onclick="window.exportAdminTableCsv(this, 'scan-activity-logs.csv')">Export CSV</button>
+          <button type="button" class="btn btn-secondary" onclick="window.loadScanActivity()"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg> <span>Refresh</span></button>
         </div>
       </div>
 
@@ -2582,7 +2768,7 @@
 </div>
 
 <script src="/js/bootstrap.bundle.min.js"></script>
-<script src="/js/admin-app.js?v=20261026_107"></script>
+<script src="/js/admin-app.js?v=20261119_212"></script>
 
 <!-- =========================================================================
      MODAL: ACTIVE DIRECTORY & LDAP SETTINGS MODAL
@@ -2778,6 +2964,80 @@
         <span>🌐 MFP Web ↗</span>
       </a>
       <button type="button" class="btn btn-secondary" onclick="window.closeNocDeviceModal()">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: RESET COUNTERS -->
+<div id="modalResetCounters" class="modal-backdrop" style="display:none; z-index:99999;">
+  <div class="modal-box" style="max-width:460px;">
+    <div class="modal-head">
+      <h3 class="h6 mb-0 fw-bold">Reset Print / Copy / Scan Counters</h3>
+      <button type="button" class="modal-close-btn" onclick="document.getElementById('modalResetCounters').style.display='none'">&times;</button>
+    </div>
+    <div class="modal-body" style="padding:16px;">
+      <div class="mb-3">
+        <label for="rcScope" class="form-label small fw-semibold">Reset Scope</label>
+        <select id="rcScope" class="form-select form-select-sm" onchange="window.rcScopeChanged()">
+          <option value="USER">By User (Username)</option>
+          <option value="PRINTER">By Printer (Name / Code / IP)</option>
+          <option value="DEPARTMENT">By Department</option>
+          <option value="ALL">All Users &amp; Printers (Zero Everything)</option>
+        </select>
+      </div>
+      <div class="mb-3" id="rcTargetGroup">
+        <label for="rcTarget" class="form-label small fw-semibold">Target (Username / Printer / Department)</label>
+        <input type="text" id="rcTarget" class="form-control form-control-sm" placeholder="e.g. rr, PCT0001, or Operations">
+      </div>
+      <div class="d-flex justify-content-end gap-2">
+        <button type="button" class="btn btn-secondary btn-sm" onclick="document.getElementById('modalResetCounters').style.display='none'">Cancel</button>
+        <button type="button" class="btn btn-danger btn-sm" onclick="window.handleResetCounters()">Reset to Zero</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: ADVANCED REPORT BUILDER -->
+<div id="modalAdvReportBuilder" class="modal-backdrop" style="display:none; z-index:99999;">
+  <div class="modal-box" style="max-width:520px;">
+    <div class="modal-head">
+      <h3 class="h6 mb-0 fw-bold">Advanced Report Builder</h3>
+      <button type="button" class="modal-close-btn" onclick="document.getElementById('modalAdvReportBuilder').style.display='none'">&times;</button>
+    </div>
+    <div class="modal-body" style="padding:16px;">
+      <div class="mb-2">
+        <label for="arbGroupBy" class="form-label small fw-semibold">Group By / Dimension</label>
+        <select id="arbGroupBy" class="form-select form-select-sm">
+          <option value="USER_PRINTER">User &times; Printer (Prints, Copies &amp; Scans per MFP)</option>
+          <option value="USER">User-Wise Summary</option>
+          <option value="PRINTER">Printer-Wise Utilization</option>
+          <option value="DEPARTMENT">Department Allocation</option>
+        </select>
+      </div>
+      <div class="row g-2 mb-2">
+        <div class="col-6">
+          <label for="arbFrom" class="form-label small fw-semibold">From (ISO Date)</label>
+          <input type="date" id="arbFrom" class="form-control form-control-sm">
+        </div>
+        <div class="col-6">
+          <label for="arbTo" class="form-label small fw-semibold">To (ISO Date)</label>
+          <input type="date" id="arbTo" class="form-control form-control-sm">
+        </div>
+      </div>
+      <div class="row g-2 mb-3">
+        <div class="col-6">
+          <label for="arbDept" class="form-label small fw-semibold">Department</label>
+          <input type="text" id="arbDept" class="form-control form-control-sm" placeholder="All (or e.g. Operations)">
+        </div>
+        <div class="col-6">
+          <label for="arbPrinter" class="form-label small fw-semibold">Printer</label>
+          <input type="text" id="arbPrinter" class="form-control form-control-sm" placeholder="All (or printer name/IP)">
+        </div>
+      </div>
+      <div class="d-flex justify-content-end gap-2">
+        <button type="button" class="btn btn-secondary btn-sm" onclick="document.getElementById('modalAdvReportBuilder').style.display='none'">Cancel</button>
+        <button type="button" class="btn btn-primary btn-sm" onclick="window.handleRunAdvReportBuilder()">Build &amp; View Report</button>
+      </div>
     </div>
   </div>
 </div>

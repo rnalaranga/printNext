@@ -36,6 +36,10 @@ public class JobService {
     private final AuditService auditService;
     private final ToshibaEwbService toshibaEwbService;
     private final SnmpMonitoringService snmpMonitoringService;
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private CopyTrackingService copyTrackingService;
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private SystemSettingsService systemSettingsService;
 
     public JobService(PrintJobRepository printJobRepository,
                       PrinterRepository printerRepository,
@@ -89,16 +93,18 @@ public class JobService {
         Set<UUID> seen = new HashSet<>();
         List<PrintJob> result = new ArrayList<>();
 
-        // 1. Direct match by User SID
-        List<PrintJob> bySid = printJobRepository.findByUserSidAndStatusOrderBySubmittedAtDesc(user.getUserSid(), JobStatus.HELD);
+        // 1. Direct match by User SID (HELD + RELEASING)
+        List<PrintJob> bySid = new ArrayList<>(printJobRepository.findByUserSidAndStatusOrderBySubmittedAtDesc(user.getUserSid(), JobStatus.HELD));
+        bySid.addAll(printJobRepository.findByUserSidAndStatusOrderBySubmittedAtDesc(user.getUserSid(), JobStatus.RELEASING));
         for (PrintJob j : bySid) {
             if (seen.add(j.getId())) {
                 result.add(j);
             }
         }
 
-        // 2. Direct match by username or user entity ID
-        List<PrintJob> allHeld = printJobRepository.findByStatusOrderBySubmittedAtDesc(JobStatus.HELD);
+        // 2. Direct match by username or user entity ID (HELD + RELEASING)
+        List<PrintJob> allHeld = new ArrayList<>(printJobRepository.findByStatusOrderBySubmittedAtDesc(JobStatus.HELD));
+        allHeld.addAll(printJobRepository.findByStatusOrderBySubmittedAtDesc(JobStatus.RELEASING));
         for (PrintJob j : allHeld) {
             if (seen.contains(j.getId())) continue;
             if ((j.getUser() != null && j.getUser().getId() != null && j.getUser().getId().equals(user.getId())) ||
@@ -162,8 +168,8 @@ public class JobService {
         // 3. Identify physical target printer (PaperCut Station resolution)
         PrinterEntity targetPrinter = resolvePrinter(targetPrinterCode, clientIp);
 
-        // 3.1 Pre-release Hardware Readiness Check via RFC 3805 SNMP (Paper Empty, Jam, Door Open)
-        if (snmpMonitoringService != null) {
+        // 3.1 Pre-release Hardware Readiness Check via RFC 3805 SNMP (skip paper-empty block when BYPASS is selected)
+        if (snmpMonitoringService != null && !"BYPASS".equalsIgnoreCase(drawer)) {
             SnmpMonitoringService.HardwareReadiness readiness = snmpMonitoringService.checkPrinterHardwareReadiness(targetPrinter, drawer);
             if (!readiness.isReady()) {
                 LOGGER.warning("[RELEASE BLOCKED] Printer " + targetPrinter.getName() + " (" + targetPrinter.getIpAddress() +
@@ -199,20 +205,85 @@ public class JobService {
         // 5. Adapt authentic spool data for selected drawer and paper size (if requested)
         byte[] transmitBytes = adaptSpoolForDrawerAndSize(spoolBytes, drawer, paperSize);
 
+        // 5.5 Temporarily unlock printer hardware for authenticated RAW print release
+        if (toshibaEwbService != null && targetPrinter != null && targetPrinter.getIpAddress() != null) {
+            toshibaEwbService.setCopyRestriction(targetPrinter.getIpAddress(),
+                    targetPrinter.getAdminUsername(), targetPrinter.getAdminPassword(), false, true);
+        }
+
         // 6. Transmit spool data directly to the physical printer where user is standing (Port 9100)
         RawSocketPrinterService.PrintTransmissionResult result =
                 rawSocketPrinterService.transmitSpoolData(targetPrinter, transmitBytes, job.getDocumentName());
 
         if (result.success()) {
-            job.setStatus(JobStatus.COMPLETED);
+            job.setStatus(result.simulated() ? JobStatus.COMPLETED : JobStatus.RELEASING);
             job.setTargetPrinter(targetPrinter);
             job.setReleasedAt(Instant.now());
             job.setErrorMessage(null);
             printJobRepository.save(job);
 
-            // Increment user's central print count (user-wise accounting)
-            int pages = job.getPageCount() > 0 ? job.getPageCount() : 1;
-            user.setPrintCount(user.getPrintCount() + pages);
+            if (!result.simulated() && targetPrinter != null) {
+                final UUID jobId = job.getId();
+                final PrinterEntity printerRef = targetPrinter;
+                final String drawerRef = drawer;
+                java.util.concurrent.CompletableFuture.runAsync(() -> {
+                    try {
+                        Thread.sleep(3000);
+                        for (int i = 0; i < 60; i++) {
+                            if (snmpMonitoringService != null && !"BYPASS".equalsIgnoreCase(drawerRef)) {
+                                SnmpMonitoringService.HardwareReadiness readiness = snmpMonitoringService.checkPrinterHardwareReadiness(printerRef, drawerRef);
+                                if (!readiness.isReady()) {
+                                    printJobRepository.findById(jobId).ifPresent(j -> {
+                                        if (j.getStatus() == JobStatus.RELEASING) {
+                                            j.setStatus(JobStatus.HELD);
+                                            j.setErrorMessage(readiness.reason() + " - Tap Print to retry or use another printer");
+                                            printJobRepository.save(j);
+                                        }
+                                    });
+                                    if (toshibaEwbService != null && printerRef.getIpAddress() != null) {
+                                        toshibaEwbService.clearJobLogs(printerRef.getIpAddress(),
+                                                printerRef.getAdminUsername(), printerRef.getAdminPassword());
+                                    }
+                                    return;
+                                }
+                            }
+                            boolean busy = (copyTrackingService != null && copyTrackingService.isPrinterHardwareBusy(printerRef.getIpAddress()));
+                            if (!busy) {
+                                printJobRepository.findById(jobId).ifPresent(j -> {
+                                    if (j.getStatus() == JobStatus.RELEASING) {
+                                        j.setStatus(JobStatus.COMPLETED);
+                                        j.setErrorMessage(null);
+                                        printJobRepository.save(j);
+                                    }
+                                });
+                                if (toshibaEwbService != null && printerRef.getIpAddress() != null) {
+                                    toshibaEwbService.setCopyRestriction(printerRef.getIpAddress(),
+                                            printerRef.getAdminUsername(), printerRef.getAdminPassword(), true, true);
+                                    toshibaEwbService.clearJobLogs(printerRef.getIpAddress(),
+                                            printerRef.getAdminUsername(), printerRef.getAdminPassword());
+                                }
+                                return;
+                            }
+                            Thread.sleep(2000);
+                        }
+                        // Fallback after 120s
+                        printJobRepository.findById(jobId).ifPresent(j -> {
+                            if (j.getStatus() == JobStatus.RELEASING) {
+                                j.setStatus(JobStatus.COMPLETED);
+                                printJobRepository.save(j);
+                            }
+                        });
+                    } catch (Exception ignored) {}
+                });
+            }
+
+            // Increment user's central print count (A4/smaller=1, A3=2; duplex=x2)
+            int basePages = job.getPageCount() > 0 ? job.getPageCount() : 1;
+            int sizeMult = ((paperSize != null && paperSize.toUpperCase().contains("A3"))
+                    || (drawer != null && drawer.toUpperCase().contains("DRAWER2"))) ? 2 : 1;
+            int duplexMult = job.isDuplex() ? 2 : 1;
+            int countedPages = basePages * sizeMult * duplexMult;
+            user.setPrintCount(user.getPrintCount() + countedPages);
             userRepository.save(user);
 
             // Clean up Windows spooler queue if this was an authentic intercepted Windows job
@@ -267,6 +338,9 @@ public class JobService {
         validateOwnership(job, user);
 
         int updated = printJobRepository.atomicTransitionStatus(id, JobStatus.HELD, JobStatus.CANCELLED);
+        if (updated == 0) {
+            updated = printJobRepository.atomicTransitionStatus(id, JobStatus.RELEASING, JobStatus.CANCELLED);
+        }
         if (updated == 0) {
             throw new JobConcurrencyException("Cannot cancel job " + id + ": job is not in HELD status.");
         }
@@ -423,5 +497,33 @@ public class JobService {
                 .findFirst()
                 .or(() -> printerRepository.findByIsActiveTrue().stream().findFirst())
                 .orElseGet(() -> new PrinterEntity("TOSHIBA-3518A-HQ", "Toshiba e-STUDIO 3518A", "192.168.1.150", 9100, "HQ Office", "Toshiba e-STUDIO 3518A", false, true));
+    }
+
+    @org.springframework.scheduling.annotation.Scheduled(fixedDelay = 60000, initialDelay = 30000)
+    public void expireOldHeldJobs() {
+        int expiryMins = 60;
+        if (systemSettingsService != null) {
+            Integer configured = systemSettingsService.getOrCreateSettings().getJobExpiryMinutes();
+            if (configured != null && configured >= 1) {
+                expiryMins = configured;
+            }
+        }
+        Instant cutoff = Instant.now().minus(java.time.Duration.ofMinutes(expiryMins));
+        List<PrintJob> heldJobs = printJobRepository.findByStatusOrderBySubmittedAtDesc(JobStatus.HELD);
+        for (PrintJob job : heldJobs) {
+            if (job.getSubmittedAt() != null && job.getSubmittedAt().isBefore(cutoff)) {
+                try {
+                    spoolStorageService.deleteSpoolFile(job.getSpoolFilePath());
+                    if (job.getWindowsJobId() != null) {
+                        windowsQueueService.cancelWindowsJob(job.getWindowsJobId());
+                    }
+                    job.setStatus(JobStatus.CANCELLED);
+                    job.setErrorMessage("Auto-deleted after " + expiryMins + " minutes");
+                    printJobRepository.save(job);
+                    auditService.logEvent("JOB_EXPIRED", job.getUserSid(), job.getUsername(), job.getId(),
+                            "SYSTEM", "127.0.0.1", "Auto-deleted held job after " + expiryMins + " minutes: " + job.getDocumentName(), "INFO");
+                } catch (Exception ignored) {}
+            }
+        }
     }
 }

@@ -31,6 +31,10 @@ public class AuthService {
     // Rate Limiting: Max 5 failed attempts per IP within 60 seconds
     private final Map<String, RateLimitTracker> rateLimitMap = new ConcurrentHashMap<>();
 
+    // Single-MFP Concurrent Login Guard: username (lowercase) -> active station
+    private record ActiveMfpSession(String stationKey, Instant expiresAt) {}
+    private final Map<String, ActiveMfpSession> activeUserSessions = new ConcurrentHashMap<>();
+
     public AuthService(ActiveDirectoryService activeDirectoryService,
                        AuditService auditService,
                        CopyTrackingService copyTrackingService,
@@ -122,6 +126,19 @@ public class AuthService {
             rateLimitMap.remove(clientIp);
 
             // Create new session to prevent session fixation
+            String stationKey = (request.printerCode() != null && !request.printerCode().isBlank())
+                    ? request.printerCode().trim().toUpperCase()
+                    : ((request.printerIp() != null && !request.printerIp().isBlank()) ? request.printerIp().trim() : clientIp);
+            String userKey = user.getUsername().toLowerCase();
+            ActiveMfpSession existingSession = activeUserSessions.get(userKey);
+            if (existingSession != null && Instant.now().isBefore(existingSession.expiresAt())
+                    && !existingSession.stationKey().equalsIgnoreCase(stationKey)) {
+                auditService.logEvent("LOGIN_BLOCKED_CONCURRENT", user.getUserSid(), user.getUsername(), null, null, clientIp,
+                        "Blocked concurrent MFP login; already active on " + existingSession.stationKey(), "FAILURE");
+                return AuthResponse.failure("Already logged in on another MFP (" + existingSession.stationKey() + "). Please log out there first.");
+            }
+            activeUserSessions.put(userKey, new ActiveMfpSession(stationKey, Instant.now().plusSeconds(300)));
+
             HttpSession session = httpRequest.getSession(true);
             session.setAttribute(SESSION_USER_KEY, user);
             session.setMaxInactiveInterval(300); // 5 minutes inactivity timeout for MFP touchscreen
@@ -168,6 +185,7 @@ public class AuthService {
 
             UserEntity user = (UserEntity) session.getAttribute(SESSION_USER_KEY);
             if (user != null) {
+                activeUserSessions.remove(user.getUsername().toLowerCase());
                 auditService.logEvent("LOGOUT", user.getUserSid(), user.getUsername(), null, null, clientIp,
                         "User logged out", "SUCCESS");
             }

@@ -37,6 +37,7 @@ public class SystemSettingsService {
             defaults.setSystemSubtitle("Print Management");
             defaults.setPrimaryColor("#1D4ED8");
             defaults.setInactivityTimeoutSecs(60);
+            defaults.setJobExpiryMinutes(60);
             defaults.setSupportContact("IT Helpdesk");
             defaults.setUpdatedAt(Instant.now());
             return repository.save(defaults);
@@ -68,6 +69,7 @@ public class SystemSettingsService {
         dto.setSmtpUseSsl(entity.getSmtpUseSsl());
         dto.setScanToEmailEnabled(entity.getScanToEmailEnabled());
         dto.setDefaultScanSubject(entity.getDefaultScanSubject());
+        dto.setJobExpiryMinutes(entity.getJobExpiryMinutes() != null ? entity.getJobExpiryMinutes() : 60);
         return dto;
     }
 
@@ -92,6 +94,9 @@ public class SystemSettingsService {
         }
         if (dto.getInactivityTimeoutSecs() != null && dto.getInactivityTimeoutSecs() >= 10 && dto.getInactivityTimeoutSecs() <= 3600) {
             settings.setInactivityTimeoutSecs(dto.getInactivityTimeoutSecs());
+        }
+        if (dto.getJobExpiryMinutes() != null && dto.getJobExpiryMinutes() >= 1 && dto.getJobExpiryMinutes() <= 10080) {
+            settings.setJobExpiryMinutes(dto.getJobExpiryMinutes());
         }
         if (dto.getSupportContact() != null) {
             settings.setSupportContact(dto.getSupportContact().trim());
@@ -223,6 +228,7 @@ public class SystemSettingsService {
         branding.put("logoFilename", settings.getLogoFilename());
         branding.put("primaryColor", settings.getPrimaryColor());
         branding.put("inactivityTimeoutSecs", settings.getInactivityTimeoutSecs());
+        branding.put("jobExpiryMinutes", settings.getJobExpiryMinutes() != null ? settings.getJobExpiryMinutes() : 60);
         branding.put("supportContact", settings.getSupportContact());
         return branding;
     }

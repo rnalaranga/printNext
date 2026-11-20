@@ -46,6 +46,13 @@ if (-not $printer) {
     $printer = Get-Printer -Name $PrinterName
     Write-Host "[OK] Created '$PrinterName' (Driver: $driverName)." -ForegroundColor Green
 } else {
+    if ($printer.PortName -match "," -or $printer.PortName -match "PRINTER0|192\.168\.") {
+        if (Get-PrinterPort -Name "VirtualPoolPort" -ErrorAction SilentlyContinue) {
+            Set-Printer -Name $PrinterName -PortName "VirtualPoolPort" -ErrorAction SilentlyContinue
+            $printer = Get-Printer -Name $PrinterName -ErrorAction SilentlyContinue
+            Write-Host "[FIXED] Isolated '$PrinterName' onto local port 'VirtualPoolPort' (removed physical port pooling)." -ForegroundColor Yellow
+        }
+    }
     Write-Host "[OK] Connected to '$PrinterName' (Driver: $($printer.DriverName), Port: $($printer.PortName), Shared: $($printer.Shared))." -ForegroundColor Green
 }
 

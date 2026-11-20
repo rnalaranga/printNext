@@ -1,5 +1,7 @@
 package com.rr.secureprint.controller;
 
+import java.util.Map;
+
 import com.rr.secureprint.service.ReportService;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -19,6 +21,16 @@ public class ReportController {
 
     public ReportController(ReportService reportService) {
         this.reportService = reportService;
+    }
+
+    @GetMapping("/hub/{reportType}")
+    public ResponseEntity<?> getHubReport(
+            @PathVariable String reportType,
+            @RequestParam(value = "from", required = false) String from,
+            @RequestParam(value = "to", required = false) String to,
+            @RequestParam(value = "department", required = false) String department,
+            @RequestParam(value = "printer", required = false) String printer) {
+        return ResponseEntity.ok(reportService.generateHubReport(reportType, from, to, department, printer));
     }
 
     @GetMapping("/summary")
@@ -100,5 +112,17 @@ public class ReportController {
                 .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + filename + "\"")
                 .contentType(MediaType.parseMediaType("text/csv; charset=UTF-8"))
                 .body(bytes);
+    }
+
+    @PostMapping("/reset-counters")
+    public ResponseEntity<Map<String, Object>> resetCounters(@RequestBody Map<String, String> body) {
+        String scope = body != null ? body.getOrDefault("scope", "") : "";
+        String target = body != null ? body.getOrDefault("target", "") : "";
+        return ResponseEntity.ok(reportService.resetCounters(scope, target));
+    }
+
+    @PostMapping("/builder")
+    public ResponseEntity<Map<String, Object>> buildCustomReport(@RequestBody Map<String, Object> body) {
+        return ResponseEntity.ok(reportService.buildCustomReport(body != null ? body : Map.of()));
     }
 }

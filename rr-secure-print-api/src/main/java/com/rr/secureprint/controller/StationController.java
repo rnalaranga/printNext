@@ -39,6 +39,8 @@ public class StationController {
     private final CopyTrackingService copyTrackingService;
     private final ToshibaEwbService toshibaEwbService;
     private final SystemSettingsService systemSettingsService;
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.rr.secureprint.service.SnmpMonitoringService snmpMonitoringService;
     private final Set<String> unlockedPrinters = java.util.concurrent.ConcurrentHashMap.newKeySet();
     private final java.util.Map<String, String> currentAddressBookUserByPrinter = new java.util.concurrent.ConcurrentHashMap<>();
 
@@ -60,7 +62,19 @@ public class StationController {
 
     @PostMapping("/diagnostics")
     public ResponseEntity<?> receiveDiagnostics(@RequestBody(required = false) Map<String, Object> body, HttpServletRequest request) {
-        log.info("[EWB DIAGNOSTICS from {}]: {}", request.getRemoteAddr(), body);
+        String clientIp = request.getRemoteAddr();
+        log.info("[EWB DIAGNOSTICS from {}]: {}", clientIp, body);
+        if (clientIp != null && toshibaEwbService.hasPendingLock(clientIp) && !copyTrackingService.hasActiveSession(clientIp)) {
+            printerRepository.findByIpAddress(clientIp.trim()).ifPresent(p -> {
+                if (!"TOSHIBA_OLD".equalsIgnoreCase(p.getDeviceGeneration())) {
+                    CompletableFuture.runAsync(() -> {
+                        log.info("[PENDING LOCK RECOVERY] Printer {} ({}) woke up and reported diagnostics. Applying pending lock...", p.getPrinterCode(), p.getIpAddress());
+                        toshibaEwbService.setDefaultScreen(p.getIpAddress(), p.getAdminUsername(), p.getAdminPassword(), "EWB", false);
+                        toshibaEwbService.setCopyRestriction(p.getIpAddress(), p.getAdminUsername(), p.getAdminPassword(), true, true);
+                    });
+                }
+            });
+        }
         return ResponseEntity.ok(Map.of("received", true));
     }
 
@@ -120,20 +134,72 @@ public class StationController {
             matched = allPhysical.getFirst();
         }
 
-        return ResponseEntity.ok(Map.of(
-                "currentStation", matched != null ? matched : Map.of(
-                        "printerCode", "STATION-01",
-                        "name", "Toshiba e-STUDIO MFP",
-                        "ipAddress", "192.168.1.11",
-                        "rawPort", 9100,
-                        "location", "Main Office"
-                ),
-                "allStations", allPhysical,
-                "virtualQueueName", "RR Secure Virtual Queue",
-                "virtualQueueShare", "\\\\SERVER\\RR-Secure-Print",
-                "clientIp", clientIp != null ? clientIp : "",
-                "branding", systemSettingsService.getPublicBranding()
+        if (clientIp != null && toshibaEwbService.hasPendingLock(clientIp) && !copyTrackingService.hasActiveSession(clientIp)) {
+            printerRepository.findByIpAddress(clientIp.trim()).ifPresent(p -> {
+                if (!"TOSHIBA_OLD".equalsIgnoreCase(p.getDeviceGeneration())) {
+                    CompletableFuture.runAsync(() -> {
+                        log.info("[PENDING LOCK RECOVERY] Printer {} ({}) accessed /current. Applying pending lock...", p.getPrinterCode(), p.getIpAddress());
+                        toshibaEwbService.setDefaultScreen(p.getIpAddress(), p.getAdminUsername(), p.getAdminPassword(), "EWB", false);
+                        toshibaEwbService.setCopyRestriction(p.getIpAddress(), p.getAdminUsername(), p.getAdminPassword(), true, true);
+                    });
+                }
+            });
+        }
+
+        boolean paperEmpty = false;
+        String paperEmptyMessage = "";
+        int tonerLevel = -1;
+        if (matched != null && snmpMonitoringService != null) {
+            try {
+                com.rr.secureprint.service.SnmpMonitoringService.HardwareReadiness r1 =
+                        snmpMonitoringService.checkPrinterHardwareReadiness(matched, "DRAWER1");
+                com.rr.secureprint.service.SnmpMonitoringService.HardwareReadiness r2 =
+                        snmpMonitoringService.checkPrinterHardwareReadiness(matched, "DRAWER2");
+                boolean d1Empty = !r1.isReady() && r1.reason() != null && r1.reason().toLowerCase().contains("paper");
+                boolean d2Empty = !r2.isReady() && r2.reason() != null && r2.reason().toLowerCase().contains("paper");
+                if (d1Empty && d2Empty) {
+                    paperEmpty = true;
+                    paperEmptyMessage = "Drawer 1 (A4) & Drawer 2 (A3) — Paper Empty";
+                } else if (d1Empty) {
+                    paperEmpty = true;
+                    paperEmptyMessage = "Drawer 1 (A4) — Paper Empty";
+                } else if (d2Empty) {
+                    paperEmpty = true;
+                    paperEmptyMessage = "Drawer 2 (A3) — Paper Empty";
+                }
+            } catch (Exception ignored) {}
+            try {
+                com.rr.secureprint.service.SnmpClient.SnmpItem cur = com.rr.secureprint.service.SnmpClient.query(
+                        matched.getIpAddress(), "public", "1.3.6.1.2.1.43.11.1.1.9.1.1", false, 500);
+                com.rr.secureprint.service.SnmpClient.SnmpItem max = com.rr.secureprint.service.SnmpClient.query(
+                        matched.getIpAddress(), "public", "1.3.6.1.2.1.43.11.1.1.8.1.1", false, 500);
+                if (cur != null && max != null && cur.getValue() != null && max.getValue() != null) {
+                    int c = Integer.parseInt(cur.getValue().trim());
+                    int m = Integer.parseInt(max.getValue().trim());
+                    if (m > 0 && c >= 0) {
+                        tonerLevel = Math.min(100, Math.max(0, (int) Math.round((c * 100.0) / m)));
+                    }
+                }
+            } catch (Exception ignored) {}
+        }
+
+        java.util.Map<String, Object> resp = new java.util.HashMap<>();
+        resp.put("currentStation", matched != null ? matched : Map.of(
+                "printerCode", "STATION-01",
+                "name", "Toshiba e-STUDIO MFP",
+                "ipAddress", "192.168.1.11",
+                "rawPort", 9100,
+                "location", "Main Office"
         ));
+        resp.put("allStations", allPhysical);
+        resp.put("virtualQueueName", "RR Secure Virtual Queue");
+        resp.put("virtualQueueShare", "\\\\SERVER\\RR-Secure-Print");
+        resp.put("clientIp", clientIp != null ? clientIp : "");
+        resp.put("branding", systemSettingsService.getPublicBranding());
+        resp.put("paperEmpty", paperEmpty);
+        resp.put("paperEmptyMessage", paperEmptyMessage);
+        resp.put("tonerLevel", tonerLevel);
+        return ResponseEntity.ok(resp);
     }
 
     /**
@@ -177,17 +243,37 @@ public class StationController {
             try {
                 request.getSession(true).setAttribute("RR_ACTIVE_PRINTER_IP", p.getIpAddress());
             } catch (Exception ignored) {}
-            // Unlock copy/scan/print functions for authenticated walk-up session
+            // Unlock copy/scan/print functions and set target DefaultScreen for authenticated walk-up session
             if (!"TOSHIBA_OLD".equalsIgnoreCase(p.getDeviceGeneration())) {
                 try {
-                    // Unlock physical copy, scan, and USB print restrictions (AuthenticatedTarget/copy, scan, print = false)
-                    boolean unlockOk = toshibaEwbService.setCopyRestriction(p.getIpAddress(), p.getAdminUsername(), p.getAdminPassword(), false, true);
+                    String targetScreen = "SCAN".equalsIgnoreCase(mode) ? "Scan"
+                            : (("USB".equalsIgnoreCase(mode) || "PRINT".equalsIgnoreCase(mode)) ? "Print"
+                            : ("HOME".equalsIgnoreCase(mode) ? "Home" : "Copy"));
+                    boolean unlockOk = switchScreen
+                            ? toshibaEwbService.unlockCopyAndSetDefaultScreen(p.getIpAddress(), p.getAdminUsername(), p.getAdminPassword(), targetScreen)
+                            : toshibaEwbService.setCopyRestriction(p.getIpAddress(), p.getAdminUsername(), p.getAdminPassword(), false, true);
+                    if (!unlockOk && switchScreen) {
+                        unlockOk = toshibaEwbService.setCopyRestriction(p.getIpAddress(), p.getAdminUsername(), p.getAdminPassword(), false, true);
+                    }
                     if (unlockOk) {
                         unlockedPrinters.add(p.getIpAddress());
                         screenSuccess[0] = true;
                         copyTrackingService.registerWalkUpSession(p.getIpAddress(), username);
-                        log.info("[STATION CONTROLLER] Device function unlocked INSTANTLY: {} on {}. Physical engine is open.",
-                                mode, p.getIpAddress());
+                        log.info("[STATION CONTROLLER] Device function unlocked & DefaultScreen={} on {}. Physical engine is open.",
+                                targetScreen, p.getIpAddress());
+                        if (switchScreen && !"EWB".equalsIgnoreCase(targetScreen)) {
+                            final String ip = p.getIpAddress();
+                            final String admUser = p.getAdminUsername();
+                            final String admPass = p.getAdminPassword();
+                            CompletableFuture.delayedExecutor(18, java.util.concurrent.TimeUnit.SECONDS).execute(() -> {
+                                try {
+                                    boolean restored = toshibaEwbService.setDefaultScreen(ip, admUser, admPass, "EWB");
+                                    log.info("[STATION CONTROLLER] Pre-restored DefaultScreen=EWB on {} after 18s walk-up transition: {}", ip, restored);
+                                } catch (Exception ex) {
+                                    log.debug("[STATION CONTROLLER] Pre-restore DefaultScreen=EWB error on {}: {}", ip, ex.getMessage());
+                                }
+                            });
+                        }
                     } else {
                         log.error("[STATION CONTROLLER] Failed to unlock device functions on {}", p.getIpAddress());
                     }
@@ -284,7 +370,16 @@ public class StationController {
         }
 
         printerOpt.ifPresent(p -> {
-            log.info("[STATION CONTROLLER] Native copy/scan screen active on {}", p.getIpAddress());
+            log.info("[STATION CONTROLLER] Native copy/scan screen active on {} - pre-restoring DefaultScreen=EWB", p.getIpAddress());
+            if (!"TOSHIBA_OLD".equalsIgnoreCase(p.getDeviceGeneration())) {
+                CompletableFuture.runAsync(() -> {
+                    try {
+                        toshibaEwbService.setDefaultScreen(p.getIpAddress(), p.getAdminUsername(), p.getAdminPassword(), "EWB", false);
+                    } catch (Exception ex) {
+                        log.debug("Could not pre-restore DefaultScreen=EWB on {}: {}", p.getIpAddress(), ex.getMessage());
+                    }
+                });
+            }
         });
 
         return ResponseEntity.ok(Map.of("success", true));
@@ -496,33 +591,19 @@ public class StationController {
         for (PrinterEntity p : toLock) {
             unlockedPrinters.remove(p.getIpAddress());
             currentAddressBookUserByPrinter.remove(p.getIpAddress());
-            if (!"TOSHIBA_OLD".equalsIgnoreCase(p.getDeviceGeneration())) {
-                try {
-                    // Revert screen immediately so terminal shows PIN screen (140ms)
-                    toshibaEwbService.setDefaultScreen(p.getIpAddress(), p.getAdminUsername(), p.getAdminPassword(), "EWB", true);
-                    // Lock hardware in background so user doesn't wait
-                    CompletableFuture.runAsync(() -> {
-                        try {
-                            toshibaEwbService.setCopyRestriction(p.getIpAddress(), p.getAdminUsername(), p.getAdminPassword(), true, true);
-                            log.info("[STATION CONTROLLER] Background physical copy lock completed on {}", p.getIpAddress());
-                        } catch (Exception ex) {
-                            log.warn("Background physical copy lock error on {}: {}", p.getIpAddress(), ex.getMessage());
-                        }
-                    });
-                    log.info("[STATION CONTROLLER] Synchronous auto-lock executed on {}: screen=EWB, hardware lock dispatched", p.getIpAddress());
-                } catch (Exception ex) {
-                    log.warn("Synchronous auto-lock error on {}: {}", p.getIpAddress(), ex.getMessage());
-                }
-            }
             copyTrackingService.recordTerminalLogout(p.getIpAddress());
+            log.info("[STATION CONTROLLER] Auto-lock dispatched via recordTerminalLogout on {}", p.getIpAddress());
             auditService.logEvent("DEVICE_AUTO_LOCKED", "SYSTEM", "hardware", null,
                     p.getPrinterCode(), p.getIpAddress(),
                     "Physical device copy restriction locked due to " + reason, "SUCCESS");
         }
 
-        // Invalidate web session
+        // Invalidate web session without re-triggering duplicate recordTerminalLogout calls
         try {
-            authService.logout(request);
+            HttpSession existingSession = request.getSession(false);
+            if (existingSession != null) {
+                existingSession.invalidate();
+            }
         } catch (Exception ignored) {}
 
         return ResponseEntity.ok(Map.of("success", true, "locked", true, "lockedPrinters", toLock.size(), "reason", reason));
@@ -561,10 +642,20 @@ public class StationController {
             copyTrackingService.updateSessionHeartbeat(p.getIpAddress());
             String activeUser = copyTrackingService.getActiveTerminalUser(p.getIpAddress());
             boolean hasActiveSession = (activeUser != null);
-            return ResponseEntity.ok(Map.of("status", "alive", "authenticated", hasActiveSession, "printer", p.getPrinterCode()));
+            boolean checkBusy = body != null && "true".equalsIgnoreCase(body.get("checkBusy"));
+            boolean printerBusy = hasActiveSession && checkBusy && copyTrackingService.isPrinterHardwareBusy(p.getIpAddress());
+            if (printerBusy) {
+                copyTrackingService.extendWalkUpActivity(p.getIpAddress());
+            }
+            return ResponseEntity.ok(Map.of(
+                    "status", "alive",
+                    "authenticated", hasActiveSession,
+                    "printerBusy", printerBusy,
+                    "printer", p.getPrinterCode()
+            ));
         }
 
-        return ResponseEntity.ok(Map.of("status", "alive", "authenticated", false));
+        return ResponseEntity.ok(Map.of("status", "alive", "authenticated", false, "printerBusy", false));
     }
 
     /**

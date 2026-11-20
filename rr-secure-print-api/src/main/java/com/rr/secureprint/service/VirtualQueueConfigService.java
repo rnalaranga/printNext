@@ -467,7 +467,7 @@ public class VirtualQueueConfigService {
 
         try {
             String cmd = String.format(
-                    "$p = Get-CimInstance Win32_Printer -Filter \"Name='%s'\" -ErrorAction SilentlyContinue; if ($p) { $p.Paused } else { $false }",
+                    "$p = Get-Printer -Name '%s' -ErrorAction SilentlyContinue; if ($p -and ($p.PrinterStatus -match 'Paused')) { 'True' } else { 'False' }",
                     printerName.replace("'", "''")
             );
             ProcessBuilder pb = new ProcessBuilder("powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", cmd);

@@ -31,6 +31,9 @@ public class SystemSettingsEntity {
     @Column(name = "inactivity_timeout_secs")
     private Integer inactivityTimeoutSecs = 60;
 
+    @Column(name = "job_expiry_minutes")
+    private Integer jobExpiryMinutes = 60;
+
     @Column(name = "support_contact", length = 255)
     private String supportContact = "IT Helpdesk";
 
@@ -138,6 +141,14 @@ public class SystemSettingsEntity {
 
     public void setInactivityTimeoutSecs(Integer inactivityTimeoutSecs) {
         this.inactivityTimeoutSecs = inactivityTimeoutSecs;
+    }
+
+    public Integer getJobExpiryMinutes() {
+        return jobExpiryMinutes;
+    }
+
+    public void setJobExpiryMinutes(Integer jobExpiryMinutes) {
+        this.jobExpiryMinutes = jobExpiryMinutes;
     }
 
     public String getSupportContact() {

@@ -50,6 +50,8 @@ public class CopyTrackingService {
     private final PrintJobRepository printJobRepository;
     private final HttpClient httpClient;
     private final java.util.Map<String, Long> postJobAutoLockDeadlineByIp = new java.util.concurrent.ConcurrentHashMap<>();
+    private final java.util.Map<String, Long> lastLogoutLockTimeByIp = new java.util.concurrent.ConcurrentHashMap<>();
+    private final java.util.Map<String, Instant> lastWalkUpActivityByIp = new java.util.concurrent.ConcurrentHashMap<>();
 
     /**
      * Represents a terminal session on a specific printer.
@@ -177,6 +179,12 @@ public class CopyTrackingService {
         return new HashSet<>(activeTerminalUsers.keySet());
     }
 
+    public boolean hasActiveSession(String printerIp) {
+        if (printerIp == null || printerIp.isBlank()) return false;
+        TerminalSession s = activeTerminalUsers.get(printerIp.trim());
+        return s != null && s.isActive();
+    }
+
     /**
      * Updates the last heartbeat timestamp for an active terminal session.
      */
@@ -228,9 +236,37 @@ public class CopyTrackingService {
         Instant now = Instant.now();
         TerminalSession session = new TerminalSession(cleanUser, now, null, now, true);
         activeTerminalUsers.put(cleanIp, session);
+        lastWalkUpActivityByIp.put(cleanIp, now);
         addToHistory(cleanIp, session);
 
         LOGGER.info("[TERMINAL SESSION] Walk-up Copy/Scan mode activated for user '" + cleanUser + "' on IP " + cleanIp);
+    }
+
+    public void extendWalkUpActivity(String printerIp) {
+        if (printerIp == null || printerIp.isBlank()) return;
+        String cleanIp = printerIp.trim();
+        lastWalkUpActivityByIp.put(cleanIp, Instant.now());
+        if (postJobAutoLockDeadlineByIp.containsKey(cleanIp)) {
+            postJobAutoLockDeadlineByIp.put(cleanIp, System.currentTimeMillis() + 15000L);
+        }
+    }
+
+    /**
+     * Checks live MFP hardware status via SNMP hrPrinterStatus (1.3.6.1.2.1.25.3.5.1.1.1).
+     * Returns true if the printer/copier is currently PRINTING (4) or WARMUP (5).
+     */
+    public boolean isPrinterHardwareBusy(String printerIp) {
+        if (printerIp == null || printerIp.isBlank() || "127.0.0.1".equals(printerIp.trim())) {
+            return false;
+        }
+        try {
+            SnmpClient.SnmpItem item = SnmpClient.query(printerIp.trim(), "public", "1.3.6.1.2.1.25.3.5.1.1.1", false, 500);
+            if (item != null && item.getValue() != null) {
+                String val = item.getValue().trim();
+                return "4".equals(val) || "5".equals(val);
+            }
+        } catch (Exception ignored) {}
+        return false;
     }
 
     /**
@@ -242,25 +278,48 @@ public class CopyTrackingService {
 
         TerminalSession active = activeTerminalUsers.remove(cleanIp);
         postJobAutoLockDeadlineByIp.remove(cleanIp);
+        lastWalkUpActivityByIp.remove(cleanIp);
+
+        long nowMs = System.currentTimeMillis();
+        Long lastLockMs = lastLogoutLockTimeByIp.get(cleanIp);
+        if (active == null && lastLockMs != null && (nowMs - lastLockMs) < 2500L) {
+            LOGGER.fine("[TERMINAL LOGOUT] Skipping duplicate logout lock request within 2.5s for IP " + cleanIp);
+            return;
+        }
+        lastLogoutLockTimeByIp.put(cleanIp, nowMs);
+
         if (active != null) {
             TerminalSession closed = new TerminalSession(active.username(), active.loginTime(), Instant.now());
             addToHistory(cleanIp, closed);
             LOGGER.info("[TERMINAL SESSION] User '" + active.username() + "' logged out from IP " + cleanIp + " (Session recorded for job reconciliation)");
         }
 
+        final boolean wasWalkUp = (active != null && active.isWalkUp());
         printerRepository.findByIpAddress(cleanIp).ifPresent(p -> {
             if (!"TOSHIBA_OLD".equalsIgnoreCase(p.getDeviceGeneration())) {
                 CompletableFuture.runAsync(() -> {
                     try {
+                        if (hasActiveSession(cleanIp)) {
+                            LOGGER.info("[TERMINAL LOGOUT] New session active on " + cleanIp + "; skipping post-logout lock.");
+                            return;
+                        }
                         toshibaEwbService.setDefaultScreen(p.getIpAddress(), p.getAdminUsername(), p.getAdminPassword(), "EWB", false);
-                        toshibaEwbService.setCopyRestriction(p.getIpAddress(), p.getAdminUsername(), p.getAdminPassword(), true, true);
+                        if (hasActiveSession(cleanIp)) {
+                            LOGGER.info("[TERMINAL LOGOUT] New session active on " + cleanIp + "; aborting CWS copy lock.");
+                            return;
+                        }
+                        // Force CWS commit if walk-up mode unlocked the device or if lock state is unknown/pending
+                        boolean forceLock = wasWalkUp || toshibaEwbService.hasPendingLock(cleanIp);
+                        toshibaEwbService.setCopyRestriction(p.getIpAddress(), p.getAdminUsername(), p.getAdminPassword(), true, forceLock);
                         LOGGER.info("[TERMINAL LOGOUT] Copier physical copy restriction locked & DefaultScreen=EWB on " + cleanIp);
-                        if (active != null) {
+                        if (active != null && !hasActiveSession(cleanIp)) {
                             // Poll sequentially AFTER lock is secured so TopAccess never collides
                             pollPrinterJobLogs(p);
                         }
-                        // Always purge native MFP logs so no completed jobs remain on the physical touch screen
-                        toshibaEwbService.clearJobLogs(p.getIpAddress(), p.getAdminUsername(), p.getAdminPassword());
+                        if (!hasActiveSession(cleanIp)) {
+                            // Purge native MFP logs so no completed jobs remain on the physical touch screen
+                            toshibaEwbService.clearJobLogs(p.getIpAddress(), p.getAdminUsername(), p.getAdminPassword());
+                        }
                     } catch (Exception ex) {
                         LOGGER.warning("Could not lock copy on " + cleanIp + ": " + ex.getMessage());
                     }
@@ -625,12 +684,25 @@ public class CopyTrackingService {
                 String lockReason = "";
 
                 if (session.isWalkUp()) {
-                    if (postJobTimeout) {
+                    Instant lastActivity = lastWalkUpActivityByIp.getOrDefault(ip, session.loginTime());
+                    long idleWalkUpSeconds = Duration.between(lastActivity, now).getSeconds();
+                    boolean inEnergySave = totalSessionSeconds >= 3 && printerOpt.isPresent()
+                            && !"TOSHIBA_OLD".equalsIgnoreCase(printerOpt.get().getDeviceGeneration())
+                            && toshibaEwbService.isPrinterInEnergySave(ip, printerOpt.get().getAdminUsername(), printerOpt.get().getAdminPassword());
+                    if (inEnergySave) {
                         shouldLock = true;
-                        lockReason = "Job completed (15s post-job auto-lock)";
-                    } else if (totalSessionSeconds > 60) {
-                        shouldLock = true;
-                        lockReason = "Walk-up session max duration reached (60s idle timeout)";
+                        lockReason = "Physical SLEEP / Energy Saver detected";
+                    } else if (postJobTimeout || idleWalkUpSeconds > 16) {
+                        if (isPrinterHardwareBusy(ip)) {
+                            extendWalkUpActivity(ip);
+                            LOGGER.info("[AUTO-LOCK WATCHDOG] Printer " + ip + " is actively PRINTING/COPYING via SNMP. Extending walk-up session.");
+                        } else if (postJobTimeout) {
+                            shouldLock = true;
+                            lockReason = "Job completed (15s post-job auto-lock)";
+                        } else {
+                            shouldLock = true;
+                            lockReason = "Walk-up session idle timeout (16s without activity)";
+                        }
                     }
                 } else {
                     if (secondsSinceHeartbeat > 20 || totalSessionSeconds > 35) {
@@ -673,6 +745,13 @@ public class CopyTrackingService {
                 continue; // Skip actively operated printer so user operations have 100% bandwidth
             }
             try {
+                if (!"TOSHIBA_OLD".equalsIgnoreCase(printer.getDeviceGeneration()) && toshibaEwbService.hasPendingLock(printer.getIpAddress())) {
+                    toshibaEwbService.setDefaultScreen(printer.getIpAddress(), printer.getAdminUsername(), printer.getAdminPassword(), "EWB", false);
+                    boolean locked = toshibaEwbService.setCopyRestriction(printer.getIpAddress(), printer.getAdminUsername(), printer.getAdminPassword(), true, true);
+                    if (locked) {
+                        LOGGER.info("[PENDING LOCK RECOVERY] Secured previously unreachable printer " + printer.getPrinterCode() + " (" + printer.getIpAddress() + ")");
+                    }
+                }
                 pollPrinterJobLogs(printer);
                 toshibaEwbService.clearJobLogs(printer.getIpAddress(), printer.getAdminUsername(), printer.getAdminPassword());
             } catch (Exception e) {
@@ -806,6 +885,7 @@ public class CopyTrackingService {
                     copyCount++;
                     TerminalSession activeSession = activeTerminalUsers.get(printer.getIpAddress());
                     if (activeSession != null && activeSession.isWalkUp()) {
+                        lastWalkUpActivityByIp.put(printer.getIpAddress(), Instant.now());
                         postJobAutoLockDeadlineByIp.put(printer.getIpAddress(), System.currentTimeMillis() + 15000L);
                         LOGGER.info("[AUTO-LOCK] New physical copy job completed on " + printer.getIpAddress() + ". Auto-lock scheduled in 15s.");
                     }
@@ -817,6 +897,7 @@ public class CopyTrackingService {
                     scanCount++;
                     TerminalSession activeSession = activeTerminalUsers.get(printer.getIpAddress());
                     if (activeSession != null && activeSession.isWalkUp()) {
+                        lastWalkUpActivityByIp.put(printer.getIpAddress(), Instant.now());
                         postJobAutoLockDeadlineByIp.put(printer.getIpAddress(), System.currentTimeMillis() + 15000L);
                         LOGGER.info("[AUTO-LOCK] New physical scan job completed on " + printer.getIpAddress() + ". Auto-lock scheduled in 15s.");
                     }
@@ -831,6 +912,7 @@ public class CopyTrackingService {
                     usbCount++;
                     TerminalSession activeSession = activeTerminalUsers.get(printer.getIpAddress());
                     if (activeSession != null && activeSession.isWalkUp()) {
+                        lastWalkUpActivityByIp.put(printer.getIpAddress(), Instant.now());
                         postJobAutoLockDeadlineByIp.put(printer.getIpAddress(), System.currentTimeMillis() + 15000L);
                         LOGGER.info("[AUTO-LOCK] New physical USB print job completed on " + printer.getIpAddress() + ". Auto-lock scheduled in 15s.");
                     }

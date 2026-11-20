@@ -3351,12 +3351,14 @@
         var titleInput = document.getElementById('settingSystemTitle');
         var subInput = document.getElementById('settingSystemSubtitle');
         var timeoutInput = document.getElementById('settingInactivityTimeout');
+        var jobExpiryInput = document.getElementById('settingJobExpiryMinutes');
         var supportInput = document.getElementById('settingSupportContact');
 
         if (orgInput) orgInput.value = settings.organizationName || '';
         if (titleInput) titleInput.value = settings.systemTitle || '';
         if (subInput) subInput.value = settings.systemSubtitle || '';
         if (timeoutInput) timeoutInput.value = settings.inactivityTimeoutSecs || 60;
+        if (jobExpiryInput) jobExpiryInput.value = settings.jobExpiryMinutes || 60;
         if (supportInput) supportInput.value = settings.supportContact || '';
 
         // SMTP settings
@@ -3600,6 +3602,8 @@
     var title = (document.getElementById('settingSystemTitle').value || '').trim();
     var subtitle = (document.getElementById('settingSystemSubtitle').value || '').trim();
     var timeout = parseInt(document.getElementById('settingInactivityTimeout').value, 10) || 60;
+    var jobExpiryEl = document.getElementById('settingJobExpiryMinutes');
+    var jobExpiryMins = jobExpiryEl ? (parseInt(jobExpiryEl.value, 10) || 60) : 60;
     var support = (document.getElementById('settingSupportContact').value || '').trim();
 
     if (!orgName) {
@@ -3608,6 +3612,10 @@
     }
     if (!title) {
       showToast('System title is required.', 'error');
+      return;
+    }
+    if (jobExpiryMins < 1 || jobExpiryMins > 10080) {
+      showToast('Held job auto-delete minutes must be between 1 and 10,080.', 'error');
       return;
     }
 
@@ -3622,6 +3630,7 @@
         systemTitle: title,
         systemSubtitle: subtitle,
         inactivityTimeoutSecs: timeout,
+        jobExpiryMinutes: jobExpiryMins,
         supportContact: support
       })
     })
@@ -4383,6 +4392,7 @@
   };
 
   window.loadReports = function () {
+    if (window.rhInitIfNeeded) window.rhInitIfNeeded();
     var tbody = document.getElementById('reportsTableBody');
     if (tbody) {
       tbody.innerHTML = '<tr><td colspan="11" class="text-center py-4 text-muted">Loading report data...</td></tr>';
@@ -4482,6 +4492,12 @@
     });
     if (deptSelect) deptSelect.innerHTML = deptOpts;
     if (crDept) crDept.innerHTML = deptOpts;
+    var rhDept = document.getElementById('rhDeptFilter');
+    if (rhDept) {
+      var rhCurrDept = rhDept.value || '';
+      rhDept.innerHTML = deptOpts;
+      if (rhCurrDept) rhDept.value = rhCurrDept;
+    }
 
     // 2. Cost Centers
     var ccSet = {};
@@ -4497,15 +4513,19 @@
     if (crCC) crCC.innerHTML = ccOpts;
 
     // 3. Printers
-    if (prnSelect) {
-      var currentPrn = prnSelect.value;
-      var prnOpts = '<option value="">All Printers</option>';
-      state.reports.printers.forEach(function (p) {
-        if (p && p.name) {
-          prnOpts += '<option value="' + esc(p.name) + '"' + (p.name === currentPrn ? ' selected' : '') + '>' + esc(p.name) + ' (' + esc(p.ipAddress) + ')</option>';
-        }
-      });
-      prnSelect.innerHTML = prnOpts;
+    var prnOpts = '<option value="">All Printers</option>';
+    var currentPrn = prnSelect ? prnSelect.value : '';
+    state.reports.printers.forEach(function (p) {
+      if (p && p.name) {
+        prnOpts += '<option value="' + esc(p.name) + '"' + (p.name === currentPrn ? ' selected' : '') + '>' + esc(p.name) + ' (' + esc(p.ipAddress) + ')</option>';
+      }
+    });
+    if (prnSelect) prnSelect.innerHTML = prnOpts;
+    var rhPrn = document.getElementById('rhPrinterFilter');
+    if (rhPrn) {
+      var rhCurrPrn = rhPrn.value || '';
+      rhPrn.innerHTML = prnOpts;
+      if (rhCurrPrn) rhPrn.value = rhCurrPrn;
     }
   }
 
@@ -5584,7 +5604,7 @@
   window.initNocMonitoring = function () {
     startNocClock();
     startNocPollingCountdown();
-    window.refreshNocFleet(false);
+    window.refreshNocFleet(true, true);
   };
 
   function startNocClock() {
@@ -5612,15 +5632,15 @@
 
   function startNocPollingCountdown() {
     if (nocState.pollTimer) clearInterval(nocState.pollTimer);
-    nocState.countdownSecs = 15;
+    nocState.countdownSecs = 5;
     updateCountdownBadge();
 
     nocState.pollTimer = setInterval(function () {
       if (state.currentPage !== 'monitoring') return;
       nocState.countdownSecs--;
       if (nocState.countdownSecs <= 0) {
-        nocState.countdownSecs = 15;
-        window.refreshNocFleet(false);
+        nocState.countdownSecs = 5;
+        window.refreshNocFleet(true, true);
       }
       updateCountdownBadge();
     }, 1000);
@@ -5633,10 +5653,10 @@
     }
   }
 
-  window.refreshNocFleet = function (force) {
+  window.refreshNocFleet = function (force, silent) {
     if (force === undefined) force = false;
     var refreshBtn = document.getElementById('btnNocRefresh');
-    if (refreshBtn && force) {
+    if (refreshBtn && force && !silent) {
       refreshBtn.style.opacity = '0.6';
       refreshBtn.style.pointerEvents = 'none';
     }
@@ -5649,7 +5669,7 @@
         return res.json();
       })
       .then(function (data) {
-        if (refreshBtn && force) {
+        if (refreshBtn && force && !silent) {
           refreshBtn.style.opacity = '1';
           refreshBtn.style.pointerEvents = 'auto';
         }
@@ -5657,7 +5677,11 @@
         nocState.printers = data.printers || [];
         updateNocKpis(data);
         renderNocFleet();
-        if (force) showToast('SNMP Telemetry refreshed from hardware!', 'success');
+        var nocModalEl = document.getElementById('modalNocDeviceDetail');
+        if (nocModalEl && nocModalEl.style.display === 'flex' && nocState.selectedPrinter && nocState.selectedPrinter.id) {
+          window.openNocDeviceModal(nocState.selectedPrinter.id);
+        }
+        if (force && !silent) showToast('SNMP Telemetry refreshed from hardware!', 'success');
       })
       .catch(function (err) {
         if (refreshBtn && force) {
@@ -5811,15 +5835,53 @@
 
       var bulbTag = '<span class="noc-bulb ' + bulbClass + '" title="' + escapeHtml(bulbTitle) + '"></span>';
 
-      html += '<div class="noc-tile" onclick="window.openNocDeviceModal(' + p.id + ')" title="' + escapeHtml(p.printerCode + ' - ' + p.name + ' (' + p.statusMessage + ')') + '">';
-      html += '  <div class="noc-tile-head">';
-      html += '    <div style="display:flex; align-items:center; gap:8px;">';
-      html += '      <img src="img/toshiba-mfp.png" alt="MFP" style="width:30px; height:30px; object-fit:contain;">';
-      html += '      <span class="noc-tile-code">' + escapeHtml(p.printerCode) + '</span>';
+      var isOffline = (p.status === 'OFFLINE');
+      var hasError = !isOffline && (p.status === 'ERROR');
+      var emptyDrawers = [];
+      if (!isOffline && p.trays) {
+        p.trays.forEach(function (t) {
+          if (String(t.status).toUpperCase() === 'EMPTY') {
+            var tn = String(t.trayName || '').replace(/Drawer\s*/i, 'D').replace(/Tray\s*/i, 'D').replace(/Bypass.*/i, 'BYP').trim();
+            if (tn && emptyDrawers.indexOf(tn) === -1) emptyDrawers.push(tn);
+          }
+        });
+      }
+      if (!isOffline && emptyDrawers.length === 0) {
+        var checkTexts = [];
+        if (p.alerts) checkTexts = checkTexts.concat(p.alerts);
+        if (p.detectedErrors) checkTexts = checkTexts.concat(p.detectedErrors);
+        if (p.alertDetails) p.alertDetails.forEach(function (ad) { checkTexts.push((ad.location || '') + ' ' + (ad.description || '')); });
+        checkTexts.forEach(function (txt) {
+          var m = String(txt).match(/(?:Drawer|Tray|Cassette)\s*([1-4])/i);
+          if (m && emptyDrawers.indexOf('D' + m[1]) === -1) emptyDrawers.push('D' + m[1]);
+        });
+      }
+      var hasPaperEmpty = !isOffline && (
+        emptyDrawers.length > 0 ||
+        (p.detectedErrors && p.detectedErrors.some(function (e) { var u = String(e).toUpperCase(); return u.indexOf('PAPER') !== -1 || u.indexOf('EMPTY') !== -1; })) ||
+        (p.alerts && p.alerts.some(function (a) { return String(a).toUpperCase().indexOf('PAPER') !== -1; })) ||
+        (p.alertDetails && p.alertDetails.some(function (ad) { return String((ad.codeName || '') + ' ' + (ad.description || '')).toUpperCase().indexOf('PAPER') !== -1; }))
+      );
+      var drawerLabel = emptyDrawers.length > 0 ? emptyDrawers.join(',') : 'EMPTY';
+      var paperEmptyIcon = hasPaperEmpty
+        ? '<span title="Paper Empty: ' + escapeHtml(drawerLabel) + '" style="display:inline-flex; align-items:center; gap:2px; background:#FEF2F2; border:1px solid #FECACA; color:#DC2626; font-size:9px; font-weight:800; padding:0 3px; line-height:1.3; white-space:nowrap; font-family:\'JetBrains Mono\',monospace;"><img src="img/paper-empty.jpg" alt="Paper Empty" style="width:13px; height:13px; object-fit:contain; mix-blend-mode:multiply;"><span>' + escapeHtml(drawerLabel) + '</span></span>'
+        : '';
+      var shortModel = String(p.name || p.model || '').replace(/Toshiba\s*/i, '').replace(/e-?STUDIO\s*/i, '').trim() || p.printerCode;
+      var tileStateClass = isOffline ? ' noc-offline-gray' : (hasError ? ' noc-error-blink' : '');
+      html += '<div class="noc-tile' + tileStateClass + '" style="overflow:hidden;" onclick="window.openNocDeviceModal(' + p.id + ')" title="' + escapeHtml(p.printerCode + ' - ' + p.name + ' (' + p.statusMessage + ')') + '">';
+      html += '  <div class="noc-tile-head" style="gap:4px; flex-wrap:nowrap;">';
+      html += '    <div style="display:flex; align-items:center; gap:5px; min-width:0;">';
+      html += '      <img src="img/toshiba-mfp.png" alt="MFP" style="width:24px; height:24px; object-fit:contain; flex-shrink:0;">';
+      html += '      <span class="noc-tile-code" style="font-size:11px;">' + escapeHtml(p.printerCode) + '</span>';
       html += '    </div>';
-      html += '    <div style="display:flex; align-items:center; gap:6px;">' + realBadge + bulbTag + '</div>';
+      var onlineDot = !isOffline
+        ? '<span title="Online" style="display:inline-block; width:7px; height:7px; background:#10B981; border-radius:50% !important; flex-shrink:0;"></span>'
+        : '';
+      var showAlertBulb = (p.status === 'WARNING' || p.status === 'ERROR' || p.status === 'OFFLINE' || isPrinting);
+      html += '    <div style="display:flex; align-items:center; gap:4px; flex-shrink:0;">' + paperEmptyIcon + onlineDot + (showAlertBulb ? bulbTag : '') + '</div>';
       html += '  </div>';
-      html += '  <div class="noc-tile-loc">' + escapeHtml(p.name) + '</div>';
+      html += '  <div class="noc-tile-loc" style="font-weight:700;">' + escapeHtml(shortModel) + '</div>';
+      html += '  <div style="font-size:10px; color:#475569; font-family:\'JetBrains Mono\',monospace; margin-bottom:4px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">' + escapeHtml(p.location || 'Office') + ' \u2022 ' + escapeHtml(p.ipAddress || '') + '</div>';
       html += '  <div class="noc-tile-toner-row">';
       html += '    <div class="noc-mini-toner-track" title="Toner ' + tonerPct + '%">';
       html += '      <div class="noc-mini-toner-bar" style="width:' + Math.max(5, tonerPct) + '%; background:' + tonerColor + ';"></div>';
@@ -6198,11 +6260,13 @@
           aHtml += '</div>';
         }
         alertList.innerHTML = aHtml;
-      } else if (p.alerts && p.alerts.length > 0) {
+      } else if ((p.alerts && p.alerts.length > 0) || p.status === 'ERROR' || p.status === 'WARNING' || p.status === 'OFFLINE') {
+        var extraAlerts = (p.alerts && p.alerts.length > 0) ? p.alerts : [p.statusMessage || ('Device status: ' + p.status)];
         alertSec.style.display = 'block';
-        if (badgeAlertCount) badgeAlertCount.textContent = p.alerts.length;
-        alertList.innerHTML = p.alerts.map(function (a) {
-          return '<div style="background:#FFFBEB; border:1px solid #FDE68A; color:#B45309; padding:8px 12px; border-radius:6px; font-size:12px; font-weight:700;">\u26A0\uFE0F ' + escapeHtml(a) + '</div>';
+        if (badgeAlertCount) badgeAlertCount.textContent = extraAlerts.length;
+        alertList.innerHTML = extraAlerts.map(function (a) {
+          var isErr = (p.status === 'ERROR' || p.status === 'OFFLINE');
+          return '<div style="background:' + (isErr ? '#FEF2F2' : '#FFFBEB') + '; border:1px solid ' + (isErr ? '#FECACA' : '#FDE68A') + '; color:' + (isErr ? '#991B1B' : '#B45309') + '; padding:8px 12px; font-size:12px; font-weight:700;">\u26A0\uFE0F ' + escapeHtml(a) + '</div>';
         }).join('');
       } else {
         alertSec.style.display = 'none';
@@ -6274,6 +6338,965 @@
   window.closeNocDeviceModal = function () {
     var modal = document.getElementById('modalNocDeviceDetail');
     if (modal) modal.style.display = 'none';
+  };
+
+  /* =========================================================================
+     20 STANDARD ISO REPORTS HUB & ADMIN TABLE UTILITIES
+     ========================================================================= */
+  var RH_GROUPS = [
+    ['Users & Cost Centers', [
+      { id: 'user-summary', code: 'RPT-01', label: 'User-Wise Summary', desc: 'Print, copy & scan volumes and estimated LKR spend per user.' },
+      { id: 'user-history', code: 'RPT-02', label: 'Detailed Transaction History', desc: 'Chronological ISO 8601 audit ledger of all print, copy, and scan jobs.' },
+      { id: 'department-summary', code: 'RPT-03', label: 'Department Allocation', desc: 'Volume share and cost attribution by organizational department.' },
+      { id: 'top-users', code: 'RPT-04', label: 'Top 10 Heavy Users', desc: 'Highest-volume users ranked by total print & copy pages.' },
+      { id: 'inactive-users', code: 'RPT-05', label: 'Zero-Usage / Inactive Users', desc: 'Directory accounts with zero recorded print, copy, or scan output.' },
+      { id: 'quota-compliance', code: 'RPT-06', label: 'User Quota Compliance', desc: 'Tracks monthly consumption against the 1,000-page threshold.' },
+      { id: 'user-printer-matrix', code: 'RPT-21', label: 'User x Printer Copy & Print Breakdown', desc: 'Shows which printers each user used and exact copy/print/scan counts per MFP.' }
+    ]],
+    ['Printers & Consumables', [
+      { id: 'printer-utilization', code: 'RPT-07', label: 'Printer Fleet Utilization', desc: 'Job counts, page throughput, share %, and online status per MFP.' },
+      { id: 'series-comparison', code: 'RPT-08', label: 'MFP Series Comparison', desc: 'Workload split across Toshiba e-STUDIO 08 / 18 / 28 generations.' },
+      { id: 'toner-forecast', code: 'RPT-09', label: 'SNMP Toner Forecast', desc: 'Live RFC 3805 toner levels, engine status, and active hardware alerts.' },
+      { id: 'paper-errors', code: 'RPT-10', label: 'Paper & Error Incidents', desc: 'Blocked releases, paper-empty warnings, and device errors.' }
+    ]],
+    ['Paper & Environment', [
+      { id: 'paper-size', code: 'RPT-11', label: 'Paper Size (A4 / A3)', desc: 'Volume split between standard A4 and large-format 2x-weighted A3 jobs.' },
+      { id: 'duplex-ratio', code: 'RPT-12', label: 'Simplex vs Duplex Ratio', desc: 'Double-sided printing adoption and physical paper sheets saved.' },
+      { id: 'color-mono', code: 'RPT-13', label: 'Color vs Mono Usage', desc: 'Monochrome and color page distribution across prints and copies.' },
+      { id: 'waste-expired', code: 'RPT-14', label: 'Waste Reduction (Expired)', desc: 'Held jobs purged automatically on timeout, saving forgotten paper.' },
+      { id: 'user-cancelled', code: 'RPT-15', label: 'User-Cancelled Jobs', desc: 'Print jobs cancelled cleanly by users at the touchscreen queue.' }
+    ]],
+    ['Time Trends & Security', [
+      { id: 'daily-trend', code: 'RPT-16', label: 'Daily Volume Trend', desc: 'Day-by-day print, copy & scan roll-up formatted in YYYY-MM-DD.' },
+      { id: 'monthly-summary', code: 'RPT-17', label: 'Monthly Executive Summary', desc: 'Month-over-month fleet throughput and cost roll-up (YYYY-MM).' },
+      { id: 'peak-hours', code: 'RPT-18', label: 'Peak Hour Activity (24h)', desc: 'Identifies busiest office hours across print, copy, and scan jobs.' },
+      { id: 'scan-activity', code: 'RPT-19', label: 'Scan-to-Email Relay Log', desc: 'Digital document relay history with SMTP delivery status.' },
+      { id: 'security-audit', code: 'RPT-20', label: 'Security & Audit Trail', desc: 'Authentication events, auto-locks, expiries, and admin changes.' }
+    ]]
+  ];
+
+  var rhState = {
+    initialized: false,
+    activeId: '',
+    catalogQuery: '',
+    data: null,
+    sortCol: -1,
+    sortDir: 'asc'
+  };
+
+  function rhFindMeta(reportId) {
+    for (var g = 0; g < RH_GROUPS.length; g++) {
+      var cat = RH_GROUPS[g][0];
+      var items = RH_GROUPS[g][1];
+      for (var i = 0; i < items.length; i++) {
+        if (items[i].id === reportId) {
+          return {
+            id: items[i].id,
+            code: items[i].code,
+            label: items[i].label,
+            desc: items[i].desc,
+            category: cat
+          };
+        }
+      }
+    }
+    return null;
+  }
+
+  function rhToIsoDate(d) {
+    var y = d.getFullYear();
+    var m = d.getMonth() + 1;
+    var day = d.getDate();
+    return y + '-' + (m < 10 ? '0' : '') + m + '-' + (day < 10 ? '0' : '') + day;
+  }
+
+  function rhComputeDates() {
+    var sel = document.getElementById('rhPeriod');
+    var mode = sel ? sel.value : 'all';
+    var now = new Date();
+    var today = rhToIsoDate(now);
+    if (mode === 'today') return { from: today, to: today };
+    if (mode === '7d') {
+      var d7 = new Date(now.getTime() - 6 * 86400000);
+      return { from: rhToIsoDate(d7), to: today };
+    }
+    if (mode === '30d') {
+      var d30 = new Date(now.getTime() - 29 * 86400000);
+      return { from: rhToIsoDate(d30), to: today };
+    }
+    if (mode === 'month') {
+      return { from: today.slice(0, 7) + '-01', to: today };
+    }
+    if (mode === 'custom') {
+      var fEl = document.getElementById('rhFrom');
+      var tEl = document.getElementById('rhTo');
+      return {
+        from: fEl ? (fEl.value || '') : '',
+        to: tEl ? (tEl.value || '') : ''
+      };
+    }
+    return { from: '', to: '' };
+  }
+
+  function rhBuildNav() {
+    var sel = document.getElementById('rhReportSelect');
+    if (sel) {
+      var optHtml = '';
+      for (var g0 = 0; g0 < RH_GROUPS.length; g0++) {
+        var cat0 = RH_GROUPS[g0][0];
+        var items0 = RH_GROUPS[g0][1];
+        optHtml += '<optgroup label="' + esc(cat0) + '">';
+        for (var i0 = 0; i0 < items0.length; i0++) {
+          var it0 = items0[i0];
+          var isSel = rhState.activeId === it0.id ? ' selected' : '';
+          optHtml += '<option value="' + esc(it0.id) + '"' + isSel + '>' + esc(it0.code + ' \u2014 ' + it0.label) + '</option>';
+        }
+        optHtml += '</optgroup>';
+      }
+      sel.innerHTML = optHtml;
+      if (rhState.activeId) sel.value = rhState.activeId;
+    }
+
+    var nav = document.getElementById('rhNav');
+    if (!nav) return;
+    var q = rhState.catalogQuery;
+    var html = '';
+    var matchCount = 0;
+
+    for (var g = 0; g < RH_GROUPS.length; g++) {
+      var cat = RH_GROUPS[g][0];
+      var items = RH_GROUPS[g][1];
+      var catHtml = '';
+      for (var i = 0; i < items.length; i++) {
+        var it = items[i];
+        var hay = (it.code + ' ' + it.label + ' ' + it.desc + ' ' + cat).toLowerCase();
+        if (q && hay.indexOf(q) === -1) continue;
+        matchCount++;
+        var isAct = rhState.activeId === it.id;
+        catHtml += '<button type="button" class="rh-item-btn' + (isAct ? ' active' : '') + '" data-report-id="' + esc(it.id) + '" title="' + esc(it.desc) + '" onclick="window.rhSelect(\'' + esc(it.id) + '\')">';
+        catHtml += '<span class="rh-item-code">' + esc(it.code) + '</span>';
+        catHtml += '<span class="text-truncate">' + esc(it.label) + '</span>';
+        catHtml += '</button>';
+      }
+      if (catHtml) {
+        html += '<div class="rh-cat-label">' + esc(cat) + '</div>' + catHtml;
+      }
+    }
+
+    if (matchCount === 0) {
+      html = '<div class="text-center text-muted small py-3">No matching reports found.</div>';
+    }
+    nav.innerHTML = html;
+  }
+
+  window.switchReportsWorkspaceMode = function (mode) {
+    var isoView = document.getElementById('isoReportsHubView');
+    var sapView = document.getElementById('sapReportBuilderView');
+    var expView = document.getElementById('legacyReportsExplorerView');
+    var btnIso = document.getElementById('btnModeIsoHub');
+    var btnSap = document.getElementById('btnModeSapBuilder');
+    var btnExp = document.getElementById('btnModeLegacyExplorer');
+
+    [isoView, sapView, expView].forEach(function (v) { if (v) v.style.display = 'none'; });
+    [btnIso, btnSap, btnExp].forEach(function (b) { if (b) { b.classList.remove('btn-primary'); b.classList.add('btn-secondary'); } });
+
+    if (mode === 'explorer') {
+      if (expView) expView.style.display = '';
+      if (btnExp) { btnExp.classList.remove('btn-secondary'); btnExp.classList.add('btn-primary'); }
+    } else if (mode === 'sap') {
+      if (sapView) sapView.style.display = '';
+      if (btnSap) { btnSap.classList.remove('btn-secondary'); btnSap.classList.add('btn-primary'); }
+      if (!sapState.data && window.sapExecuteQuery) window.sapExecuteQuery();
+    } else {
+      if (isoView) isoView.style.display = '';
+      if (btnIso) { btnIso.classList.remove('btn-secondary'); btnIso.classList.add('btn-primary'); }
+      if (window.rhInitIfNeeded) window.rhInitIfNeeded();
+    }
+  };
+
+  window.rhFilterCatalog = function (val) {
+    rhState.catalogQuery = (val || '').trim().toLowerCase();
+    rhBuildNav();
+  };
+
+  window.rhInitIfNeeded = function () {
+    if (!rhState.initialized) {
+      rhState.initialized = true;
+      rhBuildNav();
+    } else {
+      var nav = document.getElementById('rhNav');
+      if (nav && !nav.children.length) rhBuildNav();
+    }
+    if (!rhState.activeId) {
+      window.rhSelect('user-summary');
+    }
+  };
+
+  window.rhSelect = function (reportId) {
+    rhState.activeId = reportId;
+    rhState.sortCol = -1;
+    rhState.sortDir = 'asc';
+    var sr = document.getElementById('rhSearch');
+    if (sr) sr.value = '';
+
+    var sel = document.getElementById('rhReportSelect');
+    if (sel && sel.value !== reportId) sel.value = reportId;
+
+    var btns = document.querySelectorAll('#rhNav .rh-item-btn');
+    for (var i = 0; i < btns.length; i++) {
+      btns[i].classList.toggle('active', btns[i].getAttribute('data-report-id') === reportId);
+    }
+
+    var meta = rhFindMeta(reportId);
+    var codeEl = document.getElementById('rhCodeBadge');
+    var catEl = document.getElementById('rhCategoryBadge');
+    var titleEl = document.getElementById('rhTitle');
+    var descEl = document.getElementById('rhDesc');
+    if (meta) {
+      if (codeEl) codeEl.textContent = meta.code;
+      if (catEl) catEl.textContent = meta.category;
+      if (titleEl) titleEl.textContent = meta.label;
+      if (descEl) descEl.textContent = meta.desc;
+    }
+
+    window.rhRun();
+  };
+
+  window.rhPeriodChanged = function () {
+    var sel = document.getElementById('rhPeriod');
+    var mode = sel ? sel.value : 'all';
+    var customs = document.querySelectorAll('.rh-custom');
+    for (var i = 0; i < customs.length; i++) {
+      customs[i].style.display = (mode === 'custom') ? '' : 'none';
+    }
+    if (mode === 'custom') {
+      var fEl = document.getElementById('rhFrom');
+      var tEl = document.getElementById('rhTo');
+      var today = new Date();
+      var prior = new Date(today.getTime() - 29 * 86400000);
+      if (fEl && !fEl.value) fEl.value = rhToIsoDate(prior);
+      if (tEl && !tEl.value) tEl.value = rhToIsoDate(today);
+    }
+    window.rhRun();
+  };
+
+  window.rhRun = function () {
+    if (!rhState.activeId) rhState.activeId = 'user-summary';
+    var dates = rhComputeDates();
+    var deptEl = document.getElementById('rhDeptFilter');
+    var prnEl = document.getElementById('rhPrinterFilter');
+    var dept = deptEl ? (deptEl.value || '') : '';
+    var printer = prnEl ? (prnEl.value || '') : '';
+
+    var params = [];
+    if (dates.from) params.push('from=' + encodeURIComponent(dates.from));
+    if (dates.to) params.push('to=' + encodeURIComponent(dates.to));
+    if (dept) params.push('department=' + encodeURIComponent(dept));
+    if (printer) params.push('printer=' + encodeURIComponent(printer));
+
+    var url = '/api/admin/reports/hub/' + encodeURIComponent(rhState.activeId) + (params.length ? '?' + params.join('&') : '');
+
+    var emptyEl = document.getElementById('rhEmpty');
+    var resEl = document.getElementById('rhResult');
+    var runBtn = document.getElementById('rhBtnRun');
+    if (runBtn) runBtn.disabled = true;
+    if (emptyEl) {
+      emptyEl.style.display = '';
+      emptyEl.innerHTML = '<div class="fw-semibold mb-1">Generating report...</div><div class="small text-secondary">Fetching live database &amp; hardware telemetry.</div>';
+    }
+    if (resEl) resEl.style.display = 'none';
+
+    fetch(url)
+      .then(function (res) {
+        if (!res.ok) throw new Error('HTTP ' + res.status + ' while loading report');
+        return res.json();
+      })
+      .then(function (data) {
+        rhState.data = data;
+        var codeEl = document.getElementById('rhCodeBadge');
+        var catEl = document.getElementById('rhCategoryBadge');
+        var titleEl = document.getElementById('rhTitle');
+        var descEl = document.getElementById('rhDesc');
+        var metaEl = document.getElementById('rhMeta');
+        if (codeEl && data.code) codeEl.textContent = data.code;
+        if (catEl && data.category) catEl.textContent = data.category;
+        if (titleEl && data.title) titleEl.textContent = data.title;
+        if (descEl && data.description) descEl.textContent = data.description;
+        var rowCount = Array.isArray(data.rows) ? data.rows.length : 0;
+        var rangeText = (dates.from || dates.to) ? ((dates.from || 'Start') + ' to ' + (dates.to || 'Now')) : 'All time';
+        if (metaEl) {
+          metaEl.textContent = 'ISO 8601 Period: ' + rangeText + ' | Generated: ' + (data.generatedAt || '') + ' | Records: ' + rowCount;
+        }
+        if (emptyEl) emptyEl.style.display = 'none';
+        if (resEl) resEl.style.display = '';
+        window.rhRender();
+      })
+      .catch(function (err) {
+        if (resEl) resEl.style.display = 'none';
+        if (emptyEl) {
+          emptyEl.style.display = '';
+          emptyEl.innerHTML = '<div class="fw-semibold text-danger mb-1">Failed to generate report</div><div class="small text-secondary">' + esc(err && err.message ? err.message : 'Server error') + '</div>';
+        }
+      })
+      .finally(function () {
+        if (runBtn) runBtn.disabled = false;
+      });
+  };
+
+  function rhGetVisibleRows() {
+    var data = rhState.data;
+    if (!data || !Array.isArray(data.rows)) return [];
+    var srEl = document.getElementById('rhSearch');
+    var q = srEl ? (srEl.value || '').trim().toLowerCase() : '';
+    var list = data.rows.filter(function (row) {
+      if (!q) return true;
+      for (var c = 0; c < row.length; c++) {
+        var val = row[c];
+        if (val != null && String(val).toLowerCase().indexOf(q) !== -1) return true;
+      }
+      return false;
+    });
+
+    if (rhState.sortCol >= 0) {
+      var colIdx = rhState.sortCol;
+      var dir = rhState.sortDir === 'desc' ? -1 : 1;
+      list.sort(function (a, b) {
+        var va = a[colIdx];
+        var vb = b[colIdx];
+        if (va == null && vb == null) return 0;
+        if (va == null) return 1;
+        if (vb == null) return -1;
+        if (typeof va === 'number' && typeof vb === 'number') {
+          return (va - vb) * dir;
+        }
+        return String(va).localeCompare(String(vb), undefined, { numeric: true, sensitivity: 'base' }) * dir;
+      });
+    }
+    return list;
+  }
+
+  function rhFormatStatusBadge(text) {
+    var up = String(text).toUpperCase();
+    if (up === 'ONLINE' || up === 'ACTIVE' || up === 'COMPLIANT' || up === 'OK' || up === 'SENT' || up === 'DELIVERED' || up === 'LOW' || up === 'TRACKED' || up === 'SUCCESS') {
+      return '<span class="badge badge-completed">' + esc(text) + '</span>';
+    }
+    if (up === 'WARNING' || up === 'LOW TONER' || up === 'MODERATE') {
+      return '<span class="badge badge-held">' + esc(text) + '</span>';
+    }
+    if (up === 'OFFLINE' || up === 'EXCEEDED' || up === 'FAILURE' || up === 'FAILED' || up === 'REPLACE SOON' || up === 'PEAK' || up === 'DISABLED' || up === 'CANCELLED') {
+      return '<span class="badge badge-cancelled">' + esc(text) + '</span>';
+    }
+    return null;
+  }
+
+  window.rhSort = function (colIdx) {
+    if (rhState.sortCol === colIdx) {
+      rhState.sortDir = (rhState.sortDir === 'asc') ? 'desc' : 'asc';
+    } else {
+      rhState.sortCol = colIdx;
+      rhState.sortDir = 'asc';
+    }
+    window.rhRender();
+  };
+
+  window.rhRender = function () {
+    var data = rhState.data;
+    if (!data) return;
+
+    // 1. 4-KPI Summary Strip
+    var kpiRow = document.getElementById('rhKpiRow');
+    if (kpiRow) {
+      var kpis = Array.isArray(data.kpis) ? data.kpis : [];
+      var kHtml = '';
+      for (var k = 0; k < kpis.length; k++) {
+        var item = kpis[k];
+        var kVal = (typeof item.value === 'number') ? item.value.toLocaleString() : esc(item.value != null ? item.value : '-');
+        kHtml += '<div class="col-6 col-xl-3"><div class="rh-kpi-card">';
+        kHtml += '<div class="rh-kpi-label">' + esc(item.label || '') + '</div>';
+        kHtml += '<div class="rh-kpi-val">' + kVal + '</div>';
+        if (item.sub) kHtml += '<div class="rh-kpi-sub">' + esc(item.sub) + '</div>';
+        kHtml += '</div></div>';
+      }
+      kpiRow.innerHTML = kHtml;
+    }
+
+    // 2. Columns
+    var cols = Array.isArray(data.columns) ? data.columns : [];
+    var headEl = document.getElementById('rhHead');
+    if (headEl) {
+      var hHtml = '';
+      for (var c = 0; c < cols.length; c++) {
+        var arrow = (rhState.sortCol === c) ? (rhState.sortDir === 'asc' ? ' \u25B2' : ' \u25BC') : '';
+        hHtml += '<th class="rh-th-sort" onclick="window.rhSort(' + c + ')">' + esc(cols[c]) + arrow + '</th>';
+      }
+      headEl.innerHTML = hHtml;
+    }
+
+    // 3. Rows
+    var visible = rhGetVisibleRows();
+    var bodyEl = document.getElementById('rhBody');
+    if (bodyEl) {
+      if (visible.length === 0) {
+        bodyEl.innerHTML = '<tr><td colspan="' + Math.max(1, cols.length) + '" class="text-center text-muted py-4">No records match the selected filters for this period.</td></tr>';
+      } else {
+        var bHtml = '';
+        for (var r = 0; r < visible.length; r++) {
+          var row = visible[r];
+          bHtml += '<tr>';
+          for (var c2 = 0; c2 < cols.length; c2++) {
+            var val = c2 < row.length ? row[c2] : '';
+            var colName = (cols[c2] || '').toLowerCase();
+            if (typeof val === 'number') {
+              var isCurrency = colName.indexOf('cost') !== -1 || colName.indexOf('lkr') !== -1 || colName.indexOf('saved (lkr)') !== -1 || colName.indexOf('%') !== -1;
+              var disp = isCurrency ? val.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : val.toLocaleString();
+              bHtml += '<td class="text-end font-monospace">' + esc(disp) + '</td>';
+            } else {
+              var strVal = val != null ? String(val) : '';
+              var isStatusCol = colName.indexOf('status') !== -1 || colName.indexOf('compliance') !== -1 || colName.indexOf('forecast') !== -1 || colName.indexOf('severity') !== -1 || colName.indexOf('level') !== -1;
+              var badge = isStatusCol ? rhFormatStatusBadge(strVal) : null;
+              if (badge) {
+                bHtml += '<td>' + badge + '</td>';
+              } else {
+                var monoClass = (colName.indexOf('timestamp') !== -1 || colName.indexOf('date') !== -1 || colName.indexOf('month') !== -1 || colName.indexOf('hour') !== -1 || colName.indexOf('ip') !== -1) ? ' class="font-monospace"' : '';
+                bHtml += '<td' + monoClass + '>' + esc(strVal) + '</td>';
+              }
+            }
+          }
+          bHtml += '</tr>';
+        }
+        bodyEl.innerHTML = bHtml;
+      }
+    }
+
+    // 4. Footer
+    var footEl = document.getElementById('rhFoot');
+    if (footEl) {
+      var footer = Array.isArray(data.footer) ? data.footer : [];
+      if (footer.length === 0) {
+        footEl.innerHTML = '';
+      } else {
+        var fHtml = '';
+        for (var f = 0; f < cols.length; f++) {
+          var fv = f < footer.length ? footer[f] : '';
+          var fCol = (cols[f] || '').toLowerCase();
+          if (typeof fv === 'number') {
+            var fCurr = fCol.indexOf('cost') !== -1 || fCol.indexOf('lkr') !== -1 || fCol.indexOf('saved (lkr)') !== -1 || fCol.indexOf('%') !== -1;
+            var fDisp = fCurr ? fv.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : fv.toLocaleString();
+            fHtml += '<td class="text-end font-monospace">' + esc(fDisp) + '</td>';
+          } else {
+            fHtml += '<td>' + esc(fv != null ? fv : '') + '</td>';
+          }
+        }
+        footEl.innerHTML = fHtml;
+      }
+    }
+  };
+
+  function rhCsvCell(val) {
+    var s = val != null ? String(val) : '';
+    return '"' + s.replace(/"/g, '""') + '"';
+  }
+
+  window.rhExportCsv = function () {
+    var data = rhState.data;
+    if (!data || !Array.isArray(data.columns)) {
+      if (typeof showToast === 'function') showToast('Run a report before exporting CSV.', 'error');
+      return;
+    }
+    var visible = rhGetVisibleRows();
+    var lines = [];
+    lines.push(data.columns.map(rhCsvCell).join(','));
+    for (var i = 0; i < visible.length; i++) {
+      lines.push(visible[i].map(rhCsvCell).join(','));
+    }
+    if (Array.isArray(data.footer) && data.footer.length) {
+      lines.push(data.footer.map(rhCsvCell).join(','));
+    }
+    var csvContent = '\uFEFF' + lines.join('\r\n');
+    var blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    var link = document.createElement('a');
+    var url = URL.createObjectURL(blob);
+    var fileId = (data.code ? data.code + '-' : '') + (rhState.activeId || 'report') + '-' + rhToIsoDate(new Date()) + '.csv';
+    link.href = url;
+    link.download = fileId;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+  };
+
+  window.rhPrint = function () {
+    var data = rhState.data;
+    if (!data) {
+      window.print();
+      return;
+    }
+    var w = window.open('', '_blank', 'width=1100,height=800');
+    if (!w) {
+      window.print();
+      return;
+    }
+    var doc = w.document;
+    doc.open();
+    doc.write('<!DOCTYPE html><html><head><title></title></head><body></body></html>');
+    doc.close();
+
+    var titleText = (data.code ? data.code + ' - ' : '') + (data.title || 'Report');
+    doc.title = titleText;
+
+    var style = doc.createElement('style');
+    style.textContent = 'body{font-family:Segoe UI,Arial,sans-serif;padding:24px;color:#0F172A;font-size:12px;}h1{font-size:18px;margin:0 0 4px;}p{color:#475569;margin:0 0 14px;}table{width:100%;border-collapse:collapse;margin-top:10px;}th,td{border:1px solid #CBD5E1;padding:6px 8px;text-align:left;}th{background:#F1F5F9;font-weight:700;}tfoot td{background:#F8FAFC;font-weight:700;}.num{text-align:right;font-family:Consolas,monospace;}';
+    doc.head.appendChild(style);
+
+    var h1 = doc.createElement('h1');
+    h1.textContent = titleText;
+    doc.body.appendChild(h1);
+
+    var p = doc.createElement('p');
+    var metaEl = document.getElementById('rhMeta');
+    p.textContent = (metaEl ? metaEl.textContent : ('Generated: ' + (data.generatedAt || '')));
+    doc.body.appendChild(p);
+
+    var table = doc.createElement('table');
+    var thead = doc.createElement('thead');
+    var headTr = doc.createElement('tr');
+    var cols = Array.isArray(data.columns) ? data.columns : [];
+    for (var c = 0; c < cols.length; c++) {
+      var th = doc.createElement('th');
+      th.textContent = cols[c];
+      headTr.appendChild(th);
+    }
+    thead.appendChild(headTr);
+    table.appendChild(thead);
+
+    var tbody = doc.createElement('tbody');
+    var visible = rhGetVisibleRows();
+    for (var r = 0; r < visible.length; r++) {
+      var tr = doc.createElement('tr');
+      for (var c2 = 0; c2 < cols.length; c2++) {
+        var td = doc.createElement('td');
+        var val = c2 < visible[r].length ? visible[r][c2] : '';
+        if (typeof val === 'number') {
+          td.className = 'num';
+          td.textContent = val.toLocaleString();
+        } else {
+          td.textContent = val != null ? String(val) : '';
+        }
+        tr.appendChild(td);
+      }
+      tbody.appendChild(tr);
+    }
+    table.appendChild(tbody);
+
+    if (Array.isArray(data.footer) && data.footer.length) {
+      var tfoot = doc.createElement('tfoot');
+      var fTr = doc.createElement('tr');
+      for (var f = 0; f < cols.length; f++) {
+        var fTd = doc.createElement('td');
+        var fv = f < data.footer.length ? data.footer[f] : '';
+        if (typeof fv === 'number') fTd.className = 'num';
+        fTd.textContent = fv != null ? String(fv) : '';
+        fTr.appendChild(fTd);
+      }
+      tfoot.appendChild(fTr);
+      table.appendChild(tfoot);
+    }
+
+    doc.body.appendChild(table);
+    w.focus();
+    setTimeout(function () { w.print(); }, 150);
+  };
+
+  /* =========================================================================
+     UNIFIED ADMIN TABLE SEARCH, CSV EXPORT & STICKY WRAPPER ENHANCER
+     ========================================================================= */
+  window.filterAdminTable = function (tbodyId, query) {
+    var tbody = document.getElementById(tbodyId);
+    if (!tbody) return;
+    var q = (query || '').trim().toLowerCase();
+    var rows = tbody.querySelectorAll('tr');
+    for (var i = 0; i < rows.length; i++) {
+      var tr = rows[i];
+      if (!q) {
+        tr.style.display = '';
+        continue;
+      }
+      var txt = (tr.textContent || '').toLowerCase();
+      tr.style.display = txt.indexOf(q) !== -1 ? '' : 'none';
+    }
+  };
+
+  window.exportAdminTableCsv = function (triggerOrId, filename) {
+    var table = null;
+    if (typeof triggerOrId === 'string') {
+      var el = document.getElementById(triggerOrId);
+      table = el ? (el.tagName === 'TABLE' ? el : el.closest('table')) : null;
+    } else if (triggerOrId && triggerOrId.closest) {
+      var page = triggerOrId.closest('.page-view');
+      if (page) table = page.querySelector('table');
+    }
+    if (!table) {
+      if (typeof showToast === 'function') showToast('No table data found to export.', 'error');
+      return;
+    }
+
+    var lines = [];
+    var headRows = table.querySelectorAll('thead tr');
+    for (var h = 0; h < headRows.length; h++) {
+      var ths = headRows[h].querySelectorAll('th, td');
+      var hArr = [];
+      for (var c = 0; c < ths.length; c++) {
+        hArr.push(rhCsvCell((ths[c].textContent || '').replace(/\s+/g, ' ').trim()));
+      }
+      if (hArr.length) lines.push(hArr.join(','));
+    }
+
+    var bodyRows = table.querySelectorAll('tbody tr');
+    var exportedCount = 0;
+    for (var b = 0; b < bodyRows.length; b++) {
+      var br = bodyRows[b];
+      if (br.style.display === 'none') continue;
+      var tds = br.querySelectorAll('td');
+      if (tds.length === 1 && tds[0].colSpan > 1) continue;
+      var bArr = [];
+      for (var d = 0; d < tds.length; d++) {
+        bArr.push(rhCsvCell((tds[d].textContent || '').replace(/\s+/g, ' ').trim()));
+      }
+      if (bArr.length) {
+        lines.push(bArr.join(','));
+        exportedCount++;
+      }
+    }
+
+    if (exportedCount === 0) {
+      if (typeof showToast === 'function') showToast('No visible rows to export.', 'error');
+      return;
+    }
+
+    var blob = new Blob(['\uFEFF' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8;' });
+    var link = document.createElement('a');
+    var url = URL.createObjectURL(blob);
+    link.href = url;
+    link.download = filename || 'export.csv';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+  };
+
+  document.addEventListener('DOMContentLoaded', function () {
+    var tables = document.querySelectorAll('.page-view table');
+    for (var i = 0; i < tables.length; i++) {
+      var t = tables[i];
+      if (t.id === 'rhTable' || t.id === 'reportsMainTable') continue;
+      if (!t.closest('.table-responsive') && !t.closest('.table-wrap')) {
+        var wrap = document.createElement('div');
+        wrap.className = 'table-responsive';
+        t.parentNode.insertBefore(wrap, t);
+        wrap.appendChild(t);
+      }
+      var thead = t.querySelector('thead');
+      if (thead) {
+        thead.style.position = 'sticky';
+        thead.style.top = '0';
+        thead.style.zIndex = '2';
+      }
+    }
+    if (document.getElementById('rhReportSelect') || document.getElementById('rhNav')) {
+      rhBuildNav();
+    }
+
+    // ISO 9241-171 / WCAG 2.1 AA: ensure table headers have scope="col"
+    var ths = document.querySelectorAll('.page-view table thead th:not([scope])');
+    for (var k = 0; k < ths.length; k++) {
+      ths[k].setAttribute('scope', 'col');
+    }
+
+    // ISO 9241-171: live region for toast notifications
+    var toastEl = document.getElementById('toastStrip') || document.querySelector('.toast-strip');
+    if (toastEl && !toastEl.getAttribute('aria-live')) {
+      toastEl.setAttribute('aria-live', 'polite');
+      toastEl.setAttribute('role', 'status');
+    }
+  });
+
+  // ISO 8601 DateTime & ISO 4217 Currency global formatters
+  window.formatIsoDateTime = function (input) {
+    if (!input) return '-';
+    var d = (input instanceof Date) ? input : new Date(input);
+    if (isNaN(d.getTime())) return String(input);
+    var p = function (n) { return (n < 10 ? '0' : '') + n; };
+    return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) + ' ' +
+           p(d.getHours()) + ':' + p(d.getMinutes()) + ':' + p(d.getSeconds());
+  };
+
+  window.formatLkr = function (amount) {
+    var num = Number(amount);
+    if (isNaN(num)) num = 0;
+    return 'LKR ' + num.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  };
+
+  // ISO 9241-171: Esc key closes any visible modal-backdrop
+  document.addEventListener('keydown', function (e) {
+    if (e.key !== 'Escape') return;
+    var modals = document.querySelectorAll('.modal-backdrop');
+    for (var i = modals.length - 1; i >= 0; i--) {
+      if (modals[i].style.display && modals[i].style.display !== 'none') {
+        modals[i].style.display = 'none';
+        break;
+      }
+    }
+  });
+
+  window.openResetCountersModal = function () {
+    var m = document.getElementById('modalResetCounters');
+    if (m) m.style.display = 'flex';
+  };
+
+  window.rcScopeChanged = function () {
+    var sc = document.getElementById('rcScope');
+    var grp = document.getElementById('rcTargetGroup');
+    if (sc && grp) grp.style.display = (sc.value === 'ALL') ? 'none' : '';
+  };
+
+  window.handleResetCounters = function () {
+    var sc = (document.getElementById('rcScope') || {}).value || 'USER';
+    var tgt = ((document.getElementById('rcTarget') || {}).value || '').trim();
+    if (sc !== 'ALL' && !tgt) {
+      if (typeof showToast === 'function') showToast('Please enter a target username, printer, or department.', 'error');
+      return;
+    }
+    fetch('/api/admin/reports/reset-counters', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ scope: sc, target: tgt })
+    })
+    .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+    .then(function (res) {
+      var m = document.getElementById('modalResetCounters');
+      if (m) m.style.display = 'none';
+      if (typeof showToast === 'function') showToast('Counters reset (' + res.scope + '): ' + res.usersReset + ' users, ' + res.jobsZeroed + ' jobs zeroed.', 'success');
+      if (window.rhRun) window.rhRun();
+    })
+    .catch(function (err) {
+      if (typeof showToast === 'function') showToast('Reset failed: ' + err.message, 'error');
+    });
+  };
+
+  window.openAdvReportBuilder = function () {
+    var m = document.getElementById('modalAdvReportBuilder');
+    if (m) m.style.display = 'flex';
+  };
+
+  window.handleRunAdvReportBuilder = function () {
+    var payload = {
+      groupBy: (document.getElementById('arbGroupBy') || {}).value || 'USER_PRINTER',
+      from: (document.getElementById('arbFrom') || {}).value || '',
+      to: (document.getElementById('arbTo') || {}).value || '',
+      department: ((document.getElementById('arbDept') || {}).value || '').trim(),
+      printer: ((document.getElementById('arbPrinter') || {}).value || '').trim()
+    };
+    fetch('/api/admin/reports/builder', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    })
+    .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+    .then(function (data) {
+      var m = document.getElementById('modalAdvReportBuilder');
+      if (m) m.style.display = 'none';
+      rhState.data = data;
+      var codeEl = document.getElementById('rhCodeBadge');
+      var catEl = document.getElementById('rhCategoryBadge');
+      var titleEl = document.getElementById('rhTitle');
+      var descEl = document.getElementById('rhDesc');
+      var emptyEl = document.getElementById('rhEmpty');
+      var resEl = document.getElementById('rhResult');
+      if (codeEl) codeEl.textContent = data.code || 'CUSTOM';
+      if (catEl) catEl.textContent = data.category || 'Custom Report Builder';
+      if (titleEl) titleEl.textContent = data.title || 'Custom Report';
+      if (descEl) descEl.textContent = data.description || '';
+      if (emptyEl) emptyEl.style.display = 'none';
+      if (resEl) resEl.style.display = '';
+      window.rhRender();
+    })
+    .catch(function (err) {
+      if (typeof showToast === 'function') showToast('Report builder failed: ' + err.message, 'error');
+    });
+  };
+
+  var sapState = { data: null, activeCols: [], sortCol: -1, sortDir: 'asc' };
+
+  window.sapExecuteQuery = function () {
+    var payload = {
+      groupBy: (document.getElementById('sapGroupBy') || {}).value || 'USER_PRINTER',
+      from: (document.getElementById('sapFrom') || {}).value || '',
+      to: (document.getElementById('sapTo') || {}).value || '',
+      department: ((document.getElementById('sapDept') || {}).value || '').trim(),
+      printer: ((document.getElementById('sapPrinter') || {}).value || '').trim()
+    };
+    fetch('/api/admin/reports/builder', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    })
+    .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+    .then(function (data) {
+      sapState.data = data;
+      sapState.sortCol = -1;
+      sapState.sortDir = 'asc';
+      var cols = Array.isArray(data.columns) ? data.columns : [];
+      sapState.activeCols = cols.map(function (_, idx) { return idx; });
+      window.sapRenderColChooser();
+      window.sapRenderGrid();
+    })
+    .catch(function (err) {
+      if (typeof showToast === 'function') showToast('SAP query failed: ' + err.message, 'error');
+    });
+  };
+
+  window.sapRenderColChooser = function () {
+    var box = document.getElementById('sapColChooser');
+    if (!box || !sapState.data || !Array.isArray(sapState.data.columns)) return;
+    var cols = sapState.data.columns;
+    box.innerHTML = cols.map(function (c, idx) {
+      var checked = sapState.activeCols.indexOf(idx) !== -1 ? ' checked' : '';
+      return '<label class="d-inline-flex align-items-center gap-1 border px-2 py-1 bg-light" style="cursor:pointer;">' +
+        '<input type="checkbox" value="' + idx + '"' + checked + ' onchange="window.sapToggleCol(' + idx + ', this.checked)"> ' +
+        '<span>' + esc(c) + '</span>' +
+        '<span style="color:#64748B; font-size:10px; margin-left:3px;" title="Move left" onclick="event.preventDefault(); window.sapMoveCol(' + idx + ', -1)">&#9664;</span>' +
+        '<span style="color:#64748B; font-size:10px;" title="Move right" onclick="event.preventDefault(); window.sapMoveCol(' + idx + ', 1)">&#9654;</span>' +
+        '</label>';
+    }).join('');
+  };
+
+  window.sapToggleCol = function (idx, on) {
+    if (on) {
+      if (sapState.activeCols.indexOf(idx) === -1) sapState.activeCols.push(idx);
+    } else {
+      sapState.activeCols = sapState.activeCols.filter(function (i) { return i !== idx; });
+    }
+    window.sapRenderGrid();
+  };
+
+  window.sapMoveCol = function (idx, delta) {
+    var pos = sapState.activeCols.indexOf(idx);
+    if (pos === -1) return;
+    var next = pos + delta;
+    if (next < 0 || next >= sapState.activeCols.length) return;
+    var tmp = sapState.activeCols[pos];
+    sapState.activeCols[pos] = sapState.activeCols[next];
+    sapState.activeCols[next] = tmp;
+    window.sapRenderColChooser();
+    window.sapRenderGrid();
+  };
+
+  window.sapSelectAllCols = function (all) {
+    if (!sapState.data || !Array.isArray(sapState.data.columns)) return;
+    sapState.activeCols = all ? sapState.data.columns.map(function (_, idx) { return idx; }) : [0, 1].filter(function (i) { return i < sapState.data.columns.length; });
+    window.sapRenderColChooser();
+    window.sapRenderGrid();
+  };
+
+  window.sapApplyPreset = function (preset) {
+    if (!sapState.data || !Array.isArray(sapState.data.columns)) return;
+    var cols = sapState.data.columns;
+    var out = [];
+    cols.forEach(function (c, idx) {
+      var low = String(c).toLowerCase();
+      if (preset === 'copy') {
+        if (low.indexOf('user') !== -1 || low.indexOf('dept') !== -1 || low.indexOf('department') !== -1 || low.indexOf('printer') !== -1 || low.indexOf('copy') !== -1 || low.indexOf('ip') !== -1) out.push(idx);
+      } else if (preset === 'cost') {
+        if (low.indexOf('user') !== -1 || low.indexOf('dept') !== -1 || low.indexOf('department') !== -1 || low.indexOf('printer') !== -1 || low.indexOf('total') !== -1 || low.indexOf('cost') !== -1 || low.indexOf('lkr') !== -1) out.push(idx);
+      }
+    });
+    sapState.activeCols = out.length ? out : cols.map(function (_, idx) { return idx; });
+    window.sapRenderColChooser();
+    window.sapRenderGrid();
+  };
+
+  window.sapSort = function (colIdx) {
+    if (sapState.sortCol === colIdx) {
+      sapState.sortDir = (sapState.sortDir === 'asc') ? 'desc' : 'asc';
+    } else {
+      sapState.sortCol = colIdx;
+      sapState.sortDir = 'asc';
+    }
+    window.sapRenderGrid();
+  };
+
+  window.sapClearQuery = function () {
+    ['sapFrom', 'sapTo', 'sapDept', 'sapPrinter', 'sapQuickFilter'].forEach(function (id) {
+      var el = document.getElementById(id); if (el) el.value = '';
+    });
+    sapState.data = null;
+    sapState.activeCols = [];
+    var cc = document.getElementById('sapColChooser'); if (cc) cc.innerHTML = '';
+    var b = document.getElementById('sapBody');
+    if (b) b.innerHTML = '<tr><td class="text-center text-muted py-4">Cleared. Click <strong>Execute (F8)</strong> to run query.</td></tr>';
+    var h = document.getElementById('sapHead'); if (h) h.innerHTML = '';
+    var f = document.getElementById('sapFoot'); if (f) f.innerHTML = '';
+    var k = document.getElementById('sapKpiRow'); if (k) k.innerHTML = '';
+  };
+
+  window.sapRenderGrid = function () {
+    var data = sapState.data;
+    if (!data) return;
+    var kpiRow = document.getElementById('sapKpiRow');
+    if (kpiRow && Array.isArray(data.kpis)) {
+      kpiRow.innerHTML = data.kpis.map(function (item) {
+        var v = (typeof item.value === 'number') ? item.value.toLocaleString() : esc(item.value != null ? item.value : '-');
+        return '<div class="col-6 col-xl-3"><div class="rh-kpi-card"><div class="rh-kpi-label">' + esc(item.label || '') + '</div><div class="rh-kpi-val">' + v + '</div><div class="rh-kpi-sub">' + esc(item.sub || '') + '</div></div></div>';
+      }).join('');
+    }
+    var cols = Array.isArray(data.columns) ? data.columns : [];
+    var visCols = sapState.activeCols.length ? sapState.activeCols : cols.map(function (_, i) { return i; });
+    var q = ((document.getElementById('sapQuickFilter') || {}).value || '').trim().toLowerCase();
+    var headEl = document.getElementById('sapHead');
+    if (headEl) {
+      headEl.innerHTML = visCols.map(function (colIdx) {
+        var arrow = (sapState.sortCol === colIdx) ? (sapState.sortDir === 'asc' ? ' \u25B2' : ' \u25BC') : '';
+        return '<th class="rh-th-sort" onclick="window.sapSort(' + colIdx + ')">' + esc(cols[colIdx]) + arrow + '</th>';
+      }).join('');
+    }
+    var rows = (Array.isArray(data.rows) ? data.rows.slice() : []).filter(function (row) {
+      if (!q) return true;
+      return visCols.some(function (colIdx) {
+        var cell = row[colIdx];
+        return cell != null && String(cell).toLowerCase().indexOf(q) !== -1;
+      });
+    });
+    if (sapState.sortCol >= 0) {
+      var sc = sapState.sortCol;
+      var dir = sapState.sortDir === 'desc' ? -1 : 1;
+      rows.sort(function (a, b) {
+        var va = a[sc], vb = b[sc];
+        if (typeof va === 'number' && typeof vb === 'number') return (va - vb) * dir;
+        return String(va != null ? va : '').localeCompare(String(vb != null ? vb : ''), undefined, { numeric: true, sensitivity: 'base' }) * dir;
+      });
+    }
+    var bodyEl = document.getElementById('sapBody');
+    if (bodyEl) {
+      bodyEl.innerHTML = rows.length === 0
+        ? '<tr><td colspan="' + Math.max(1, visCols.length) + '" class="text-center text-muted py-4">No matching records.</td></tr>'
+        : rows.map(function (r) {
+            return '<tr>' + visCols.map(function (idx) {
+              var v = r[idx];
+              return typeof v === 'number' ? '<td class="text-end font-monospace">' + esc(v.toLocaleString()) + '</td>' : '<td>' + esc(v != null ? v : '') + '</td>';
+            }).join('') + '</tr>';
+          }).join('');
+    }
+    var footEl = document.getElementById('sapFoot');
+    if (footEl && Array.isArray(data.footer)) {
+      footEl.innerHTML = visCols.map(function (idx) {
+        var fv = data.footer[idx];
+        return typeof fv === 'number' ? '<td class="text-end font-monospace">' + esc(fv.toLocaleString()) + '</td>' : '<td>' + esc(fv != null ? fv : '') + '</td>';
+      }).join('');
+    }
+  };
+
+  window.sapExportCsv = function () {
+    window.exportAdminTableCsv('sapAlvTable', 'sap-report-builder.csv');
   };
 
 })();

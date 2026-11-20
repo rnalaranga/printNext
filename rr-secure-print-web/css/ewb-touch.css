@@ -1524,6 +1524,7 @@ table.pc-job-table tbody tr.pc-row-selected {
 }
 
 @media (max-height: 480px) {
+  body { zoom: 0.9; }
   .pc-header { height: 48px; padding: 0 20px; }
   .pc-logo-box { width: 34px; height: 34px; line-height: 30px; font-size: 14px; margin-right: 8px; }
   .pc-brand-name { font-size: 14px; }
@@ -1550,8 +1551,9 @@ table.pc-job-table tbody tr.pc-row-selected {
   display: none;
   position: fixed !important;
   top: 58px;
-  left: 50%;
-  transform: translateX(-50%);
+  left: 5%;
+  right: 5%;
+  margin: 0 auto;
   width: 90%;
   max-width: 860px;
   padding: 10px 18px;
@@ -1605,4 +1607,74 @@ table.pc-job-table tbody tr.pc-row-selected {
 table.pc-job-table tr.pc-selected {
   background-color: #EFF6FF !important;
   border-left: 3.5px solid #2563EB !important;
+}
+
+/* Multi-screen responsive polish */
+@media (max-width: 860px) {
+  .pc-copy-wrapper { padding: 12px !important; min-height: 200px !important; }
+  .pc-menu-grid { gap: 10px !important; }
+  .pc-menu-tile { padding: 14px 10px !important; }
+  .pc-selection-summary { font-size: 11px !important; gap: 3px !important; }
+}
+
+@media (max-height: 480px) {
+  .pc-copy-wrapper { min-height: 180px !important; padding: 8px !important; }
+}
+
+/* ==========================================================================
+   ISO 9241-110 / WCAG 2.1 AA TOUCHSCREEN ERGONOMICS
+   ========================================================================== */
+button, .btn, .pc-btn, .pc-menu-tile, .pc-keypad-btn, input[type="button"], input[type="submit"] {
+  min-height: 48px;
+  min-width: 48px;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+:focus-visible {
+  outline: 3px solid #1D4ED8 !important;
+  outline-offset: 2px !important;
+}
+
+.pc-job-table td, .pc-job-table th {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Dedicated compact status strip sizing for Toshiba 18 & 28 Series screens */
+body.series-18 #stationStatusStrip {
+  bottom: 5px !important;
+  right: 8px !important;
+  padding: 4px 10px !important;
+  font-size: 10.5px !important;
+  gap: 7px !important;
+  max-width: calc(100vw - 16px);
+  overflow: hidden;
+}
+
+body.series-28 #stationStatusStrip {
+  bottom: 10px !important;
+  right: 14px !important;
+  padding: 8px 16px !important;
+  font-size: 14.5px !important;
+  gap: 12px !important;
+  max-width: calc(100vw - 24px);
+  overflow: hidden;
+}
+
+body.series-28 #stationStatusStrip #tonerLevelBadge > span:nth-child(2) {
+  width: 80px !important;
+  height: 8px !important;
+}
+
+body.series-28 #stationStatusStrip #tonerBarFill {
+  height: 8px !important;
+}
+
+body.series-18 #stationStatusStrip #tonerBarFill {
+  height: 5px !important;
+}
+
+/* Global 0px sharp corners across entire MFP Touchscreen UI */
+*, *::before, *::after {
+  border-radius: 0px !important;
 }

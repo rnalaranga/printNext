@@ -11,6 +11,7 @@ public class SystemSettingsDto {
     private String logoFilename;
     private String primaryColor;
     private Integer inactivityTimeoutSecs;
+    private Integer jobExpiryMinutes;
     private String supportContact;
     private Instant updatedAt;
 
@@ -63,6 +64,9 @@ public class SystemSettingsDto {
 
     public Integer getInactivityTimeoutSecs() { return inactivityTimeoutSecs; }
     public void setInactivityTimeoutSecs(Integer inactivityTimeoutSecs) { this.inactivityTimeoutSecs = inactivityTimeoutSecs; }
+
+    public Integer getJobExpiryMinutes() { return jobExpiryMinutes; }
+    public void setJobExpiryMinutes(Integer jobExpiryMinutes) { this.jobExpiryMinutes = jobExpiryMinutes; }
 
     public String getSupportContact() { return supportContact; }
     public void setSupportContact(String supportContact) { this.supportContact = supportContact; }

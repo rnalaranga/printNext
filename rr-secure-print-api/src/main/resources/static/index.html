@@ -964,8 +964,31 @@
        SCREEN 1: AUTHENTICATION (PaperCut MF Touch Screen Standard)
        ============================================================ -->
   <div id="screenAuth" class="pc-screen pc-auth-screen pc-active">
-    <!-- Real-time Hardware I/O Debug Status Bar for Toshiba Terminal -->
-    <div id="rawKeyDebug" style="position:fixed; bottom:4px; left:10px; font-size:10px; color:#1E40AF; font-weight:700; z-index:999999; background:rgba(255,255,255,0.92); padding:2px 8px; border:1px solid #BFDBFE; border-radius:4px; opacity:0.85;">READER I/O: [Standby - Waiting for tap / key]</div>
+    <div id="paperEmptyLoginBanner" style="display:none; background:#FEF2F2; color:#B91C1C; font-size:13px; font-weight:800; text-align:center; padding:8px 14px; border-radius:8px; margin:0 auto 10px auto; max-width:480px; border:1.5px solid #FCA5A5; box-shadow:0 2px 8px rgba(220,38,38,0.12);">
+      &#9888; Drawer 1 (A4) &mdash; Paper Empty
+    </div>
+    <div id="stationStatusStrip" style="position:fixed; bottom:8px; right:12px; z-index:50; display:flex; align-items:center; gap:10px; background:rgba(255,255,255,0.94); backdrop-filter:blur(8px); border:1px solid #CBD5E1; border-radius:6px; padding:6px 14px; font-size:12.5px; line-height:1.25; white-space:nowrap;">
+      <span id="stationBadgeErrorWrap" style="display:inline; font-weight:700;">
+        <span id="stationBadgeError" style="color:#10B981;">Ready</span>
+      </span>
+      <span id="tonerLevelBadge" style="display:inline-flex; align-items:center; gap:6px; border-left:1px solid #E2E8F0; padding-left:10px; color:#1E293B; font-weight:700;">
+        <span>Toner</span>
+        <span style="display:inline-block; width:64px; height:7px; background:#E2E8F0; border-radius:999px; overflow:hidden; vertical-align:middle;">
+          <span id="tonerBarFill" style="display:block; width:0%; height:100%; background:#2563EB; border-radius:999px; transition:width 0.4s ease;"></span>
+        </span>
+        <span id="tonerPercentText" style="font-family:'JetBrains Mono',monospace;">--%</span>
+      </span>
+      <span id="stationInfoBadge" style="display:inline-flex; align-items:center; gap:8px; border-left:1px solid #E2E8F0; padding-left:10px; color:#0F172A;">
+        <span id="stationBadgeLocation" style="color:#475569; font-weight:600;">--</span>
+        <span style="color:#CBD5E1;">|</span>
+        <span id="stationBadgeIp" style="font-family:'JetBrains Mono',monospace; font-weight:600;">--</span>
+        <span style="color:#CBD5E1;">|</span>
+        <span style="display:inline-block; width:7px; height:7px; border-radius:50%; background:#10B981;"></span>
+        <strong id="stationBadgeCode">--</strong>
+      </span>
+    </div>
+    <!-- Real-time Hardware I/O Debug Status Bar hidden -->
+    <div id="rawKeyDebug" style="display:none;"></div>
 
     <div class="pc-auth-wrapper">
 
@@ -1189,7 +1212,7 @@
               &larr; Apps
             </button>
             <div class="pc-tab-active" style="display:inline-block; vertical-align:middle;">
-              Held Print Queue <span id="queueCountBadge" class="pc-count-tag">(0)</span>
+              Print Queue <span id="queueCountBadge" class="pc-count-tag">(0)</span>
             </div>
             <button type="button" onclick="window.toggleSelectAllCheckbox(true)" style="margin-left:6px; padding:4px 8px; font-size:11px; font-weight:700; background:#F8FAFC; color:#334155; border:1px solid #CBD5E1; border-radius:6px; cursor:pointer;">
               Select All
@@ -1197,7 +1220,7 @@
           </td>
           <td style="vertical-align:middle; text-align:right; white-space:nowrap;">
             <button id="printAllBtn" class="pc-btn-print-all" onclick="window.printAllJobs()">
-              Release All <span id="printAllCountText">(0)</span>
+              Print All <span id="printAllCountText">(0)</span>
             </button>
             <button class="pc-btn-refresh" onclick="window.loadJobs()">
               Refresh
@@ -1213,7 +1236,7 @@
               <th style="width:36px; text-align:center;">
                 <input type="checkbox" id="selectAllCheckbox" class="pc-checkbox-touch" onchange="window.toggleSelectAllCheckbox(this.checked)">
               </th>
-              <th>DOCUMENT NAME</th>
+              <th>DOCUMENT</th>
               <th class="pc-col-hide-sm" style="width:125px;">SUBMITTED</th>
               <th style="width:65px; text-align:center;">PAGES</th>
               <th class="pc-col-hide-sm" style="width:105px;">ATTRIBUTES</th>
@@ -1242,14 +1265,14 @@
               <span id="selectedPagesText">0 pgs</span>
               <span class="pc-summary-sep">|</span>
               <span style="font-size:11px; font-weight:700; color:#475569;">Tray:</span>
-              <select id="drawerSelect" style="padding:3px 6px; font-size:11px; font-weight:700; border-radius:6px; border:1px solid #94A3B8; background:#FFFFFF; color:#0F172A; cursor:pointer;">
+              <select id="drawerSelect" style="display:none;">
                 <option value="DRAWER1" selected>Drawer 1 (A4)</option>
                 <option value="DRAWER2">Drawer 2 (A3)</option>
                 <option value="BYPASS">Bypass Tray</option>
                 <option value="AUTO">Auto Select</option>
               </select>
               <span style="font-size:11px; font-weight:700; color:#475569;">Size:</span>
-              <select id="paperSizeSelect" style="padding:3px 6px; font-size:11px; font-weight:700; border-radius:6px; border:1px solid #94A3B8; background:#FFFFFF; color:#0F172A; cursor:pointer;">
+              <select id="paperSizeSelect" style="display:none;">
                 <option value="AUTO" selected>Auto</option>
                 <option value="A4">A4</option>
                 <option value="A3">A3</option>
@@ -1258,14 +1281,11 @@
             </div>
           </td>
           <td style="vertical-align:middle; text-align:right; white-space:nowrap;">
-            <button id="dockMenuBtn" class="pc-btn-dock-cancel" onclick="window.showMenuScreen()" style="background:#0F172A; color:#FFFFFF; border-color:#0F172A; margin-right:6px;">
-              &larr; Apps
-            </button>
             <button id="cancelBtn" class="pc-btn-dock-cancel pc-btn-disabled" onclick="window.cancelSelectedJobs()">
               Delete
             </button>
             <button id="releaseBtn" class="pc-btn-dock-print pc-btn-disabled" onclick="window.releaseSelectedJobs()">
-              Print Selected &rarr;
+              Print &rarr;
             </button>
           </td>
         </tr>
@@ -1277,49 +1297,17 @@
        SCREEN 4: PHOTOCOPY WALK-UP STATION
        ============================================================ -->
   <div id="screenCopy" class="pc-screen pc-copy-screen">
-    <div class="pc-copy-wrapper">
-      <div style="background:#FFFFFF; border:2px solid #2563EB; border-radius:16px; padding:20px 24px; box-shadow:0 6px 24px rgba(37,99,235,0.12);">
-        <div style="display:flex; align-items:center; justify-content:space-between; border-bottom:1.5px solid #E2E8F0; padding-bottom:12px; margin-bottom:14px;">
-          <div style="display:flex; align-items:center; gap:10px;">
-            <div style="background:#DBEAFE; color:#1D4ED8; width:44px; height:44px; border-radius:10px; display:flex; align-items:center; justify-content:center; font-size:24px;">&#128424;</div>
-            <div>
-              <div style="font-size:18px; font-weight:900; color:#1E3A8A; line-height:1.2;">Photocopier Unlocked</div>
-              <div style="font-size:11.5px; font-weight:600; color:#64748B;">Walk-up copy active &bull; <span id="copyStationTime" style="color:#DC2626; font-weight:800;">60s remaining</span></div>
-            </div>
-          </div>
-          <div style="background:#DCFCE7; color:#15803D; font-size:11.5px; font-weight:800; padding:5px 12px; border-radius:16px; border:1px solid #86EFAC;">
-            &#9679; Hardware Ready
-          </div>
-        </div>
-
-        <!-- 3 Simple Visual Steps -->
-        <div style="display:grid; grid-template-columns: repeat(3, 1fr); gap:12px; margin-bottom:16px;">
-          <div style="background:#F8FAFC; border:1.5px solid #E2E8F0; border-radius:10px; padding:12px 10px; text-align:center;">
-            <div style="width:26px; height:26px; background:#2563EB; color:#FFF; border-radius:50%; font-weight:900; font-size:12px; display:flex; align-items:center; justify-content:center; margin:0 auto 6px auto;">1</div>
-            <div style="font-size:12.5px; font-weight:800; color:#1E293B; margin-bottom:3px;">Open Screen</div>
-            <div style="font-size:10.5px; font-weight:600; color:#64748B; line-height:1.4;">Press <span style="background:#FEF08A; padding:1px 5px; border-radius:3px; color:#854D0E; font-weight:800;">[ HOME ]</span> on physical panel</div>
-          </div>
-
-          <div style="background:#F8FAFC; border:1.5px solid #E2E8F0; border-radius:10px; padding:12px 10px; text-align:center;">
-            <div style="width:26px; height:26px; background:#10B981; color:#FFF; border-radius:50%; font-weight:900; font-size:12px; display:flex; align-items:center; justify-content:center; margin:0 auto 6px auto;">2</div>
-            <div style="font-size:12.5px; font-weight:800; color:#1E293B; margin-bottom:3px;">Make Copies</div>
-            <div style="font-size:10.5px; font-weight:600; color:#64748B; line-height:1.4;">Place paper &amp; press physical <span style="color:#059669; font-weight:800;">[ START ]</span> key</div>
-          </div>
-
-          <div style="background:#F8FAFC; border:1.5px solid #E2E8F0; border-radius:10px; padding:12px 10px; text-align:center;">
-            <div style="width:26px; height:26px; background:#EF4444; color:#FFF; border-radius:50%; font-weight:900; font-size:12px; display:flex; align-items:center; justify-content:center; margin:0 auto 6px auto;">3</div>
-            <div style="font-size:12.5px; font-weight:800; color:#1E293B; margin-bottom:3px;">Secure Device</div>
-            <div style="font-size:10.5px; font-weight:600; color:#64748B; line-height:1.4;">Press <span style="background:#FEE2E2; padding:1px 5px; border-radius:3px; color:#991B1B; font-weight:800;">[ SLEEP ]</span> or button below to lock</div>
-          </div>
-        </div>
-
-        <div style="display:flex; justify-content:space-between; align-items:center; border-top:1.5px solid #E2E8F0; padding-top:14px;">
-          <button type="button" onclick="window.showMenuScreen()" style="padding:10px 18px; font-size:12px; font-weight:700; background:#F1F5F9; border:1.5px solid #CBD5E1; color:#334155; border-radius:8px; cursor:pointer;">
-            &larr; Back to Apps
-          </button>
-          <button type="button" onclick="window.handleFinishCopying()" style="padding:10px 22px; font-size:13px; font-weight:800; background:#EF4444; color:#FFFFFF; border:none; border-radius:8px; cursor:pointer; box-shadow:0 3px 10px rgba(239,68,68,0.25);">
-            &#128274; Finish &amp; Lock Copier
-          </button>
+    <style>
+      @-webkit-keyframes pcCopySpin { 0% { -webkit-transform: rotate(0deg); } 100% { -webkit-transform: rotate(360deg); } }
+      @keyframes pcCopySpin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    </style>
+    <div style="display:table; width:100%; height:calc(100vh - 90px); min-height:260px;">
+      <div style="display:table-cell; vertical-align:middle; text-align:center; padding:16px;">
+        <div style="display:inline-block; background:#FFFFFF; border:2px solid #2563EB; border-radius:16px; padding:32px 36px; box-shadow:0 6px 24px rgba(37,99,235,0.12); text-align:center; max-width:360px; width:90%;">
+          <div style="width:48px; height:48px; border:4px solid #DBEAFE; border-top:4px solid #2563EB; border-radius:50%; margin:0 auto 16px auto; -webkit-animation:pcCopySpin 0.9s linear infinite; animation:pcCopySpin 0.9s linear infinite;"></div>
+          <div style="font-size:17px; font-weight:800; color:#1E3A8A; margin-bottom:8px;">Loading Copy...</div>
+          <div style="font-size:12px; font-weight:600; color:#64748B;">For quick access, press <span style="background:#FEF08A; padding:1px 6px; border-radius:4px; color:#854D0E; font-weight:800;">HOME</span></div>
+          <span id="copyStationTime" style="display:none;"></span>
         </div>
       </div>
     </div>
@@ -1329,49 +1317,13 @@
        SCREEN: USB PRINT WALK-UP STATION
        ============================================================ -->
   <div id="screenUsb" class="pc-screen pc-copy-screen">
-    <div class="pc-copy-wrapper">
-      <div style="background:#FFFFFF; border:2px solid #8B5CF6; border-radius:16px; padding:20px 24px; box-shadow:0 6px 24px rgba(139,92,246,0.12);">
-        <div style="display:flex; align-items:center; justify-content:space-between; border-bottom:1.5px solid #E2E8F0; padding-bottom:12px; margin-bottom:14px;">
-          <div style="display:flex; align-items:center; gap:10px;">
-            <div style="background:#EDE9FE; color:#7C3AED; width:44px; height:44px; border-radius:10px; display:flex; align-items:center; justify-content:center; font-size:24px;">&#128424;</div>
-            <div>
-              <div style="font-size:18px; font-weight:900; color:#5B21B6; line-height:1.2;">USB Print Unlocked</div>
-              <div style="font-size:11.5px; font-weight:600; color:#64748B;">Direct USB print active &bull; <span id="usbStationTime" style="color:#DC2626; font-weight:800;">60s remaining</span></div>
-            </div>
-          </div>
-          <div style="background:#DCFCE7; color:#15803D; font-size:11.5px; font-weight:800; padding:5px 12px; border-radius:16px; border:1px solid #86EFAC;">
-            &#9679; Print Ready
-          </div>
-        </div>
-
-        <!-- 3 Simple Visual Steps -->
-        <div style="display:grid; grid-template-columns: repeat(3, 1fr); gap:12px; margin-bottom:16px;">
-          <div style="background:#F8FAFC; border:1.5px solid #E2E8F0; border-radius:10px; padding:12px 10px; text-align:center;">
-            <div style="width:26px; height:26px; background:#8B5CF6; color:#FFF; border-radius:50%; font-weight:900; font-size:12px; display:flex; align-items:center; justify-content:center; margin:0 auto 6px auto;">1</div>
-            <div style="font-size:12.5px; font-weight:800; color:#1E293B; margin-bottom:3px;">Open Screen</div>
-            <div style="font-size:10.5px; font-weight:600; color:#64748B; line-height:1.4;">Press <span style="background:#FEF08A; padding:1px 5px; border-radius:3px; color:#854D0E; font-weight:800;">[ HOME ]</span> on physical panel</div>
-          </div>
-
-          <div style="background:#F8FAFC; border:1.5px solid #E2E8F0; border-radius:10px; padding:12px 10px; text-align:center;">
-            <div style="width:26px; height:26px; background:#10B981; color:#FFF; border-radius:50%; font-weight:900; font-size:12px; display:flex; align-items:center; justify-content:center; margin:0 auto 6px auto;">2</div>
-            <div style="font-size:12.5px; font-weight:800; color:#1E293B; margin-bottom:3px;">Insert USB &amp; Print</div>
-            <div style="font-size:10.5px; font-weight:600; color:#64748B; line-height:1.4;">Plug drive, choose file &amp; press <span style="color:#059669; font-weight:800;">[ START ]</span></div>
-          </div>
-
-          <div style="background:#F8FAFC; border:1.5px solid #E2E8F0; border-radius:10px; padding:12px 10px; text-align:center;">
-            <div style="width:26px; height:26px; background:#EF4444; color:#FFF; border-radius:50%; font-weight:900; font-size:12px; display:flex; align-items:center; justify-content:center; margin:0 auto 6px auto;">3</div>
-            <div style="font-size:12.5px; font-weight:800; color:#1E293B; margin-bottom:3px;">Remove &amp; Lock</div>
-            <div style="font-size:10.5px; font-weight:600; color:#64748B; line-height:1.4;">Unplug USB &amp; press lock button below</div>
-          </div>
-        </div>
-
-        <div style="display:flex; justify-content:space-between; align-items:center; border-top:1.5px solid #E2E8F0; padding-top:14px;">
-          <button type="button" onclick="window.showMenuScreen()" style="padding:10px 18px; font-size:12px; font-weight:700; background:#F1F5F9; border:1.5px solid #CBD5E1; color:#334155; border-radius:8px; cursor:pointer;">
-            &larr; Back to Apps
-          </button>
-          <button type="button" onclick="window.handleFinishCopying()" style="padding:10px 22px; font-size:13px; font-weight:800; background:#EF4444; color:#FFFFFF; border:none; border-radius:8px; cursor:pointer; box-shadow:0 3px 10px rgba(239,68,68,0.25);">
-            &#128274; Finish &amp; Lock USB Print
-          </button>
+    <div style="display:table; width:100%; height:calc(100vh - 90px); min-height:260px;">
+      <div style="display:table-cell; vertical-align:middle; text-align:center; padding:16px;">
+        <div style="display:inline-block; background:#FFFFFF; border:2px solid #2563EB; border-radius:16px; padding:32px 36px; box-shadow:0 6px 24px rgba(37,99,235,0.12); text-align:center; max-width:360px; width:90%;">
+          <div style="width:48px; height:48px; border:4px solid #DBEAFE; border-top:4px solid #2563EB; border-radius:50%; margin:0 auto 16px auto; -webkit-animation:pcCopySpin 0.9s linear infinite; animation:pcCopySpin 0.9s linear infinite;"></div>
+          <div style="font-size:17px; font-weight:800; color:#1E3A8A; margin-bottom:8px;">Loading USB Print...</div>
+          <div style="font-size:12px; font-weight:600; color:#64748B;">For quick access, press <span style="background:#FEF08A; padding:1px 6px; border-radius:4px; color:#854D0E; font-weight:800;">HOME</span></div>
+          <span id="usbStationTime" style="display:none;"></span>
         </div>
       </div>
     </div>
@@ -1381,54 +1333,40 @@
        SCREEN 5: DOCUMENT SCAN WALK-UP STATION
        ============================================================ -->
   <div id="screenScan" class="pc-screen pc-scan-screen">
-    <div class="pc-copy-wrapper">
-      <div style="background:#FFFFFF; border:2px solid #16A34A; border-radius:16px; padding:20px 24px; box-shadow:0 6px 24px rgba(22,163,74,0.12);">
-        <div style="display:flex; align-items:center; justify-content:space-between; border-bottom:1.5px solid #E2E8F0; padding-bottom:12px; margin-bottom:14px;">
-          <div style="display:flex; align-items:center; gap:10px;">
-            <div style="background:#DCFCE7; color:#15803D; width:44px; height:44px; border-radius:10px; display:flex; align-items:center; justify-content:center; font-size:24px;">&#128224;</div>
-            <div>
-              <div style="font-size:18px; font-weight:900; color:#14532D; line-height:1.2;">Scanner Unlocked</div>
-              <div style="font-size:11.5px; font-weight:600; color:#64748B;">Scan-to-Email destination ready</div>
-            </div>
-          </div>
-          <div style="background:#DCFCE7; color:#15803D; font-size:11.5px; font-weight:800; padding:5px 12px; border-radius:16px; border:1px solid #86EFAC;">
-            &#9679; Hardware Ready
-          </div>
-        </div>
-
-        <!-- 3 Simple Visual Steps -->
-        <div style="display:grid; grid-template-columns: repeat(3, 1fr); gap:12px; margin-bottom:16px;">
-          <div style="background:#F8FAFC; border:1.5px solid #E2E8F0; border-radius:10px; padding:12px 10px; text-align:center;">
-            <div style="width:26px; height:26px; background:#16A34A; color:#FFF; border-radius:50%; font-weight:900; font-size:12px; display:flex; align-items:center; justify-content:center; margin:0 auto 6px auto;">1</div>
-            <div style="font-size:12.5px; font-weight:800; color:#1E293B; margin-bottom:3px;">Open Screen</div>
-            <div style="font-size:10.5px; font-weight:600; color:#64748B; line-height:1.4;">Press <span style="background:#FEF08A; padding:1px 5px; border-radius:3px; color:#854D0E; font-weight:800;">[ HOME ]</span> on physical panel</div>
-          </div>
-
-          <div style="background:#F8FAFC; border:1.5px solid #E2E8F0; border-radius:10px; padding:12px 10px; text-align:center;">
-            <div style="width:26px; height:26px; background:#10B981; color:#FFF; border-radius:50%; font-weight:900; font-size:12px; display:flex; align-items:center; justify-content:center; margin:0 auto 6px auto;">2</div>
-            <div style="font-size:12.5px; font-weight:800; color:#1E293B; margin-bottom:3px;">Scan Documents</div>
-            <div style="font-size:10.5px; font-weight:600; color:#64748B; line-height:1.4;">Address Book is set &amp; press <span style="color:#059669; font-weight:800;">[ START ]</span></div>
-          </div>
-
-          <div style="background:#F8FAFC; border:1.5px solid #E2E8F0; border-radius:10px; padding:12px 10px; text-align:center;">
-            <div style="width:26px; height:26px; background:#EF4444; color:#FFF; border-radius:50%; font-weight:900; font-size:12px; display:flex; align-items:center; justify-content:center; margin:0 auto 6px auto;">3</div>
-            <div style="font-size:12.5px; font-weight:800; color:#1E293B; margin-bottom:3px;">Secure Device</div>
-            <div style="font-size:10.5px; font-weight:600; color:#64748B; line-height:1.4;">Press <span style="background:#FEE2E2; padding:1px 5px; border-radius:3px; color:#991B1B; font-weight:800;">[ SLEEP ]</span> or button below to lock</div>
-          </div>
-        </div>
-
-        <div style="display:flex; justify-content:space-between; align-items:center; border-top:1.5px solid #E2E8F0; padding-top:14px;">
-          <button type="button" onclick="window.showMenuScreen()" style="padding:10px 18px; font-size:12px; font-weight:700; background:#F1F5F9; border:1.5px solid #CBD5E1; color:#334155; border-radius:8px; cursor:pointer;">
-            &larr; Back to Apps
-          </button>
-          <button type="button" onclick="window.handleFinishCopying()" style="padding:10px 22px; font-size:13px; font-weight:800; background:#EF4444; color:#FFFFFF; border:none; border-radius:8px; cursor:pointer; box-shadow:0 3px 10px rgba(239,68,68,0.25);">
-            &#128274; Finish &amp; Lock Scanner
-          </button>
+    <div style="display:table; width:100%; height:calc(100vh - 90px); min-height:260px;">
+      <div style="display:table-cell; vertical-align:middle; text-align:center; padding:16px;">
+        <div style="display:inline-block; background:#FFFFFF; border:2px solid #2563EB; border-radius:16px; padding:32px 36px; box-shadow:0 6px 24px rgba(37,99,235,0.12); text-align:center; max-width:360px; width:90%;">
+          <div style="width:48px; height:48px; border:4px solid #DBEAFE; border-top:4px solid #2563EB; border-radius:50%; margin:0 auto 16px auto; -webkit-animation:pcCopySpin 0.9s linear infinite; animation:pcCopySpin 0.9s linear infinite;"></div>
+          <div style="font-size:17px; font-weight:800; color:#1E3A8A; margin-bottom:8px;">Loading Scan...</div>
+          <div style="font-size:12px; font-weight:600; color:#64748B;">For quick access, press <span style="background:#FEF08A; padding:1px 6px; border-radius:4px; color:#854D0E; font-weight:800;">HOME</span></div>
+          <span id="scanStationTime" style="display:none;"></span>
         </div>
       </div>
     </div>
   </div>
 
-  <script src="/js/ewb-app.js?v=20261107_30"></script>
+  <!-- Tray Select Modal (shown when selected drawer is paper empty) -->
+  <div id="traySelectModal" class="pc-modal-backdrop" style="display:none;">
+    <div class="pc-modal-box" style="max-width:420px; padding:24px; margin:30px auto;">
+      <div style="font-size:17px; font-weight:900; color:#1E3A8A; margin-bottom:6px;">Select Paper Tray</div>
+      <div style="font-size:12px; font-weight:600; color:#64748B; margin-bottom:12px;">Selected tray is empty. Choose paper size &amp; tray:</div>
+      <div style="margin-bottom:12px;">
+        <select id="modalPaperSizeSelect" onchange="document.getElementById('paperSizeSelect').value=this.value" style="width:100%; height:40px; padding:6px 12px; font-size:14px; font-weight:800; border-radius:8px; border:1.5px solid #94A3B8; background:#F8FAFC; color:#0F172A;">
+          <option value="AUTO" selected>Paper Size: Auto</option>
+          <option value="A4">Paper Size: A4</option>
+          <option value="A3">Paper Size: A3</option>
+          <option value="LETTER">Paper Size: Letter</option>
+        </select>
+      </div>
+      <div style="display:grid; gap:10px; margin-bottom:16px;">
+        <button type="button" onclick="window.selectTrayAndPrint('DRAWER1')" style="padding:14px; font-size:15px; font-weight:800; background:#EFF6FF; color:#1E3A8A; border:2px solid #2563EB; border-radius:10px; cursor:pointer;">Drawer 1 (A4)</button>
+        <button type="button" onclick="window.selectTrayAndPrint('DRAWER2')" style="padding:14px; font-size:15px; font-weight:800; background:#EFF6FF; color:#1E3A8A; border:2px solid #2563EB; border-radius:10px; cursor:pointer;">Drawer 2 (A3)</button>
+        <button type="button" onclick="window.selectTrayAndPrint('BYPASS')" style="padding:14px; font-size:15px; font-weight:800; background:#DCFCE7; color:#14532D; border:2px solid #16A34A; border-radius:10px; cursor:pointer;">Bypass Tray</button>
+      </div>
+      <button type="button" onclick="document.getElementById('traySelectModal').style.display='none'" style="padding:10px 20px; font-size:13px; font-weight:700; background:#F1F5F9; color:#334155; border:1px solid #CBD5E1; border-radius:8px; cursor:pointer;">Cancel</button>
+    </div>
+  </div>
+
+  <script src="/js/ewb-app.js?v=20261118_1"></script>
 </body>
 </html>

@@ -3059,3 +3059,485 @@ body.noc-fullscreen-active .admin-body {
   background: #F1F5F9 !important;
   min-height: 100vh !important;
 }
+
+/* ==========================================================================
+   20 STANDARD ISO REPORTS HUB (#page-reports)
+   ========================================================================== */
+.rh-nav-list {
+  max-height: 620px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.rh-cat-label {
+  font-size: 10.5px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  padding: 10px 8px 4px 8px;
+}
+
+.rh-item-btn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  text-align: left;
+  background: transparent;
+  border: 1px solid transparent;
+  border-left: 3px solid transparent;
+  padding: 7px 9px;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--text-body);
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+
+.rh-item-btn:hover {
+  background: var(--primary-soft);
+  color: var(--primary-dark);
+}
+
+.rh-item-btn.active {
+  background: var(--primary-soft);
+  border-left-color: var(--primary);
+  color: var(--primary);
+  font-weight: 700;
+}
+
+.rh-item-code {
+  font-family: 'JetBrains Mono', Consolas, monospace;
+  font-size: 10.5px;
+  font-weight: 700;
+  padding: 1px 5px;
+  background: #F1F5F9;
+  color: #475569;
+  border: 1px solid #CBD5E1;
+  flex-shrink: 0;
+}
+
+.rh-item-btn.active .rh-item-code {
+  background: var(--primary);
+  color: #FFFFFF;
+  border-color: var(--primary);
+}
+
+.rh-kpi-card {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  padding: 10px 12px;
+  height: 100%;
+}
+
+.rh-kpi-label {
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  margin-bottom: 3px;
+}
+
+.rh-kpi-val {
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--text-dark);
+  line-height: 1.2;
+}
+
+.rh-kpi-sub {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+.rh-th-sort {
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+}
+
+.rh-th-sort:hover {
+  color: var(--primary);
+}
+
+[data-theme="dark"] .rh-item-code {
+  background: #1E293B;
+  color: #94A3B8;
+  border-color: #334155;
+}
+
+[data-theme="dark"] .rh-item-btn.active .rh-item-code {
+  background: var(--primary);
+  color: #FFFFFF;
+}
+
+[data-theme="dark"] .rh-kpi-card {
+  background: rgba(15, 23, 42, 0.55);
+  border-color: #334155;
+}
+
+[data-theme="dark"] #rhTable tfoot {
+  background: #1E293B !important;
+  color: #F8FAFC !important;
+}
+
+/* ==========================================================================
+   ISO 9241-125 / 9241-171 / WCAG 2.1 AA SYSTEM-WIDE STANDARDS
+   ========================================================================== */
+:focus-visible {
+  outline: 2px solid var(--primary) !important;
+  outline-offset: 2px !important;
+}
+
+.iso-num {
+  font-variant-numeric: tabular-nums;
+  font-family: 'JetBrains Mono', Consolas, monospace;
+  text-align: right;
+}
+
+.iso-mono {
+  font-variant-numeric: tabular-nums;
+  font-family: 'JetBrains Mono', Consolas, monospace;
+}
+
+.iso-empty-state {
+  text-align: center;
+  padding: 36px 16px;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.iso-error-state {
+  background: var(--red-bg);
+  border: 1px solid var(--red-border);
+  color: var(--red-text);
+  padding: 12px 16px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+@media (max-width: 992px) {
+  .page-head {
+    flex-direction: column;
+    align-items: flex-start !important;
+    gap: 12px;
+  }
+}
+
+/* ==========================================================================
+   ISO 9241-125 VISUAL DESIGN POLISH (CARDS, TABLES, HEADERS, INPUTS)
+   ========================================================================== */
+.page-head {
+  padding-bottom: 14px;
+  margin-bottom: 20px;
+  border-bottom: 1px solid var(--border);
+}
+
+.page-head h2 {
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--text-dark);
+}
+
+.card, .table-card {
+  border: 1px solid var(--border) !important;
+  box-shadow: none !important;
+  border-radius: 0px !important;
+}
+
+.page-view table thead th {
+  background: #F1F5F9 !important;
+  color: #334155 !important;
+  font-size: 11.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  padding: 10px 12px !important;
+  border-bottom: 2px solid #CBD5E1 !important;
+}
+
+.page-view table tbody td {
+  padding: 9px 12px !important;
+  font-size: 13px;
+  vertical-align: middle;
+}
+
+.page-view table tbody tr:hover {
+  background-color: #EFF6FF !important;
+}
+
+.form-input, .form-select, .form-control {
+  border-radius: 0px !important;
+  border-color: #CBD5E1 !important;
+}
+
+.btn {
+  border-radius: 0px !important;
+  font-weight: 600 !important;
+}
+
+[data-theme="dark"] .page-view table thead th {
+  background: #1E293B !important;
+  color: #E2E8F0 !important;
+  border-bottom-color: #334155 !important;
+}
+
+[data-theme="dark"] .page-view table tbody tr:hover {
+  background-color: rgba(30, 58, 138, 0.25) !important;
+}
+
+/* ==========================================================================
+   MODERN WHITE FROSTED-GLASS ENTERPRISE SIDEBAR
+   ========================================================================== */
+.sidebar {
+  background: rgba(255, 255, 255, 0.78) !important;
+  backdrop-filter: blur(14px) saturate(160%) !important;
+  -webkit-backdrop-filter: blur(14px) saturate(160%) !important;
+  border-right: 1px solid rgba(226, 232, 240, 0.9) !important;
+  box-shadow: 4px 0 24px rgba(15, 23, 42, 0.04) !important;
+  color: #334155 !important;
+}
+
+.sidebar-brand {
+  background: rgba(255, 255, 255, 0.6) !important;
+  border-bottom: 1px solid rgba(226, 232, 240, 0.85) !important;
+}
+
+.sidebar-brand::after {
+  display: none !important;
+}
+
+.sidebar-nav {
+  padding: 12px 10px !important;
+  gap: 4px !important;
+}
+
+.sidebar-item {
+  color: #475569 !important;
+  border-radius: 0px !important;
+  padding: 9px 12px !important;
+  margin: 1px 0 !important;
+  border-left: none !important;
+  box-shadow: none !important;
+  transition: background 0.16s ease, color 0.16s ease !important;
+}
+
+.sidebar-item::before,
+.sidebar-item.active::before {
+  display: none !important;
+}
+
+.sidebar-item .sidebar-icon {
+  color: #64748B !important;
+  transition: color 0.16s ease !important;
+}
+
+.sidebar-item:hover {
+  background: rgba(15, 23, 42, 0.05) !important;
+  color: #0F172A !important;
+}
+
+.sidebar-item:hover .sidebar-icon {
+  color: #1D4ED8 !important;
+}
+
+.sidebar-item.active {
+  background: rgba(29, 78, 216, 0.10) !important;
+  color: #1D4ED8 !important;
+  font-weight: 700 !important;
+  border-left: none !important;
+  box-shadow: none !important;
+}
+
+.sidebar-item.active .sidebar-icon {
+  color: #1D4ED8 !important;
+}
+
+.sidebar-footer, .sidebar-collapse-btn {
+  border-color: rgba(226, 232, 240, 0.85) !important;
+  color: #475569 !important;
+}
+
+/* ==========================================================================
+   FLAT FROSTED-GLASS BUTTON SYSTEM (0PX RADIUS, NO BEVEL)
+   ========================================================================== */
+.btn, .btn-sm {
+  border-radius: 0px !important;
+  backdrop-filter: blur(10px) saturate(150%) !important;
+  -webkit-backdrop-filter: blur(10px) saturate(150%) !important;
+  box-shadow: none !important;
+  transition: background 0.16s ease, border-color 0.16s ease, color 0.16s ease !important;
+}
+
+.btn-primary {
+  background: rgba(29, 78, 216, 0.88) !important;
+  border: 1px solid rgba(29, 78, 216, 0.95) !important;
+  color: #FFFFFF !important;
+  box-shadow: none !important;
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: rgba(30, 64, 175, 0.96) !important;
+  box-shadow: none !important;
+}
+
+.btn-secondary, .btn-outline-secondary, .btn-light {
+  background: rgba(255, 255, 255, 0.72) !important;
+  border: 1px solid rgba(203, 213, 225, 0.9) !important;
+  color: #1E293B !important;
+  box-shadow: none !important;
+}
+
+.btn-secondary:hover:not(:disabled), .btn-outline-secondary:hover:not(:disabled), .btn-light:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.94) !important;
+  border-color: #94A3B8 !important;
+  color: #0F172A !important;
+}
+
+.btn-outline-primary {
+  background: rgba(239, 246, 255, 0.72) !important;
+  border: 1px solid rgba(147, 197, 253, 0.9) !important;
+  color: #1D4ED8 !important;
+  box-shadow: none !important;
+}
+
+.btn-outline-primary:hover:not(:disabled) {
+  background: rgba(219, 234, 254, 0.92) !important;
+  color: #1E3A8A !important;
+}
+
+.btn-danger {
+  background: rgba(220, 38, 38, 0.88) !important;
+  border: 1px solid rgba(220, 38, 38, 0.95) !important;
+  color: #FFFFFF !important;
+  box-shadow: none !important;
+}
+
+[data-theme="dark"] .btn-secondary,
+[data-theme="dark"] .btn-outline-secondary,
+[data-theme="dark"] .btn-light {
+  background: rgba(30, 41, 59, 0.72) !important;
+  border-color: rgba(71, 85, 105, 0.85) !important;
+  color: #E2E8F0 !important;
+  box-shadow: none !important;
+}
+
+/* ==========================================================================
+   NOC LIVE VIEW ERROR BLINK ANIMATION
+   ========================================================================== */
+@keyframes nocRedPulse {
+  0%, 100% {
+    border-color: #FCA5A5;
+    background-color: #FFFFFF;
+    box-shadow: 0 0 6px 1px rgba(239, 68, 68, 0.28);
+  }
+  50% {
+    border-color: #EF4444;
+    background-color: #FEF2F2;
+    box-shadow: 0 0 20px 5px rgba(239, 68, 68, 0.55), inset 0 0 12px rgba(239, 68, 68, 0.14);
+  }
+}
+
+.noc-error-blink {
+  border-color: #EF4444 !important;
+  animation: nocRedPulse 1.3s ease-in-out infinite !important;
+}
+
+.noc-offline-gray {
+  filter: grayscale(100%) !important;
+  opacity: 0.65 !important;
+  background: #F1F5F9 !important;
+  border-color: #CBD5E1 !important;
+}
+
+/* Global 0px sharp corners across entire Admin UI */
+*, *::before, *::after {
+  border-radius: 0px !important;
+}
+
+/* ==========================================================================
+   SMOKY FROSTED-GLASS TOP HEADER BAR (.topbar)
+   ========================================================================== */
+.topbar {
+  position: sticky !important;
+  top: 0 !important;
+  z-index: 40 !important;
+  padding: 12px 24px !important;
+  background: rgba(241, 245, 249, 0.78) !important;
+  backdrop-filter: blur(20px) saturate(180%) !important;
+  -webkit-backdrop-filter: blur(20px) saturate(180%) !important;
+  border-bottom: 1px solid rgba(203, 213, 225, 0.75) !important;
+  box-shadow: 0 2px 16px rgba(15, 23, 42, 0.06) !important;
+}
+
+.topbar::after {
+  display: none !important;
+}
+
+.topbar-left {
+  display: flex !important;
+  align-items: center !important;
+  gap: 14px !important;
+}
+
+.topbar h1 {
+  color: #0F172A !important;
+  font-size: 16px !important;
+  font-weight: 700 !important;
+  letter-spacing: -0.015em !important;
+  line-height: 1.25 !important;
+  margin: 0 0 2px 0 !important;
+}
+
+.topbar p {
+  color: #64748B !important;
+  font-size: 12px !important;
+  line-height: 1.3 !important;
+  margin: 0 !important;
+}
+
+.topbar-toggle-btn,
+.topbar .nav-btn {
+  background: rgba(255, 255, 255, 0.65) !important;
+  backdrop-filter: blur(10px) !important;
+  -webkit-backdrop-filter: blur(10px) !important;
+  border: 1px solid rgba(203, 213, 225, 0.85) !important;
+  color: #1E293B !important;
+  box-shadow: none !important;
+}
+
+.topbar-toggle-btn:hover,
+.topbar .nav-btn:hover {
+  background: rgba(255, 255, 255, 0.92) !important;
+  border-color: #94A3B8 !important;
+  color: #0F172A !important;
+}
+
+.topbar .nav-btn.active {
+  background: rgba(29, 78, 216, 0.88) !important;
+  border-color: rgba(29, 78, 216, 0.95) !important;
+  color: #FFFFFF !important;
+}
+
+.noc-tile, .noc-card {
+  border: 1px solid #E2E8F0 !important;
+  box-shadow: none;
+}
+
+.noc-tile.noc-error-blink,
+.noc-card.noc-error-blink {
+  border-color: #EF4444 !important;
+  animation: nocRedPulse 1.3s ease-in-out infinite !important;
+}
+
+.noc-bulb {
+  width: 7px !important;
+  height: 7px !important;
+  border-radius: 50% !important;
+}

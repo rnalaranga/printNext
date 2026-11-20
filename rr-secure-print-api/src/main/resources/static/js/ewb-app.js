@@ -122,6 +122,9 @@
         // (Navigating to native copy hides EWB, which must NOT trigger auto-lock!)
         if (state.currentUser && !state.isNativeOperationActive) {
           window.emergencyLockAndLogout('HARDWARE_SLEEP_BUTTON');
+        } else if (state.currentUser && state.isNativeOperationActive) {
+          // Native Copy/Scan screen opened: immediately pre-restore DefaultScreen=EWB so Sleep/Wake returns to EWB
+          sendCopyScreenOpenedBeacon();
         }
       }
     }
@@ -427,6 +430,61 @@
           applyEwbBranding(data.branding);
         }
         state.station = data.currentStation;
+        var stSeries = String(data.currentStation.seriesName || data.currentStation.series || data.currentStation.model || '').toUpperCase();
+        document.body.classList.remove('series-18', 'series-28');
+        if (stSeries.indexOf('18') !== -1) document.body.classList.add('series-18');
+        else if (stSeries.indexOf('28') !== -1) document.body.classList.add('series-28');
+        var stBadge = document.getElementById('stationInfoBadge');
+        if (stBadge) {
+          var stCode = document.getElementById('stationBadgeCode');
+          var stIp = document.getElementById('stationBadgeIp');
+          var stLoc = document.getElementById('stationBadgeLocation');
+          if (stCode) stCode.textContent = data.currentStation.printerCode || data.currentStation.name || '--';
+          if (stIp) stIp.textContent = data.currentStation.ipAddress || '--';
+          if (stLoc) stLoc.textContent = data.currentStation.location || 'Office';
+          stBadge.style.display = 'inline-flex';
+        }
+        var errWrap = document.getElementById('stationBadgeErrorWrap');
+        var errEl = document.getElementById('stationBadgeError');
+        if (errWrap && errEl) {
+          var snmpErr = data.paperEmpty ? (data.paperEmptyMessage || 'Paper Empty') : (data.errorMessage || (Array.isArray(data.alerts) && data.alerts.length ? data.alerts[0] : ''));
+          if (snmpErr) {
+            errEl.textContent = snmpErr;
+            errEl.style.color = '#DC2626';
+          } else {
+            errEl.textContent = 'Ready';
+            errEl.style.color = '#10B981';
+          }
+          errWrap.style.display = 'inline';
+        }
+        var peBanner = document.getElementById('paperEmptyLoginBanner');
+        if (peBanner) {
+          if (data.paperEmpty) {
+            peBanner.textContent = '\u26A0 ' + (data.paperEmptyMessage || 'Drawer 1 (A4) — Paper Empty');
+            peBanner.style.display = 'block';
+          } else {
+            peBanner.style.display = 'none';
+          }
+        }
+        var tonerEl = document.getElementById('tonerLevelBadge');
+        if (tonerEl) {
+          var pctText = document.getElementById('tonerPercentText');
+          var barFill = document.getElementById('tonerBarFill');
+          if (typeof data.tonerLevel === 'number' && data.tonerLevel >= 0) {
+            if (pctText) pctText.textContent = data.tonerLevel + '%';
+            if (barFill) {
+              barFill.style.width = data.tonerLevel + '%';
+              barFill.style.background = data.tonerLevel <= 15 ? '#DC2626' : (data.tonerLevel <= 30 ? '#D97706' : '#2563EB');
+            }
+          } else {
+            if (pctText) pctText.textContent = '--%';
+            if (barFill) {
+              barFill.style.width = '0%';
+              barFill.style.background = '#94A3B8';
+            }
+          }
+          tonerEl.style.display = 'inline-flex';
+        }
         var nameEl = document.getElementById('stationNameHeader');
         var ipEl = document.getElementById('stationIpHeader');
         var selectEl = document.getElementById('stationSelect');
@@ -1241,16 +1299,17 @@
     if (state.isBusy) return;
     state.isBusy = true;
     state.isNativeOperationActive = true;
+    window.showCopyScreen();
     showAlert('Activating Photocopier hardware... Please wait.', 'info');
 
     unlockDeviceTarget('COPY', function (success, data) {
       state.isBusy = false;
       if (success) {
         state.isNativeOperationActive = true;
-        state.inactivitySeconds = 60;
+        state.inactivitySeconds = 16;
         updateTimerText();
         window.showCopyScreen();
-        showAlert('✅ Hardware Ready! Press [HOME] on the physical panel now.', 'success');
+        showAlert('✅ Copy Ready! Switching automatically (or press [HOME] for instant access).', 'success');
       } else {
         state.isNativeOperationActive = false;
         var err = (data && data.message) ? data.message : 'Could not unlock photocopier hardware. Please try again.';
@@ -1263,16 +1322,17 @@
     if (state.isBusy) return;
     state.isBusy = true;
     state.isNativeOperationActive = true;
+    window.showUsbPrintScreen();
     showAlert('Activating USB Direct Print hardware... Please wait.', 'info');
 
     unlockDeviceTarget('USB', function (success, data) {
       state.isBusy = false;
       if (success) {
         state.isNativeOperationActive = true;
-        state.inactivitySeconds = 60;
+        state.inactivitySeconds = 16;
         updateTimerText();
         window.showUsbPrintScreen();
-        showAlert('✅ Hardware Ready! Press [HOME] on the physical panel now.', 'success');
+        showAlert('✅ USB Print Ready! Switching automatically (or press [HOME] for instant access).', 'success');
       } else {
         state.isNativeOperationActive = false;
         var err = (data && data.message) ? data.message : 'Could not unlock USB print hardware. Please try again.';
@@ -1285,20 +1345,21 @@
     if (state.isBusy) return;
     state.isBusy = true;
     state.isNativeOperationActive = true;
+    window.showScanScreen();
     showAlert('Activating Scanner hardware... Please wait.', 'info');
 
     unlockDeviceTarget('SCAN', function (success, data) {
       state.isBusy = false;
       if (success) {
         state.isNativeOperationActive = true;
-        state.inactivitySeconds = 60;
+        state.inactivitySeconds = 16;
         updateTimerText();
         window.showScanScreen();
         updateScanStationUI();
         if (typeof window.initScanStation === 'function') {
           window.initScanStation();
         }
-        showAlert('Scanner ready! Press [HOME] or [CLEAR] on panel', 'success');
+        showAlert('✅ Scanner Ready! Switching automatically (or press [HOME] for instant access).', 'success');
       } else {
         state.isNativeOperationActive = false;
         var err = (data && data.message) ? data.message : 'Could not unlock scanner hardware. Please try again.';
@@ -1944,6 +2005,8 @@
             state.isBusy = false;
             if (failCount > 0 && successCount === 0) {
               showAlert(lastErrorMsg || 'Print release failed. Please check printer.', 'error');
+              var tm = document.getElementById('traySelectModal');
+              if (tm) tm.style.display = 'block';
             } else if (failCount > 0) {
               showAlert(successCount + ' printed, ' + failCount + ' failed: ' + (lastErrorMsg || ''), 'warning');
             } else {
@@ -1958,6 +2021,14 @@
         });
       })(ids[i]);
     }
+  };
+
+  window.selectTrayAndPrint = function (trayCode) {
+    var ds = document.getElementById('drawerSelect');
+    if (ds) ds.value = trayCode;
+    var tm = document.getElementById('traySelectModal');
+    if (tm) tm.style.display = 'none';
+    window.releaseSelectedJobs();
   };
 
   /* ------------------------------------------------------------------ */
@@ -1998,9 +2069,33 @@
       updateTimerText();
 
       if (state.inactivitySeconds <= 0) {
-        stopInactivityTimer();
-        showAlert('Session timed out due to inactivity. Device locked.', 'error');
-        window.emergencyLockAndLogout('INACTIVITY_TIMEOUT');
+        if (state.isNativeOperationActive) {
+          var stationCode = (state.station && state.station.printerCode) ? state.station.printerCode : null;
+          var stationIp = (state.station && state.station.ipAddress) ? state.station.ipAddress : null;
+          state.inactivitySeconds = 15;
+          updateTimerText();
+          apiRequest('POST', '/api/station/heartbeat', {
+            printerCode: stationCode,
+            printerIp: stationIp,
+            checkBusy: 'true'
+          }, function (status, data) {
+            if (status === 200 && data && data.printerBusy) {
+              state.inactivitySeconds = 30;
+              updateTimerText();
+            } else if (status === 200 && data && data.authenticated === false) {
+              stopInactivityTimer();
+              window.emergencyLockAndLogout('HEARTBEAT_EXPIRED');
+            } else if (state.isNativeOperationActive) {
+              stopInactivityTimer();
+              showAlert('Session timed out due to inactivity. Device locked.', 'error');
+              window.emergencyLockAndLogout('INACTIVITY_TIMEOUT');
+            }
+          });
+        } else {
+          stopInactivityTimer();
+          showAlert('Session timed out due to inactivity. Device locked.', 'error');
+          window.emergencyLockAndLogout('INACTIVITY_TIMEOUT');
+        }
       }
     }, 1000);
   }
@@ -2014,7 +2109,7 @@
 
   function resetInactivityTimer() {
     if (state.currentUser) {
-      state.inactivitySeconds = 30;
+      state.inactivitySeconds = state.isNativeOperationActive ? 5 : 30;
       updateTimerText();
     }
   }

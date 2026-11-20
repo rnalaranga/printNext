@@ -50,6 +50,42 @@ public class ToshibaEwbService {
         return pendingLockPrinters.contains(printerIp.trim());
     }
 
+    /**
+     * Fast (~80ms) check of Toshiba Panel EnergySave / Sleep button state via CWS.
+     * Returns true if the physical MFP is currently in Energy Saver / Sleep mode.
+     */
+    public boolean isPrinterInEnergySave(String printerIp, String adminUsername, String adminPassword) {
+        String cleanIp = printerIp != null ? printerIp.trim() : "";
+        if (cleanIp.isEmpty()) return false;
+        String username = (adminUsername != null && !adminUsername.isBlank()) ? adminUsername.trim() : "admin";
+        String password = (adminPassword != null && !adminPassword.isBlank()) ? adminPassword.trim() : "123456";
+
+        Object lock = printerLocks.computeIfAbsent(cleanIp, k -> new Object());
+        synchronized (lock) {
+            try {
+                TopAccessSession session = getOrCreateSession(cleanIp, username, password);
+                String qPanel = "<DeviceInformationModel><GetValue><Panel><EnergySave/><EnergySaver/></Panel></GetValue></DeviceInformationModel>";
+                HttpRequest req = HttpRequest.newBuilder()
+                        .uri(URI.create("http://" + cleanIp + "/contentwebserver"))
+                        .timeout(Duration.ofSeconds(3))
+                        .header("Content-Type", "text/xml; charset=UTF-8")
+                        .header("csrfpId", session.sessionCookie() != null ? session.sessionCookie() : "")
+                        .POST(HttpRequest.BodyPublishers.ofString(qPanel))
+                        .build();
+                HttpResponse<String> resp = session.client().send(req, HttpResponse.BodyHandlers.ofString());
+                String body = resp.body() != null ? resp.body() : "";
+                if (body.contains("STATUS_AL_CWS_UNAUTHORIZED")) {
+                    sessionCache.remove(cleanIp);
+                    return false;
+                }
+                String lower = body.toLowerCase();
+                return lower.contains("<keypressed>true</keypressed>") || lower.contains("<sleephook>on</sleephook>");
+            } catch (Exception ex) {
+                return false;
+            }
+        }
+    }
+
     private TopAccessSession getOrCreateSession(String printerIp, String username, String password) throws Exception {
         TopAccessSession existing = sessionCache.get(printerIp);
         if (existing != null && (System.currentTimeMillis() - existing.createdAt()) < 15 * 60 * 1000) {
@@ -113,6 +149,9 @@ public class ToshibaEwbService {
                     "<SetValue>" +
                     "<EWBSettings>" +
                     "<History>false</History>" +
+                    "<DevelopMode>true</DevelopMode>" +
+                    "<DebugOut>true</DebugOut>" +
+                    "<PrintScan>true</PrintScan>" +
                     "<HomePage>" + escapeXml(targetUrl) + "</HomePage>" +
                     "<MDS>" +
                     "<BootUpURLForApp></BootUpURLForApp>" +
@@ -485,7 +524,7 @@ public class ToshibaEwbService {
                             "<Payload><path>Authentication/AuthenticationSettings/AuthenticatedTarget/copy</path><value>" + copyVal + "</value></Payload>" +
                             "<Payload><path>Authentication/AuthenticationSettings/AuthenticatedTarget/scan</path><value>" + scanVal + "</value></Payload>" +
                             "<Payload><path>Authentication/AuthenticationSettings/AuthenticatedTarget/fax</path><value>" + otherVal + "</value></Payload>" +
-                            "<Payload><path>Authentication/AuthenticationSettings/AuthenticatedTarget/print</path><value>false</value></Payload>" +
+                            "<Payload><path>Authentication/AuthenticationSettings/AuthenticatedTarget/print</path><value>" + otherVal + "</value></Payload>" +
                             "<Payload><path>Authentication/AuthenticationSettings/AuthenticatedTarget/list</path><value>" + otherVal + "</value></Payload>" +
                             "<Payload><path>Authentication/AuthenticationSettings/AuthenticatedTarget/userFunctions</path><value>" + otherVal + "</value></Payload>" +
                             "<Payload><path>Authentication/AuthenticationSettings/AuthenticatedTarget/EWB</path><value>false</value></Payload>" +
@@ -551,81 +590,12 @@ public class ToshibaEwbService {
 
         if (cleanIp.isEmpty()) return false;
 
-        Boolean currentRestriction = currentCopyRestrictionByPrinter.get(cleanIp);
-        String currentScreen = currentDefaultScreenByPrinter.get(cleanIp);
-        if (Boolean.FALSE.equals(currentRestriction) && screen.equalsIgnoreCase(currentScreen)) {
-            log.info("[TOSHIBA CWS] Combined unlock on {} already reached: copy=unlocked, screen={}. Instant return (0ms).", cleanIp, screen);
-            return true;
-        }
-
         Object lock = printerLocks.computeIfAbsent(cleanIp, k -> new Object());
         synchronized (lock) {
-            Boolean curRestWait = currentCopyRestrictionByPrinter.get(cleanIp);
-            String curScreenWait = currentDefaultScreenByPrinter.get(cleanIp);
-            if (Boolean.FALSE.equals(curRestWait) && screen.equalsIgnoreCase(curScreenWait)) {
-                return true;
-            }
-
-            for (int attempt = 0; attempt < 2; attempt++) {
-                try {
-                    TopAccessSession session = getOrCreateSession(cleanIp, username, password);
-                    String combinedXml = "<DeviceInformationModel>" +
-                            "<SetValue overrideDelta='false'>" +
-                            "<Payload><path>Authentication/AuthenticationSettings/openAccess</path><value>1</value></Payload>" +
-                            "<Payload><path>Authentication/AuthenticationSettings/functionwiseAuthentication</path><value>true</value></Payload>" +
-                            "<Payload><path>Authentication/AuthenticationSettings/allowGuestUser</path><value>true</value></Payload>" +
-                            "<Payload><path>Authentication/AuthenticationSettings/AuthenticationType/primaryLdapID</path><value>0</value></Payload>" +
-                            "<Payload><path>Authentication/AuthenticationSettings/CardAuthentication/primaryCardServerID</path><value>0</value></Payload>" +
-                            "<Payload><path>Authentication/AuthenticationSettings/CardAuthentication/autoRegistrationForCardAuth</path><value>false</value></Payload>" +
-                            "<Payload><path>Authentication/AuthenticationSettings/AuthenticatedTarget/copy</path><value>false</value></Payload>" +
-                            "<Payload><path>Authentication/AuthenticationSettings/AuthenticatedTarget/scan</path><value>false</value></Payload>" +
-                            "<Payload><path>Authentication/AuthenticationSettings/AuthenticatedTarget/fax</path><value>false</value></Payload>" +
-                            "<Payload><path>Authentication/AuthenticationSettings/AuthenticatedTarget/print</path><value>false</value></Payload>" +
-                            "<Payload><path>Authentication/AuthenticationSettings/AuthenticatedTarget/list</path><value>false</value></Payload>" +
-                            "<Payload><path>Authentication/AuthenticationSettings/AuthenticatedTarget/userFunctions</path><value>false</value></Payload>" +
-                            "<Payload><path>Authentication/AuthenticationSettings/AuthenticatedTarget/EWB</path><value>false</value></Payload>" +
-                            "</SetValue>" +
-                            "<Command>" +
-                            "<AuthSettings><commandNode>Authentication/AuthenticationSettings</commandNode></AuthSettings>" +
-                            "<Set><commandNode>Controller</commandNode><SetValue><Controller><Settings><UI><DefaultScreen>" + escapeXml(screen) + "</DefaultScreen></UI></Settings></Controller></SetValue></Set>" +
-                            "</Command>" +
-                            "</DeviceInformationModel>";
-
-                    HttpRequest req = HttpRequest.newBuilder()
-                            .uri(URI.create("http://" + cleanIp + "/contentwebserver"))
-                            .timeout(TIMEOUT)
-                            .header("Content-Type", "text/plain; charset=utf-8")
-                            .header("csrfpId", session.sessionCookie() != null ? session.sessionCookie() : "")
-                            .header("Cache-Control", "no-cache")
-                            .header("Pragma", "no-cache")
-                            .POST(HttpRequest.BodyPublishers.ofString(combinedXml))
-                            .build();
-
-                    HttpResponse<String> resp = session.client().send(req, HttpResponse.BodyHandlers.ofString());
-                    String body = resp.body() != null ? resp.body() : "";
-
-                    if (body.contains("STATUS_AL_CWS_UNAUTHORIZED")) {
-                        sessionCache.remove(cleanIp);
-                        continue;
-                    }
-
-                    boolean ok = body.contains("STATUS_OK") || body.contains("Normal");
-                    log.info("[TOSHIBA CWS] Combined unlock & screen={} on {} : {} (attempt={})", screen, cleanIp, ok, attempt);
-
-                    if (ok) {
-                        currentCopyRestrictionByPrinter.put(cleanIp, false);
-                        currentDefaultScreenByPrinter.put(cleanIp, screen);
-                        pendingLockPrinters.remove(cleanIp);
-                        return true;
-                    }
-                } catch (Exception e) {
-                    sessionCache.remove(cleanIp);
-                    if (attempt == 1) {
-                        log.warn("[TOSHIBA CWS] Combined unlock on {} failed: {}", cleanIp, e.getMessage());
-                    }
-                }
-            }
-            return false;
+            boolean unlocked = setCopyRestriction(cleanIp, username, password, false, true);
+            boolean screenSet = setDefaultScreen(cleanIp, username, password, screen, true);
+            log.info("[TOSHIBA CWS] Unlock & DefaultScreen={} on {} -> unlocked={}, screenSet={}", screen, cleanIp, unlocked, screenSet);
+            return unlocked;
         }
     }
 
