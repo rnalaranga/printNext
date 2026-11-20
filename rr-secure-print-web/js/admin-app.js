@@ -7681,3 +7681,884 @@
   };
 
 })();
+
+
+// =========================================================================
+// PRINTER PROFILE & MAINTENANCE REPORTS (REPAIR FREQUENCY & TONER REPORTS)
+// =========================================================================
+window.switchMaintSubTab = function(tab) {
+  var logSec = document.getElementById('maintLogSection');
+  var repSec = document.getElementById('maintReportsSection');
+  var btnLog = document.getElementById('btnMaintTabLog');
+  var btnRep = document.getElementById('btnMaintTabReports');
+  if (tab === 'reports') {
+    if (logSec) logSec.style.display = 'none';
+    if (repSec) repSec.style.display = '';
+    if (btnLog) { btnLog.classList.remove('btn-primary'); btnLog.classList.add('btn-outline-primary'); }
+    if (btnRep) { btnRep.classList.remove('btn-outline-primary'); btnRep.classList.add('btn-primary'); }
+    window.loadMaintenanceReports();
+  } else {
+    if (logSec) logSec.style.display = '';
+    if (repSec) repSec.style.display = 'none';
+    if (btnLog) { btnLog.classList.remove('btn-outline-primary'); btnLog.classList.add('btn-primary'); }
+    if (btnRep) { btnRep.classList.remove('btn-primary'); btnRep.classList.add('btn-outline-primary'); }
+  }
+};
+
+window.loadMaintenanceReports = function() {
+  var from = (document.getElementById('repMaintFrom') || {}).value || '';
+  var to = (document.getElementById('repMaintTo') || {}).value || '';
+  var dept = (document.getElementById('repMaintDept') || {}).value || '';
+  var printer = (document.getElementById('repMaintPrinter') || {}).value || '';
+
+  var qs = [];
+  if (from) qs.push('from=' + encodeURIComponent(from));
+  if (to) qs.push('to=' + encodeURIComponent(to));
+  if (dept) qs.push('department=' + encodeURIComponent(dept));
+  if (printer) qs.push('printerCode=' + encodeURIComponent(printer));
+
+  var url = '/api/admin/maintenance/reports' + (qs.length ? '?' + qs.join('&') : '');
+  fetch(url, { headers: window.getAuthHeaders ? window.getAuthHeaders() : {} })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      var s = data.summary || {};
+      var setTxt = function(id, v) { var el = document.getElementById(id); if (el) el.textContent = v; };
+      setTxt('repMaintTotalRepairs', s.totalRepairs || 0);
+      setTxt('repMaintTotalToners', s.totalToners || 0);
+      setTxt('repMaintTotalCost', 'LKR ' + Number(s.totalCostLkr || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
+      setTxt('repMaintAvgTime', (s.avgRepairDurationMinutes || 0) + ' min');
+
+      // Populate department & printer dropdowns if empty
+      var deptSel = document.getElementById('repMaintDept');
+      if (deptSel && deptSel.options.length <= 1 && Array.isArray(data.departmentWise)) {
+        data.departmentWise.forEach(function(d) {
+          var opt = document.createElement('option');
+          opt.value = d.department;
+          opt.textContent = d.department;
+          deptSel.appendChild(opt);
+        });
+      }
+      var prnSel = document.getElementById('repMaintPrinter');
+      if (prnSel && prnSel.options.length <= 1 && Array.isArray(data.printerWise)) {
+        data.printerWise.forEach(function(p) {
+          var opt = document.createElement('option');
+          opt.value = p.printerCode;
+          opt.textContent = p.printerCode + ' (' + (p.printerName || p.printerCode) + ')';
+          prnSel.appendChild(opt);
+        });
+      }
+
+      var esc = window.escapeHtml || function(x) { return String(x == null ? '' : x); };
+
+      // Printer-wise table
+      var pBody = document.getElementById('repMaintPrinterBody');
+      if (pBody) {
+        var pList = data.printerWise || [];
+        if (!pList.length) {
+          pBody.innerHTML = '<tr><td colspan="10" class="text-center py-3 text-muted">No maintenance records match these filters.</td></tr>';
+        } else {
+          pBody.innerHTML = pList.map(function(p) {
+            return '<tr>' +
+              '<td><a href="javascript:void(0)" class="fw-bold text-primary text-decoration-none" onclick="window.openPrinterProfile(\'' + esc(p.printerCode) + '\')">' + esc(p.printerCode) + '</a><div class="small text-muted">' + esc(p.printerName) + '</div></td>' +
+              '<td>' + esc(p.department) + '</td>' +
+              '<td class="small">' + esc(p.model) + '</td>' +
+              '<td><span class="badge bg-danger-subtle text-danger fw-bold">' + (p.repairCount || 0) + '</span></td>' +
+              '<td><span class="badge bg-primary-subtle text-primary fw-bold">' + (p.tonerCount || 0) + '</span></td>' +
+              '<td>' + (p.otherServiceCount || 0) + '</td>' +
+              '<td><span class="badge bg-light text-dark border">' + esc(p.repairFrequency || '-') + '</span></td>' +
+              '<td>' + (p.totalDurationMinutes || 0) + ' min</td>' +
+              '<td class="fw-semibold">' + Number(p.totalCostLkr || 0).toLocaleString('en-US', { minimumFractionDigits: 2 }) + '</td>' +
+              '<td class="small">' + esc(p.lastServiceDate || '-') + '</td>' +
+              '</tr>';
+          }).join('');
+        }
+      }
+
+      // Department-wise table
+      var dBody = document.getElementById('repMaintDeptBody');
+      if (dBody) {
+        var dList = data.departmentWise || [];
+        if (!dList.length) {
+          dBody.innerHTML = '<tr><td colspan="6" class="text-center py-3 text-muted">No department data.</td></tr>';
+        } else {
+          dBody.innerHTML = dList.map(function(d) {
+            return '<tr>' +
+              '<td class="fw-bold">' + esc(d.department) + '</td>' +
+              '<td>' + (d.printerCount || 0) + '</td>' +
+              '<td><span class="badge bg-danger-subtle text-danger fw-bold">' + (d.repairCount || 0) + '</span></td>' +
+              '<td><span class="badge bg-primary-subtle text-primary fw-bold">' + (d.tonerCount || 0) + '</span></td>' +
+              '<td>' + (d.totalDurationMinutes || 0) + ' min</td>' +
+              '<td class="fw-semibold">' + Number(d.totalCostLkr || 0).toLocaleString('en-US', { minimumFractionDigits: 2 }) + '</td>' +
+              '</tr>';
+          }).join('');
+        }
+      }
+
+      // Toner breakdown table
+      var tBody = document.getElementById('repMaintTonerBody');
+      if (tBody) {
+        var tList = data.tonerBreakdown || [];
+        if (!tList.length) {
+          tBody.innerHTML = '<tr><td colspan="8" class="text-center py-3 text-muted">No toner replacements in this period.</td></tr>';
+        } else {
+          tBody.innerHTML = tList.map(function(t) {
+            return '<tr>' +
+              '<td><a href="javascript:void(0)" class="fw-bold text-primary text-decoration-none" onclick="window.openPrinterProfile(\'' + esc(t.printerCode) + '\')">' + esc(t.printerCode) + '</a></td>' +
+              '<td class="small">' + esc(t.department) + '</td>' +
+              '<td>' + (t.blackCount || 0) + '</td>' +
+              '<td>' + (t.cyanCount || 0) + '</td>' +
+              '<td>' + (t.magentaCount || 0) + '</td>' +
+              '<td>' + (t.yellowCount || 0) + '</td>' +
+              '<td class="fw-bold">' + (t.totalToners || 0) + '</td>' +
+              '<td class="fw-semibold">' + Number(t.totalTonerCostLkr || 0).toLocaleString('en-US', { minimumFractionDigits: 2 }) + '</td>' +
+              '</tr>';
+          }).join('');
+        }
+      }
+    })
+    .catch(function(err) {
+      console.error('loadMaintenanceReports error:', err);
+    });
+};
+
+window.openPrinterProfile = function(printerCode) {
+  if (!printerCode) return;
+  window._currentProfilePrinterCode = printerCode;
+  var modalEl = document.getElementById('printerProfileModal');
+  if (!modalEl) return;
+  var modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+  document.getElementById('ppTitle').textContent = 'Printer Profile: ' + printerCode;
+  document.getElementById('ppSubtitle').textContent = 'Loading counters, repairs & history...';
+  document.getElementById('ppMetaCards').innerHTML = '';
+  document.getElementById('ppCounterCards').innerHTML = '';
+  document.getElementById('ppMaintCards').innerHTML = '';
+  document.getElementById('ppHistoryBody').innerHTML = '<tr><td colspan="9" class="text-center py-3 text-muted">Loading...</td></tr>';
+  modal.show();
+
+  fetch('/api/admin/maintenance/printer-profile/' + encodeURIComponent(printerCode), {
+    headers: window.getAuthHeaders ? window.getAuthHeaders() : {}
+  })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      var esc = window.escapeHtml || function(x) { return String(x == null ? '' : x); };
+      var p = data.printer || {};
+      var c = data.counters || {};
+      var m = data.maintenanceSummary || {};
+
+      document.getElementById('ppTitle').textContent = (p.printerCode || printerCode) + ' — ' + (p.name || '');
+      document.getElementById('ppSubtitle').textContent = (p.model || '') + ' • ' + (p.department || 'Unassigned') + ' • IP: ' + (p.ipAddress || '-') + ' • Location: ' + (p.location || '-');
+
+      var card = function(label, val, sub) {
+        return '<div class="col-6 col-md-3"><div class="rh-kpi-card"><div class="rh-kpi-label">' + label + '</div><div class="rh-kpi-val" style="font-size:1.15rem;">' + val + '</div>' + (sub ? '<div class="rh-kpi-sub">' + sub + '</div>' : '') + '</div></div>';
+      };
+
+      document.getElementById('ppMetaCards').innerHTML =
+        card('Status', esc(p.status || 'UNKNOWN'), p.colorSupported ? 'Color + B&W' : 'Monochrome') +
+        card('Department', esc(p.department || 'Unassigned'), esc(p.location || '-')) +
+        card('Duplex / EWB', p.duplexSupported ? 'Duplex Yes' : 'Simplex', p.ewbConfigured ? 'EWB Configured' : 'EWB Pending') +
+        card('Latest Odometer', Number(c.latestOdometerPages || 0).toLocaleString() + ' pgs', 'From service logs');
+
+      document.getElementById('ppCounterCards').innerHTML =
+        card('Current Counter', Number(c.currentCounterPages || 0).toLocaleString() + ' pgs', 'Since reset (offset: ' + Number(c.counterOffsetPages || 0).toLocaleString() + ')') +
+        card('Actual Lifetime', Number(c.totalVolumePages || 0).toLocaleString() + ' pgs', 'Print + Copy + Scan') +
+        card('Print Pages', Number(c.printPages || 0).toLocaleString(), (c.printJobs || 0) + ' jobs (' + (c.colorPages || 0) + ' color / ' + (c.bwPages || 0) + ' B&W)') +
+        card('Copy / Scan', Number(c.copyPages || 0).toLocaleString() + ' / ' + Number(c.scanPages || 0).toLocaleString(), (c.copyJobs || 0) + ' copy, ' + (c.scanJobs || 0) + ' scan');
+
+      document.getElementById('ppMaintCards').innerHTML =
+        card('Total Repairs', m.totalRepairs || 0, (m.openTickets || 0) + ' open / in-progress') +
+        card('Toner Replacements', m.totalTonerReplacements || 0, 'All cartridges') +
+        card('Total Service Time', (m.totalDurationMinutes || 0) + ' min', 'Last: ' + esc(m.lastServiceDate || 'Never')) +
+        card('Total Maintenance Cost', 'LKR ' + Number(m.totalCostLkr || 0).toLocaleString('en-US', { minimumFractionDigits: 2 }), (m.totalRecords || 0) + ' total records');
+
+      var hist = data.history || [];
+      var hBody = document.getElementById('ppHistoryBody');
+      if (!hist.length) {
+        hBody.innerHTML = '<tr><td colspan="9" class="text-center py-3 text-muted">No maintenance or toner history for this printer yet.</td></tr>';
+      } else {
+        hBody.innerHTML = hist.map(function(r) {
+          var partOrColor = r.maintenanceType === 'TONER_REPLACEMENT' ? ('Toner: ' + (r.tonerColor || 'BLACK')) : (r.partReplaced || '-');
+          return '<tr>' +
+            '<td class="small">' + esc(r.serviceDate || '-') + '</td>' +
+            '<td><span class="badge bg-light text-dark border">' + esc(r.maintenanceType) + '</span></td>' +
+            '<td class="small">' + esc(partOrColor) + '</td>' +
+            '<td class="small">' + Number(r.odometerPages || 0).toLocaleString() + '</td>' +
+            '<td class="small">' + esc(r.technician || '-') + '</td>' +
+            '<td class="small">' + (r.durationMinutes || 0) + ' min</td>' +
+            '<td class="small fw-semibold">' + Number(r.costLkr || 0).toLocaleString('en-US', { minimumFractionDigits: 2 }) + '</td>' +
+            '<td><span class="badge ' + (r.status === 'COMPLETED' ? 'bg-success-subtle text-success' : 'bg-warning-subtle text-warning') + '">' + esc(r.status) + '</span></td>' +
+            '<td class="small text-muted">' + esc(r.notes || '') + '</td>' +
+            '</tr>';
+        }).join('');
+      }
+    })
+    .catch(function(err) {
+      console.error('openPrinterProfile error:', err);
+      document.getElementById('ppSubtitle').textContent = 'Failed to load printer profile.';
+    });
+};
+
+window.resetPrinterCounter = function(code) {
+  var pCode = code || window._currentProfilePrinterCode;
+  if (!pCode) return;
+  if (!confirm('Reset counter to 0 for printer ' + pCode + '? The current actual counter will be saved as the new baseline.')) return;
+  fetch('/api/admin/maintenance/reset-counter/' + encodeURIComponent(pCode), {
+    method: 'POST',
+    headers: window.getAuthHeaders ? window.getAuthHeaders() : {}
+  })
+    .then(function(r) { return r.json(); })
+    .then(function(res) {
+      if (window.showToast) window.showToast('Counter reset to 0 for ' + pCode + ' (baseline: ' + (res.counterOffsetPages || 0) + ')', 'success');
+      if (window._currentProfilePrinterCode === pCode) {
+        window.openPrinterProfile(pCode);
+      }
+    })
+    .catch(function(err) {
+      console.error('resetPrinterCounter error:', err);
+      if (window.showToast) window.showToast('Failed to reset counter', 'danger');
+    });
+};
+
+window.resetAllPrinterCounters = function() {
+  if (!confirm('Reset counters to 0 for ALL printers? Each printer\'s current actual counter will be saved as its new baseline.')) return;
+  fetch('/api/admin/maintenance/reset-all-counters', {
+    method: 'POST',
+    headers: window.getAuthHeaders ? window.getAuthHeaders() : {}
+  })
+    .then(function(r) { return r.json(); })
+    .then(function(res) {
+      if (window.showToast) window.showToast('Reset counters to 0 for ' + (res.resetCount || 0) + ' printers.', 'success');
+    })
+    .catch(function(err) {
+      console.error('resetAllPrinterCounters error:', err);
+      if (window.showToast) window.showToast('Failed to reset all counters', 'danger');
+    });
+};
+
+window.switchAdvMaintTab = function(tab) {
+  var panels = {
+    overview: 'repPanelOverview',
+    counter: 'repPanelCounter',
+    reliability: 'repPanelReliability',
+    partlife: 'repPanelPartLife',
+    techpm: 'repPanelTechPm',
+    tcoexec: 'repPanelTcoExec',
+    sapmaint: 'repPanelSapMaint'
+  };
+  var btns = {
+    overview: 'btnAdvTabOverview',
+    counter: 'btnAdvTabCounter',
+    reliability: 'btnAdvTabReliability',
+    partlife: 'btnAdvTabPartLife',
+    techpm: 'btnAdvTabTechPm',
+    tcoexec: 'btnAdvTabTcoExec',
+    sapmaint: 'btnAdvTabSapMaint'
+  };
+  Object.keys(panels).forEach(function(k) {
+    var p = document.getElementById(panels[k]);
+    var b = document.getElementById(btns[k]);
+    if (p) p.style.display = (k === tab) ? '' : 'none';
+    if (b) {
+      if (k === tab) b.classList.add('active');
+      else b.classList.remove('active');
+    }
+  });
+  if (tab === 'sapmaint' && typeof window.sapMaintOnSourceChange === 'function') {
+    var cp = document.getElementById('sapMaintColPicker');
+    if (cp && !cp.children.length) window.sapMaintOnSourceChange();
+  }
+};
+
+window.loadAdvancedMaintenanceReports = function() {
+  var from = (document.getElementById('repMaintFrom') || {}).value || '';
+  var to = (document.getElementById('repMaintTo') || {}).value || '';
+  var dept = (document.getElementById('repMaintDept') || {}).value || '';
+  var printer = (document.getElementById('repMaintPrinter') || {}).value || '';
+
+  var qs = [];
+  if (from) qs.push('from=' + encodeURIComponent(from));
+  if (to) qs.push('to=' + encodeURIComponent(to));
+  if (dept) qs.push('department=' + encodeURIComponent(dept));
+  if (printer) qs.push('printerCode=' + encodeURIComponent(printer));
+
+  var url = '/api/admin/maintenance/advanced-reports' + (qs.length ? '?' + qs.join('&') : '');
+  fetch(url, { headers: window.getAuthHeaders ? window.getAuthHeaders() : {} })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      var esc = window.escapeHtml || function(x) { return String(x == null ? '' : x); };
+      var fmt = function(n) { return Number(n || 0).toLocaleString(); };
+      var fmtLkr = function(n) { return Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); };
+
+      // 1. Counter Delta
+      var cdBody = document.getElementById('repCounterDeltaBody');
+      if (cdBody) {
+        var cdList = data.counterDeltaReport || [];
+        cdBody.innerHTML = !cdList.length
+          ? '<tr><td colspan="10" class="text-center py-3 text-muted">No counter data.</td></tr>'
+          : cdList.map(function(r) {
+              return '<tr>' +
+                '<td><a href="javascript:void(0)" class="fw-bold text-primary text-decoration-none" onclick="window.openPrinterProfile(\'' + esc(r.printerCode) + '\')">' + esc(r.printerCode) + '</a><div class="small text-muted">' + esc(r.printerName) + '</div></td>' +
+                '<td class="small">' + esc(r.department) + '</td>' +
+                '<td>' + fmt(r.printBwPages) + '</td>' +
+                '<td>' + fmt(r.printColorPages) + '</td>' +
+                '<td>' + fmt(r.copyPages) + '</td>' +
+                '<td>' + fmt(r.scanPages) + '</td>' +
+                '<td class="fw-bold">' + fmt(r.periodTotalPages) + '</td>' +
+                '<td><span class="badge bg-primary-subtle text-primary fw-bold">' + fmt(r.currentCounterSinceReset) + '</span></td>' +
+                '<td class="small text-muted">' + fmt(r.counterOffsetPages) + '</td>' +
+                '<td class="small fw-semibold">' + fmt(r.lifetimeActualPages) + '</td>' +
+                '</tr>';
+            }).join('');
+      }
+
+      // 2. Counter Reset History
+      var crBody = document.getElementById('repCounterResetBody');
+      if (crBody) {
+        var crList = data.counterResetHistory || [];
+        crBody.innerHTML = !crList.length
+          ? '<tr><td colspan="7" class="text-center py-3 text-muted">No counter resets recorded yet.</td></tr>'
+          : crList.map(function(r) {
+              var dt = r.resetAt ? String(r.resetAt).replace('T', ' ').substring(0, 19) : '-';
+              return '<tr>' +
+                '<td class="small">' + esc(dt) + '</td>' +
+                '<td class="fw-bold">' + esc(r.printerCode) + '</td>' +
+                '<td class="small">' + esc(r.department) + '</td>' +
+                '<td>' + fmt(r.previousOffsetPages) + '</td>' +
+                '<td>' + fmt(r.actualPagesAtReset) + '</td>' +
+                '<td class="fw-bold text-success">+' + fmt(r.deltaSinceLastReset) + '</td>' +
+                '<td class="small">' + esc(r.resetBy) + '</td>' +
+                '</tr>';
+            }).join('');
+      }
+
+      // 3. Reliability & TCO
+      var relBody = document.getElementById('repReliabilityBody');
+      if (relBody) {
+        var relList = data.reliabilityScorecard || [];
+        relBody.innerHTML = !relList.length
+          ? '<tr><td colspan="11" class="text-center py-3 text-muted">No reliability data.</td></tr>'
+          : relList.map(function(r) {
+              var badge = r.isHighDrain
+                ? '<span class="badge bg-danger">High Drain</span>'
+                : '<span class="badge bg-success-subtle text-success">Healthy</span>';
+              return '<tr>' +
+                '<td><a href="javascript:void(0)" class="fw-bold text-primary text-decoration-none" onclick="window.openPrinterProfile(\'' + esc(r.printerCode) + '\')">' + esc(r.printerCode) + '</a></td>' +
+                '<td class="small">' + esc(r.department) + '</td>' +
+                '<td>' + (r.repairCount || 0) + '</td>' +
+                '<td>' + (r.mtbfDays ? r.mtbfDays + ' d' : '-') + '</td>' +
+                '<td>' + (r.mtbfPages ? fmt(r.mtbfPages) : '-') + '</td>' +
+                '<td>' + (r.mttrMinutes || 0) + ' min</td>' +
+                '<td>' + (r.slaBreaches > 0 ? '<span class="badge bg-warning text-dark">' + r.slaBreaches + '</span>' : '0') + '</td>' +
+                '<td class="fw-semibold">' + (r.uptimePct || 100) + '%</td>' +
+                '<td class="fw-semibold">' + fmtLkr(r.tcoLkr) + '</td>' +
+                '<td>' + fmtLkr(r.costPerPageLkr) + '</td>' +
+                '<td>' + badge + '</td>' +
+                '</tr>';
+            }).join('');
+      }
+
+      // 4. Part Life & Toner Yield
+      var plBody = document.getElementById('repPartLifeBody');
+      if (plBody) {
+        var plList = data.partLifeReport || [];
+        plBody.innerHTML = !plList.length
+          ? '<tr><td colspan="7" class="text-center py-3 text-muted">No part or toner replacement history yet.</td></tr>'
+          : plList.map(function(r) {
+              return '<tr>' +
+                '<td><a href="javascript:void(0)" class="fw-bold text-primary text-decoration-none" onclick="window.openPrinterProfile(\'' + esc(r.printerCode) + '\')">' + esc(r.printerCode) + '</a></td>' +
+                '<td class="small">' + esc(r.department) + '</td>' +
+                '<td class="fw-semibold">' + esc(r.itemType) + '</td>' +
+                '<td>' + (r.replacements || 0) + '</td>' +
+                '<td>' + (r.avgPagesPerReplacement ? fmt(r.avgPagesPerReplacement) + ' pgs' : '-') + '</td>' +
+                '<td class="small">' + fmt(r.lastOdometerPages) + '</td>' +
+                '<td class="fw-semibold">' + fmtLkr(r.totalCostLkr) + '</td>' +
+                '</tr>';
+            }).join('');
+      }
+
+      // 5. Technician Scorecard
+      var tBody = document.getElementById('repTechScoreBody');
+      if (tBody) {
+        var tList = data.technicianScorecard || [];
+        tBody.innerHTML = !tList.length
+          ? '<tr><td colspan="6" class="text-center py-3 text-muted">No technician records.</td></tr>'
+          : tList.map(function(r) {
+              return '<tr>' +
+                '<td class="fw-bold">' + esc(r.technician) + '</td>' +
+                '<td>' + (r.totalTickets || 0) + '</td>' +
+                '<td class="text-success fw-semibold">' + (r.completedTickets || 0) + '</td>' +
+                '<td>' + (r.openTickets || 0) + '</td>' +
+                '<td>' + (r.avgDurationMinutes || 0) + ' min</td>' +
+                '<td class="fw-semibold">' + fmtLkr(r.totalCostLkr) + '</td>' +
+                '</tr>';
+            }).join('');
+      }
+
+      // 6. PM Schedule
+      var pmBody = document.getElementById('repPmScheduleBody');
+      if (pmBody) {
+        var pmList = data.pmScheduleReport || [];
+        pmBody.innerHTML = !pmList.length
+          ? '<tr><td colspan="7" class="text-center py-3 text-muted">No upcoming or overdue PM schedules.</td></tr>'
+          : pmList.map(function(r) {
+              var stBadge = r.pmStatus === 'OVERDUE'
+                ? '<span class="badge bg-danger">OVERDUE</span>'
+                : (r.pmStatus === 'DUE_SOON' ? '<span class="badge bg-warning text-dark">DUE SOON</span>' : '<span class="badge bg-info-subtle text-info">SCHEDULED</span>');
+              return '<tr>' +
+                '<td><a href="javascript:void(0)" class="fw-bold text-primary text-decoration-none" onclick="window.openPrinterProfile(\'' + esc(r.printerCode) + '\')">' + esc(r.printerCode) + '</a></td>' +
+                '<td class="small">' + esc(r.department) + '</td>' +
+                '<td class="small">' + esc(r.maintenanceType) + '</td>' +
+                '<td class="small">' + esc(r.lastServiceDate) + '</td>' +
+                '<td class="fw-semibold">' + esc(r.nextServiceDate) + '</td>' +
+                '<td>' + r.daysRemaining + ' d</td>' +
+                '<td>' + stBadge + '</td>' +
+                '</tr>';
+            }).join('');
+      }
+      // 7. Phase 3: Toner Burn-Rate & Forecast
+      var tbBody = document.getElementById('repTonerBurnBody');
+      if (tbBody) {
+        var tbList = data.tonerBurnRateForecast || [];
+        tbBody.innerHTML = !tbList.length
+          ? '<tr><td colspan="11" class="text-center py-3 text-muted">No toner replacement history yet.</td></tr>'
+          : tbList.map(function(r) {
+              var alBadge = r.yieldAlert === 'LOW_YIELD'
+                ? '<span class="badge bg-danger">LOW YIELD</span>'
+                : (r.yieldAlert === 'DUE_SOON' ? '<span class="badge bg-warning text-dark">DUE SOON</span>' : '<span class="badge bg-success-subtle text-success">NORMAL</span>');
+              return '<tr>' +
+                '<td><a href="javascript:void(0)" class="fw-bold text-primary text-decoration-none" onclick="window.openPrinterProfile(\'' + esc(r.printerCode) + '\')">' + esc(r.printerCode) + '</a></td>' +
+                '<td class="small">' + esc(r.department) + '</td>' +
+                '<td><span class="badge bg-light text-dark border">' + esc(r.tonerColor) + '</span></td>' +
+                '<td>' + (r.replacementsCount || 0) + '</td>' +
+                '<td>' + (r.avgDaysBetween ? r.avgDaysBetween + ' d' : '-') + '</td>' +
+                '<td>' + (r.avgPagesPerCartridge ? fmt(r.avgPagesPerCartridge) : '-') + '</td>' +
+                '<td class="small text-muted">' + fmt(r.ratedYieldPages) + '</td>' +
+                '<td class="fw-semibold">' + (r.yieldEfficiencyPct ? r.yieldEfficiencyPct + '%' : '-') + '</td>' +
+                '<td class="small">' + esc(r.lastReplacedDate) + '</td>' +
+                '<td class="small fw-semibold">' + esc(r.predictedNextDate) + (r.daysUntilEmpty != null ? ' (' + r.daysUntilEmpty + 'd)' : '') + '</td>' +
+                '<td>' + alBadge + '</td>' +
+                '</tr>';
+            }).join('');
+      }
+
+      // 8. Phase 4: Department TCO Rollup
+      var dtBody = document.getElementById('repDeptTcoBody');
+      if (dtBody) {
+        var dtList = data.departmentTcoReport || [];
+        dtBody.innerHTML = !dtList.length
+          ? '<tr><td colspan="8" class="text-center py-3 text-muted">No department TCO data.</td></tr>'
+          : dtList.map(function(r) {
+              return '<tr>' +
+                '<td class="fw-bold">' + esc(r.department) + '</td>' +
+                '<td>' + (r.printerCount || 0) + '</td>' +
+                '<td>' + fmt(r.lifetimePages) + '</td>' +
+                '<td>' + fmtLkr(r.repairCostLkr) + '</td>' +
+                '<td>' + fmtLkr(r.tonerCostLkr) + '</td>' +
+                '<td class="fw-bold">' + fmtLkr(r.totalTcoLkr) + '</td>' +
+                '<td>' + fmtLkr(r.costPerPageLkr) + '</td>' +
+                '<td>' + (r.highDrainCount > 0 ? '<span class="badge bg-danger">' + r.highDrainCount + '</span>' : '0') + '</td>' +
+                '</tr>';
+            }).join('');
+      }
+
+      // 9. Phase 4: Executive Replace vs Repair Decision Matrix
+      var rmBody = document.getElementById('repReplaceMatrixBody');
+      if (rmBody) {
+        var rmList = data.replaceVsRepairMatrix || [];
+        rmBody.innerHTML = !rmList.length
+          ? '<tr><td colspan="11" class="text-center py-3 text-muted">No printer TCO data.</td></tr>'
+          : rmList.map(function(r) {
+              var recBadge = r.recommendation === 'REPLACE_RECOMMENDED'
+                ? '<span class="badge bg-danger">REPLACE RECOMMENDED</span>'
+                : (r.recommendation === 'MONITOR_CLOSELY' ? '<span class="badge bg-warning text-dark">MONITOR CLOSELY</span>' : '<span class="badge bg-success-subtle text-success">KEEP HEALTHY</span>');
+              var scoreColor = r.healthScore < 50 ? 'text-danger' : (r.healthScore < 75 ? 'text-warning' : 'text-success');
+              return '<tr>' +
+                '<td><a href="javascript:void(0)" class="fw-bold text-primary text-decoration-none" onclick="window.openPrinterProfile(\'' + esc(r.printerCode) + '\')">' + esc(r.printerCode) + '</a></td>' +
+                '<td class="small">' + esc(r.department) + '</td>' +
+                '<td class="small">' + esc(r.model) + '</td>' +
+                '<td>' + fmt(r.lifetimePages) + '</td>' +
+                '<td>' + (r.repairCount || 0) + '</td>' +
+                '<td>' + fmtLkr(r.repairCostLkr) + '</td>' +
+                '<td>' + fmtLkr(r.tonerCostLkr) + '</td>' +
+                '<td class="fw-bold">' + fmtLkr(r.totalTcoLkr) + '</td>' +
+                '<td>' + fmtLkr(r.costPerPageLkr) + '</td>' +
+                '<td class="fw-bold ' + scoreColor + '">' + r.healthScore + '/100</td>' +
+                '<td>' + recBadge + '</td>' +
+                '</tr>';
+            }).join('');
+      }
+      if (typeof window.renderMaintVisualCharts === 'function') window.renderMaintVisualCharts(data);
+    })
+    .catch(function(err) {
+      console.error('loadAdvancedMaintenanceReports error:', err);
+    });
+};
+
+(function() {
+  var origLoadMaintRep = window.loadMaintenanceReports;
+  window.loadMaintenanceReports = function() {
+    if (typeof origLoadMaintRep === 'function') origLoadMaintRep();
+    window.loadAdvancedMaintenanceReports();
+  };
+})();
+
+window.exportExecutiveMaintExcel = function() {
+  var from = (document.getElementById('repMaintFrom') || {}).value || '';
+  var to = (document.getElementById('repMaintTo') || {}).value || '';
+  var dept = (document.getElementById('repMaintDept') || {}).value || '';
+  var printer = (document.getElementById('repMaintPrinter') || {}).value || '';
+  var qs = [];
+  if (from) qs.push('from=' + encodeURIComponent(from));
+  if (to) qs.push('to=' + encodeURIComponent(to));
+  if (dept) qs.push('department=' + encodeURIComponent(dept));
+  if (printer) qs.push('printerCode=' + encodeURIComponent(printer));
+  var url = '/api/admin/maintenance/export-executive-excel' + (qs.length ? '?' + qs.join('&') : '');
+  fetch(url, { headers: window.getAuthHeaders ? window.getAuthHeaders() : {} })
+    .then(function(r) { return r.blob(); })
+    .then(function(blob) {
+      var a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'nexPrint_executive_maintenance_tco.xlsx';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+    })
+    .catch(function(err) {
+      console.error('exportExecutiveMaintExcel error:', err);
+      if (window.showToast) window.showToast('Failed to export executive Excel', 'danger');
+    });
+};
+
+window.emailExecutiveMaintReport = function() {
+  var email = prompt('Enter recipient email address for the 6-Sheet Executive Maintenance & TCO Report:');
+  if (!email || !email.trim()) return;
+  var payload = {
+    email: email.trim(),
+    from: (document.getElementById('repMaintFrom') || {}).value || '',
+    to: (document.getElementById('repMaintTo') || {}).value || '',
+    department: (document.getElementById('repMaintDept') || {}).value || '',
+    printerCode: (document.getElementById('repMaintPrinter') || {}).value || ''
+  };
+  var hdrs = Object.assign({ 'Content-Type': 'application/json' }, window.getAuthHeaders ? window.getAuthHeaders() : {});
+  fetch('/api/admin/maintenance/email-executive-report', {
+    method: 'POST',
+    headers: hdrs,
+    body: JSON.stringify(payload)
+  })
+    .then(function(r) { return r.json(); })
+    .then(function(res) {
+      if (window.showToast) window.showToast(res.message || (res.success ? 'Executive report emailed!' : 'Email failed'), res.success ? 'success' : 'danger');
+    })
+    .catch(function(err) {
+      console.error('emailExecutiveMaintReport error:', err);
+      if (window.showToast) window.showToast('Failed to email report', 'danger');
+    });
+};
+
+window.renderMaintVisualCharts = function(data) {
+  var esc = window.escapeHtml || function(x) { return String(x == null ? '' : x); };
+
+  // 1. Department TCO Horizontal Stacked Bars (Repairs vs Toners)
+  var tcoEl = document.getElementById('chartDeptTco');
+  if (tcoEl) {
+    var dList = data.departmentTcoReport || [];
+    if (!dList.length) {
+      tcoEl.innerHTML = '<div class="text-muted small py-3 text-center">No department TCO data yet.</div>';
+    } else {
+      var maxTco = Math.max(1, Math.max.apply(null, dList.map(function(d) { return d.totalTcoLkr || 0; })));
+      tcoEl.innerHTML = dList.slice(0, 6).map(function(d) {
+        var repPct = Math.round(((d.repairCostLkr || 0) / maxTco) * 100);
+        var tonPct = Math.round(((d.tonerCostLkr || 0) / maxTco) * 100);
+        return '<div class="mb-2">' +
+          '<div class="d-flex justify-content-between small mb-1"><span class="fw-semibold">' + esc(d.department) + '</span><span class="text-muted">LKR ' + Number(d.totalTcoLkr || 0).toLocaleString() + '</span></div>' +
+          '<div class="progress" style="height:10px;">' +
+            '<div class="progress-bar bg-danger" style="width:' + repPct + '%" title="Repairs: LKR ' + (d.repairCostLkr || 0) + '"></div>' +
+            '<div class="progress-bar bg-primary" style="width:' + tonPct + '%" title="Toners: LKR ' + (d.tonerCostLkr || 0) + '"></div>' +
+          '</div>' +
+        '</div>';
+      }).join('') +
+      '<div class="d-flex gap-3 small text-muted mt-2"><span><span class="badge bg-danger">&nbsp;</span> Repairs</span><span><span class="badge bg-primary">&nbsp;</span> Toners</span></div>';
+    }
+  }
+
+  // 2. Fleet Health & Replace-vs-Repair Breakdown
+  var fhEl = document.getElementById('chartFleetHealth');
+  if (fhEl) {
+    var mList = data.replaceVsRepairMatrix || [];
+    if (!mList.length) {
+      fhEl.innerHTML = '<div class="text-muted small py-3 text-center">No fleet health data yet.</div>';
+    } else {
+      var healthy = 0, monitor = 0, replace = 0;
+      mList.forEach(function(r) {
+        if (r.recommendation === 'REPLACE_RECOMMENDED') replace++;
+        else if (r.recommendation === 'MONITOR_CLOSELY') monitor++;
+        else healthy++;
+      });
+      var tot = Math.max(1, mList.length);
+      var barRow = function(lbl, cnt, cls) {
+        var pct = Math.round((cnt / tot) * 100);
+        return '<div class="mb-2">' +
+          '<div class="d-flex justify-content-between small mb-1"><span class="fw-semibold">' + lbl + '</span><span>' + cnt + ' printers (' + pct + '%)</span></div>' +
+          '<div class="progress" style="height:10px;"><div class="progress-bar ' + cls + '" style="width:' + pct + '%"></div></div>' +
+        '</div>';
+      };
+      fhEl.innerHTML =
+        barRow('Keep Healthy (Score 75-100)', healthy, 'bg-success') +
+        barRow('Monitor Closely (Score 50-74)', monitor, 'bg-warning') +
+        barRow('Replace Recommended (<50)', replace, 'bg-danger');
+    }
+  }
+};
+
+// =========================================================================
+// SAP-STYLE MAINTENANCE & COUNTER AD-HOC REPORT BUILDER (ALV GRID)
+// =========================================================================
+window._sapMaintSchemas = {
+  MAINT_LOGS: [
+    { key: 'serviceDate', label: 'Service Date', def: true },
+    { key: 'printerCode', label: 'Printer Code', def: true },
+    { key: 'printerName', label: 'Printer Name', def: true },
+    { key: 'maintenanceType', label: 'Service Type', def: true },
+    { key: 'tonerColor', label: 'Toner Color', def: false },
+    { key: 'partReplaced', label: 'Part Replaced', def: true },
+    { key: 'odometerPages', label: 'Odometer', num: true, def: true },
+    { key: 'technician', label: 'Technician', def: true },
+    { key: 'durationMinutes', label: 'Duration (min)', num: true, def: true },
+    { key: 'costLkr', label: 'Cost (LKR)', num: true, dec: true, def: true },
+    { key: 'status', label: 'Status', def: true },
+    { key: 'notes', label: 'Notes', def: false }
+  ],
+  PRINTER_TCO: [
+    { key: 'printerCode', label: 'Printer Code', def: true },
+    { key: 'printerName', label: 'Printer Name', def: true },
+    { key: 'department', label: 'Department', def: true },
+    { key: 'model', label: 'Model', def: false },
+    { key: 'lifetimePages', label: 'Lifetime Pages', num: true, def: true },
+    { key: 'repairCount', label: 'Repairs', num: true, def: true },
+    { key: 'repairCostLkr', label: 'Repair Cost (LKR)', num: true, dec: true, def: true },
+    { key: 'tonerCostLkr', label: 'Toner Cost (LKR)', num: true, dec: true, def: true },
+    { key: 'totalTcoLkr', label: 'Total TCO (LKR)', num: true, dec: true, def: true },
+    { key: 'costPerPageLkr', label: 'CPP (LKR)', num: true, dec: true, def: true },
+    { key: 'healthScore', label: 'Health Score', num: true, def: true },
+    { key: 'recommendation', label: 'Recommendation', def: true }
+  ],
+  COUNTER_DELTA: [
+    { key: 'printerCode', label: 'Printer Code', def: true },
+    { key: 'printerName', label: 'Printer Name', def: true },
+    { key: 'department', label: 'Department', def: true },
+    { key: 'printBwPages', label: 'Print B&W', num: true, def: true },
+    { key: 'printColorPages', label: 'Print Color', num: true, def: true },
+    { key: 'copyPages', label: 'Copy Pages', num: true, def: true },
+    { key: 'scanPages', label: 'Scan Pages', num: true, def: true },
+    { key: 'periodTotalPages', label: 'Period Total', num: true, def: true },
+    { key: 'currentCounterSinceReset', label: 'Current (Since Reset)', num: true, def: true },
+    { key: 'counterOffsetPages', label: 'Reset Offset', num: true, def: false },
+    { key: 'lifetimeActualPages', label: 'Lifetime Actual', num: true, def: true }
+  ],
+  TONER_YIELD: [
+    { key: 'printerCode', label: 'Printer Code', def: true },
+    { key: 'department', label: 'Department', def: true },
+    { key: 'tonerColor', label: 'Color', def: true },
+    { key: 'replacementsCount', label: 'Replacements', num: true, def: true },
+    { key: 'avgDaysBetween', label: 'Burn Rate (Days)', num: true, def: true },
+    { key: 'avgPagesPerCartridge', label: 'Actual Yield', num: true, def: true },
+    { key: 'ratedYieldPages', label: 'Rated Yield', num: true, def: true },
+    { key: 'yieldEfficiencyPct', label: 'Efficiency %', num: true, dec: true, def: true },
+    { key: 'lastReplacedDate', label: 'Last Replaced', def: true },
+    { key: 'predictedNextDate', label: 'Predicted Next', def: true },
+    { key: 'totalTonerCostLkr', label: 'Total Cost (LKR)', num: true, dec: true, def: true },
+    { key: 'yieldAlert', label: 'Alert', def: true }
+  ],
+  DEPT_TCO: [
+    { key: 'department', label: 'Department', def: true },
+    { key: 'printerCount', label: 'Printers', num: true, def: true },
+    { key: 'lifetimePages', label: 'Lifetime Pages', num: true, def: true },
+    { key: 'repairCostLkr', label: 'Repair Cost (LKR)', num: true, dec: true, def: true },
+    { key: 'tonerCostLkr', label: 'Toner Cost (LKR)', num: true, dec: true, def: true },
+    { key: 'totalTcoLkr', label: 'Total TCO (LKR)', num: true, dec: true, def: true },
+    { key: 'costPerPageLkr', label: 'CPP (LKR)', num: true, dec: true, def: true },
+    { key: 'highDrainCount', label: 'High-Drain Units', num: true, def: true }
+  ],
+  TECH_SCORECARD: [
+    { key: 'technician', label: 'Technician', def: true },
+    { key: 'totalTickets', label: 'Total Tickets', num: true, def: true },
+    { key: 'completedTickets', label: 'Completed', num: true, def: true },
+    { key: 'openTickets', label: 'Open', num: true, def: true },
+    { key: 'totalDurationMinutes', label: 'Total Time (min)', num: true, def: true },
+    { key: 'avgDurationMinutes', label: 'Avg Time (min)', num: true, def: true },
+    { key: 'totalCostLkr', label: 'Total Cost (LKR)', num: true, dec: true, def: true }
+  ]
+};
+
+window._sapMaintState = { rows: [], cols: [], sortKey: null, sortAsc: true };
+
+window.sapMaintOnSourceChange = function() {
+  var src = (document.getElementById('sapMaintSource') || {}).value || 'MAINT_LOGS';
+  var schema = window._sapMaintSchemas[src] || [];
+  var picker = document.getElementById('sapMaintColPicker');
+  if (!picker) return;
+  picker.innerHTML = schema.map(function(col) {
+    return '<label class="form-check form-check-inline mb-0">' +
+      '<input class="form-check-input sap-maint-col-chk" type="checkbox" value="' + col.key + '" ' + (col.def ? 'checked' : '') + '>' +
+      '<span class="form-check-label">' + col.label + '</span></label>';
+  }).join('');
+};
+
+window.sapMaintToggleCols = function(checked) {
+  document.querySelectorAll('.sap-maint-col-chk').forEach(function(cb) { cb.checked = !!checked; });
+};
+
+window.sapMaintClear = function() {
+  ['sapMaintFrom', 'sapMaintTo', 'sapMaintDept', 'sapMaintPrinter', 'sapMaintMinCost', 'sapMaintKeyword'].forEach(function(id) {
+    var el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+  ['sapMaintType', 'sapMaintStatus'].forEach(function(id) {
+    var el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+  window.sapMaintExecute();
+};
+
+window.sapMaintExecute = function() {
+  var src = (document.getElementById('sapMaintSource') || {}).value || 'MAINT_LOGS';
+  var from = (document.getElementById('sapMaintFrom') || {}).value || '';
+  var to = (document.getElementById('sapMaintTo') || {}).value || '';
+  var dept = ((document.getElementById('sapMaintDept') || {}).value || '').trim().toLowerCase();
+  var printer = ((document.getElementById('sapMaintPrinter') || {}).value || '').trim().toLowerCase();
+  var svcType = (document.getElementById('sapMaintType') || {}).value || '';
+  var status = (document.getElementById('sapMaintStatus') || {}).value || '';
+  var minCost = parseFloat((document.getElementById('sapMaintMinCost') || {}).value || '0') || 0;
+  var kw = ((document.getElementById('sapMaintKeyword') || {}).value || '').trim().toLowerCase();
+
+  var schema = window._sapMaintSchemas[src] || [];
+  var selectedKeys = [];
+  document.querySelectorAll('.sap-maint-col-chk:checked').forEach(function(cb) { selectedKeys.push(cb.value); });
+  var activeCols = schema.filter(function(c) { return selectedKeys.indexOf(c.key) !== -1; });
+  if (!activeCols.length) activeCols = schema.filter(function(c) { return c.def; });
+
+  var qs = [];
+  if (from) qs.push('from=' + encodeURIComponent(from));
+  if (to) qs.push('to=' + encodeURIComponent(to));
+
+  var endpoint = (src === 'MAINT_LOGS')
+    ? '/api/admin/maintenance'
+    : ('/api/admin/maintenance/advanced-reports' + (qs.length ? '?' + qs.join('&') : ''));
+
+  fetch(endpoint, { headers: window.getAuthHeaders ? window.getAuthHeaders() : {} })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      var raw = [];
+      if (src === 'MAINT_LOGS') raw = data.records || [];
+      else if (src === 'PRINTER_TCO') raw = data.replaceVsRepairMatrix || [];
+      else if (src === 'COUNTER_DELTA') raw = data.counterDeltaReport || [];
+      else if (src === 'TONER_YIELD') raw = data.tonerBurnRateForecast || [];
+      else if (src === 'DEPT_TCO') raw = data.departmentTcoReport || [];
+      else if (src === 'TECH_SCORECARD') raw = data.technicianScorecard || [];
+
+      var filtered = raw.filter(function(r) {
+        if (src === 'MAINT_LOGS') {
+          if (from && r.serviceDate && r.serviceDate < from) return false;
+          if (to && r.serviceDate && r.serviceDate > to) return false;
+          if (svcType && String(r.maintenanceType || '').toUpperCase() !== svcType) return false;
+          if (status && String(r.status || '').toUpperCase() !== status) return false;
+        }
+        if (dept && String(r.department || '').toLowerCase().indexOf(dept) === -1) return false;
+        if (printer) {
+          var pStr = (String(r.printerCode || '') + ' ' + String(r.printerName || '')).toLowerCase();
+          if (pStr.indexOf(printer) === -1) return false;
+        }
+        if (minCost > 0) {
+          var cVal = Number(r.costLkr || r.totalTcoLkr || r.totalTonerCostLkr || r.totalCostLkr || 0);
+          if (cVal < minCost) return false;
+        }
+        if (kw) {
+          var blob = JSON.stringify(r).toLowerCase();
+          if (blob.indexOf(kw) === -1) return false;
+        }
+        return true;
+      });
+
+      window._sapMaintState = { rows: filtered, cols: activeCols, sortKey: null, sortAsc: true };
+      window.sapMaintRenderAlv();
+    })
+    .catch(function(err) {
+      console.error('sapMaintExecute error:', err);
+    });
+};
+
+window.sapMaintSortBy = function(key) {
+  var st = window._sapMaintState;
+  if (!st || !st.rows) return;
+  if (st.sortKey === key) st.sortAsc = !st.sortAsc;
+  else { st.sortKey = key; st.sortAsc = true; }
+  st.rows.sort(function(a, b) {
+    var va = a[key], vb = b[key];
+    if (typeof va === 'number' && typeof vb === 'number') return st.sortAsc ? va - vb : vb - va;
+    return st.sortAsc
+      ? String(va == null ? '' : va).localeCompare(String(vb == null ? '' : vb))
+      : String(vb == null ? '' : vb).localeCompare(String(va == null ? '' : va));
+  });
+  window.sapMaintRenderAlv();
+};
+
+window.sapMaintRenderAlv = function() {
+  var st = window._sapMaintState;
+  var esc = window.escapeHtml || function(x) { return String(x == null ? '' : x); };
+  var head = document.getElementById('sapMaintAlvHead');
+  var body = document.getElementById('sapMaintAlvBody');
+  var foot = document.getElementById('sapMaintAlvFoot');
+  var cnt = document.getElementById('sapMaintRowCount');
+  if (cnt) cnt.textContent = st.rows.length + ' rows';
+
+  if (head) {
+    head.innerHTML = '<tr>' + st.cols.map(function(c) {
+      var arrow = st.sortKey === c.key ? (st.sortAsc ? ' ▲' : ' ▼') : '';
+      return '<th style="cursor:pointer; user-select:none;" onclick="window.sapMaintSortBy(\'' + c.key + '\')">' + esc(c.label) + arrow + '</th>';
+    }).join('') + '</tr>';
+  }
+
+  if (body) {
+    if (!st.rows.length) {
+      body.innerHTML = '<tr><td colspan="' + Math.max(1, st.cols.length) + '" class="text-center py-4 text-muted">No matching records found.</td></tr>';
+    } else {
+      body.innerHTML = st.rows.map(function(r) {
+        return '<tr>' + st.cols.map(function(c) {
+          var v = r[c.key];
+          if (c.key === 'printerCode' && v) {
+            return '<td><a href="javascript:void(0)" class="fw-bold text-primary text-decoration-none" onclick="window.openPrinterProfile(\'' + esc(v) + '\')">' + esc(v) + '</a></td>';
+          }
+          if (c.num) {
+            var n = Number(v || 0);
+            return '<td class="text-end font-monospace">' + (c.dec ? n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : n.toLocaleString()) + '</td>';
+          }
+          return '<td>' + esc(v == null ? '-' : v) + '</td>';
+        }).join('') + '</tr>';
+      }).join('');
+    }
+  }
+
+  if (foot) {
+    if (!st.rows.length) {
+      foot.innerHTML = '';
+    } else {
+      foot.innerHTML = '<tr>' + st.cols.map(function(c, idx) {
+        if (idx === 0) return '<td>TOTAL (' + st.rows.length + ')</td>';
+        if (c.num && c.key !== 'healthScore' && c.key !== 'costPerPageLkr' && c.key !== 'yieldEfficiencyPct') {
+          var sum = st.rows.reduce(function(acc, r) { return acc + Number(r[c.key] || 0); }, 0);
+          return '<td class="text-end font-monospace">' + (c.dec ? sum.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : sum.toLocaleString()) + '</td>';
+        }
+        return '<td></td>';
+      }).join('') + '</tr>';
+    }
+  }
+};
+
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'F8') {
+    var p = document.getElementById('repPanelSapMaint');
+    if (p && p.style.display !== 'none') {
+      e.preventDefault();
+      window.sapMaintExecute();
+    }
+  }
+});

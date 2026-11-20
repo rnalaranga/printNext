@@ -1737,11 +1737,17 @@
         </div>
         <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
           
+          <div class="btn-group btn-group-sm" role="group">
+            <button type="button" id="btnMaintTabLog" class="btn btn-primary" onclick="window.switchMaintSubTab('log')">Maintenance Log</button>
+            <button type="button" id="btnMaintTabReports" class="btn btn-outline-primary" onclick="window.switchMaintSubTab('reports')">Repair &amp; Toner Reports</button>
+          </div>
           <button type="button" class="btn btn-secondary" onclick="window.exportAdminTableCsv('maintTableBody', 'nexPrint-maintenance-log.xlsx', 'Printer Maintenance & Consumables Logbook')">Export Excel</button>
+          <button type="button" class="btn btn-outline-danger btn-sm" onclick="window.resetAllPrinterCounters()">Reset All Counters</button>
           <button type="button" class="btn btn-primary" onclick="window.openMaintenanceModal()">+ Log Maintenance / Toner</button>
         </div>
       </div>
 
+      <div id="maintLogSection">
       <div class="row g-2 mb-3">
         <div class="col-6 col-xl-3"><div class="rh-kpi-card"><div class="rh-kpi-label">Total Service Records</div><div class="rh-kpi-val" id="maintStatTotal">0</div><div class="rh-kpi-sub">All logged entries</div></div></div>
         <div class="col-6 col-xl-3"><div class="rh-kpi-card"><div class="rh-kpi-label">Toner Replacements</div><div class="rh-kpi-val" id="maintStatToner">0</div><div class="rh-kpi-sub">Black &amp; color cartridges</div></div></div>
@@ -1817,6 +1823,410 @@
       </div>
     </div>
 
+
+      </div> <!-- end #maintLogSection -->
+
+      <!-- REPAIR & TONER REPORTS SECTION -->
+      <div id="maintReportsSection" style="display:none;">
+        <div class="card border-0 mb-3">
+          <div class="card-body py-2">
+            <div class="row g-2 align-items-end">
+              <div class="col-6 col-md-2">
+                <label for="repMaintFrom" class="form-label small fw-semibold mb-1">From Date</label>
+                <input type="date" id="repMaintFrom" class="form-control form-control-sm" onchange="window.loadMaintenanceReports()" />
+              </div>
+              <div class="col-6 col-md-2">
+                <label for="repMaintTo" class="form-label small fw-semibold mb-1">To Date</label>
+                <input type="date" id="repMaintTo" class="form-control form-control-sm" onchange="window.loadMaintenanceReports()" />
+              </div>
+              <div class="col-6 col-md-2">
+                <label for="repMaintDept" class="form-label small fw-semibold mb-1">Department</label>
+                <select id="repMaintDept" class="form-select form-select-sm" onchange="window.loadMaintenanceReports()">
+                  <option value="">All Departments</option>
+                </select>
+              </div>
+              <div class="col-6 col-md-3">
+                <label for="repMaintPrinter" class="form-label small fw-semibold mb-1">Printer</label>
+                <select id="repMaintPrinter" class="form-select form-select-sm" onchange="window.loadMaintenanceReports()">
+                  <option value="">All Printers</option>
+                </select>
+              </div>
+              <div class="col-12 col-md-3 d-flex gap-1 justify-content-end flex-wrap">
+                <button type="button" class="btn btn-sm btn-primary" onclick="window.loadMaintenanceReports()">Run</button>
+                <button type="button" class="btn btn-sm btn-success" onclick="window.exportExecutiveMaintExcel()">Executive Excel (6 Sheets)</button>
+                <button type="button" class="btn btn-sm btn-outline-primary" onclick="window.emailExecutiveMaintReport()">Email Report</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="row g-2 mb-3">
+          <div class="col-6 col-xl-3"><div class="rh-kpi-card"><div class="rh-kpi-label">Filtered Repairs</div><div class="rh-kpi-val" id="repMaintTotalRepairs">0</div><div class="rh-kpi-sub">Hardware, drum &amp; fuser</div></div></div>
+          <div class="col-6 col-xl-3"><div class="rh-kpi-card"><div class="rh-kpi-label">Filtered Toners</div><div class="rh-kpi-val" id="repMaintTotalToners">0</div><div class="rh-kpi-sub">All colors replaced</div></div></div>
+          <div class="col-6 col-xl-3"><div class="rh-kpi-card"><div class="rh-kpi-label">Total Cost (LKR)</div><div class="rh-kpi-val" id="repMaintTotalCost">LKR 0.00</div><div class="rh-kpi-sub">Filtered spend</div></div></div>
+          <div class="col-6 col-xl-3"><div class="rh-kpi-card"><div class="rh-kpi-label">Avg Repair Time</div><div class="rh-kpi-val" id="repMaintAvgTime">0 min</div><div class="rh-kpi-sub">Mean time to repair</div></div></div>
+        </div>
+
+        <div class="row g-3 mb-3" id="maintChartsRow">
+          <div class="col-12 col-lg-7">
+            <div class="card border-0 h-100">
+              <div class="card-header bg-white fw-bold small">Department TCO Breakdown (Repairs vs Toners)</div>
+              <div class="card-body py-2" id="chartDeptTco"><div class="text-muted small">Loading chart...</div></div>
+            </div>
+          </div>
+          <div class="col-12 col-lg-5">
+            <div class="card border-0 h-100">
+              <div class="card-header bg-white fw-bold small">Fleet Health &amp; Replace-vs-Repair Status</div>
+              <div class="card-body py-2" id="chartFleetHealth"><div class="text-muted small">Loading chart...</div></div>
+            </div>
+          </div>
+        </div>
+
+        <ul class="nav nav-pills gap-1 mb-3" id="advMaintReportTabs">
+          <li class="nav-item"><button type="button" class="nav-link active btn-sm py-1 px-3 fw-semibold" id="btnAdvTabOverview" onclick="window.switchAdvMaintTab('overview')">Overview &amp; Frequency</button></li>
+          <li class="nav-item"><button type="button" class="nav-link btn-sm py-1 px-3 fw-semibold" id="btnAdvTabCounter" onclick="window.switchAdvMaintTab('counter')">Counter &amp; Billing Delta</button></li>
+          <li class="nav-item"><button type="button" class="nav-link btn-sm py-1 px-3 fw-semibold" id="btnAdvTabReliability" onclick="window.switchAdvMaintTab('reliability')">Reliability, MTBF &amp; TCO</button></li>
+          <li class="nav-item"><button type="button" class="nav-link btn-sm py-1 px-3 fw-semibold" id="btnAdvTabPartLife" onclick="window.switchAdvMaintTab('partlife')">Part Life &amp; Toner Yield</button></li>
+          <li class="nav-item"><button type="button" class="nav-link btn-sm py-1 px-3 fw-semibold" id="btnAdvTabTechPm" onclick="window.switchAdvMaintTab('techpm')">Technicians &amp; PM Schedule</button></li>
+          <li class="nav-item"><button type="button" class="nav-link btn-sm py-1 px-3 fw-semibold" id="btnAdvTabTcoExec" onclick="window.switchAdvMaintTab('tcoexec')">Financial TCO &amp; Replace vs Repair</button></li>
+          <li class="nav-item"><button type="button" class="nav-link btn-sm py-1 px-3 fw-semibold" id="btnAdvTabSapMaint" onclick="window.switchAdvMaintTab('sapmaint')">SAP Report Builder (ALV)</button></li>
+        </ul>
+
+        <div id="repPanelOverview">
+        <div class="card border-0 mb-3">
+          <div class="card-header bg-white fw-bold small">Printer-wise Repair Frequency &amp; Service Report <span class="text-muted fw-normal">(Click any Printer Code to open Printer Profile)</span></div>
+          <div class="table-responsive">
+            <table class="table table-sm table-hover align-middle mb-0">
+              <thead class="table-light">
+                <tr>
+                  <th>Printer</th><th>Department</th><th>Model</th><th>Repairs</th><th>Toners</th><th>Other</th><th>Repair Frequency</th><th>Total Time</th><th>Total Cost (LKR)</th><th>Last Service</th>
+                </tr>
+              </thead>
+              <tbody id="repMaintPrinterBody"><tr><td colspan="10" class="text-center py-3 text-muted">Loading...</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="row g-3">
+          <div class="col-12 col-lg-6">
+            <div class="card border-0 h-100">
+              <div class="card-header bg-white fw-bold small">Department-wise Repair &amp; Toner Report</div>
+              <div class="table-responsive">
+                <table class="table table-sm table-hover align-middle mb-0">
+                  <thead class="table-light">
+                    <tr><th>Department</th><th>Printers</th><th>Repairs</th><th>Toners</th><th>Service Time</th><th>Cost (LKR)</th></tr>
+                  </thead>
+                  <tbody id="repMaintDeptBody"><tr><td colspan="6" class="text-center py-3 text-muted">Loading...</td></tr></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+          <div class="col-12 col-lg-6">
+            <div class="card border-0 h-100">
+              <div class="card-header bg-white fw-bold small">Toner Replacement Report (By Printer &amp; Color)</div>
+              <div class="table-responsive">
+                <table class="table table-sm table-hover align-middle mb-0">
+                  <thead class="table-light">
+                    <tr><th>Printer</th><th>Dept</th><th>Black (K)</th><th>Cyan (C)</th><th>Magenta (M)</th><th>Yellow (Y)</th><th>Total</th><th>Cost (LKR)</th></tr>
+                  </thead>
+                  <tbody id="repMaintTonerBody"><tr><td colspan="8" class="text-center py-3 text-muted">Loading...</td></tr></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+        </div> <!-- end #repPanelOverview -->
+
+        <!-- PANEL 2: COUNTER & BILLING DELTA -->
+        <div id="repPanelCounter" style="display:none;">
+          <div class="card border-0 mb-3">
+            <div class="card-header bg-white d-flex justify-content-between align-items-center">
+              <span class="fw-bold small">Counter &amp; Billing Delta Report (Period Print / Copy / Scan + Reset Baseline)</span>
+              <button type="button" class="btn btn-xs btn-outline-secondary" onclick="window.exportAdminTableCsv('repCounterDeltaBody', 'nexPrint-counter-delta-report.xlsx', 'Counter & Billing Delta Report')">Export Excel</button>
+            </div>
+            <div class="table-responsive">
+              <table class="table table-sm table-hover align-middle mb-0">
+                <thead class="table-light">
+                  <tr><th>Printer</th><th>Dept</th><th>Print B&amp;W</th><th>Print Color</th><th>Copy</th><th>Scan</th><th>Period Total</th><th>Current (Since Reset)</th><th>Reset Offset</th><th>Lifetime Actual</th></tr>
+                </thead>
+                <tbody id="repCounterDeltaBody"><tr><td colspan="10" class="text-center py-3 text-muted">Loading...</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+          <div class="card border-0">
+            <div class="card-header bg-white d-flex justify-content-between align-items-center">
+              <span class="fw-bold small">Counter Reset Audit History</span>
+              <button type="button" class="btn btn-xs btn-outline-secondary" onclick="window.exportAdminTableCsv('repCounterResetBody', 'nexPrint-counter-reset-history.xlsx', 'Counter Reset History')">Export Excel</button>
+            </div>
+            <div class="table-responsive">
+              <table class="table table-sm table-hover align-middle mb-0">
+                <thead class="table-light">
+                  <tr><th>Reset At</th><th>Printer</th><th>Dept</th><th>Prev Offset</th><th>Actual At Reset</th><th>Delta Since Last Reset</th><th>Reset By</th></tr>
+                </thead>
+                <tbody id="repCounterResetBody"><tr><td colspan="7" class="text-center py-3 text-muted">Loading...</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- PANEL 3: RELIABILITY, MTBF & TCO -->
+        <div id="repPanelReliability" style="display:none;">
+          <div class="card border-0">
+            <div class="card-header bg-white d-flex justify-content-between align-items-center">
+              <span class="fw-bold small">Printer Reliability Scorecard (MTBF, MTTR, SLA Breaches, Uptime &amp; TCO)</span>
+              <button type="button" class="btn btn-xs btn-outline-secondary" onclick="window.exportAdminTableCsv('repReliabilityBody', 'nexPrint-reliability-tco-report.xlsx', 'Printer Reliability & TCO Report')">Export Excel</button>
+            </div>
+            <div class="table-responsive">
+              <table class="table table-sm table-hover align-middle mb-0">
+                <thead class="table-light">
+                  <tr><th>Printer</th><th>Dept</th><th>Repairs</th><th>MTBF (Days)</th><th>MTBF (Pages)</th><th>MTTR</th><th>SLA Breaches (&gt;4h)</th><th>Uptime %</th><th>TCO (LKR)</th><th>CPP (LKR/pg)</th><th>Status</th></tr>
+                </thead>
+                <tbody id="repReliabilityBody"><tr><td colspan="11" class="text-center py-3 text-muted">Loading...</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- PANEL 4: PART LIFE & TONER YIELD -->
+        <div id="repPanelPartLife" style="display:none;">
+          <div class="card border-0">
+            <div class="card-header bg-white d-flex justify-content-between align-items-center">
+              <span class="fw-bold small">Part Life &amp; Actual Toner Yield (Pages-to-Failure / Pages-per-Cartridge)</span>
+              <button type="button" class="btn btn-xs btn-outline-secondary" onclick="window.exportAdminTableCsv('repPartLifeBody', 'nexPrint-part-life-yield-report.xlsx', 'Part Life & Toner Yield Report')">Export Excel</button>
+            </div>
+            <div class="table-responsive">
+              <table class="table table-sm table-hover align-middle mb-0">
+                <thead class="table-light">
+                  <tr><th>Printer</th><th>Dept</th><th>Part / Toner</th><th>Replacements</th><th>Avg Pages / Replacement</th><th>Last Odometer</th><th>Total Cost (LKR)</th></tr>
+                </thead>
+                <tbody id="repPartLifeBody"><tr><td colspan="7" class="text-center py-3 text-muted">Loading...</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+          <div class="card border-0 mt-3">
+            <div class="card-header bg-white d-flex justify-content-between align-items-center">
+              <span class="fw-bold small">Toner Burn-Rate, Yield Efficiency &amp; Next Replacement Forecast</span>
+              <button type="button" class="btn btn-xs btn-outline-secondary" onclick="window.exportAdminTableCsv('repTonerBurnBody', 'nexPrint-toner-burn-forecast.xlsx', 'Toner Burn-Rate Forecast')">Export Excel</button>
+            </div>
+            <div class="table-responsive">
+              <table class="table table-sm table-hover align-middle mb-0">
+                <thead class="table-light">
+                  <tr><th>Printer</th><th>Dept</th><th>Color</th><th>Count</th><th>Burn Rate (Days)</th><th>Actual Yield</th><th>Rated Yield</th><th>Efficiency %</th><th>Last Replaced</th><th>Predicted Next</th><th>Alert</th></tr>
+                </thead>
+                <tbody id="repTonerBurnBody"><tr><td colspan="11" class="text-center py-3 text-muted">Loading...</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- PANEL 5: TECHNICIANS & PM SCHEDULE -->
+        <div id="repPanelTechPm" style="display:none;">
+          <div class="row g-3">
+            <div class="col-12 col-lg-5">
+              <div class="card border-0 h-100">
+                <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                  <span class="fw-bold small">Technician Performance Scorecard</span>
+                  <button type="button" class="btn btn-xs btn-outline-secondary" onclick="window.exportAdminTableCsv('repTechScoreBody', 'nexPrint-technician-scorecard.xlsx', 'Technician Scorecard')">Export Excel</button>
+                </div>
+                <div class="table-responsive">
+                  <table class="table table-sm table-hover align-middle mb-0">
+                    <thead class="table-light">
+                      <tr><th>Technician</th><th>Tickets</th><th>Completed</th><th>Open</th><th>Avg Time</th><th>Cost (LKR)</th></tr>
+                    </thead>
+                    <tbody id="repTechScoreBody"><tr><td colspan="6" class="text-center py-3 text-muted">Loading...</td></tr></tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+            <div class="col-12 col-lg-7">
+              <div class="card border-0 h-100">
+                <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                  <span class="fw-bold small">Preventive Maintenance (PM) Schedule &amp; Overdue Alerts</span>
+                  <button type="button" class="btn btn-xs btn-outline-secondary" onclick="window.exportAdminTableCsv('repPmScheduleBody', 'nexPrint-pm-schedule.xlsx', 'PM Schedule Report')">Export Excel</button>
+                </div>
+                <div class="table-responsive">
+                  <table class="table table-sm table-hover align-middle mb-0">
+                    <thead class="table-light">
+                      <tr><th>Printer</th><th>Dept</th><th>Service Type</th><th>Last Service</th><th>Next PM Date</th><th>Days Left</th><th>Status</th></tr>
+                    </thead>
+                    <tbody id="repPmScheduleBody"><tr><td colspan="7" class="text-center py-3 text-muted">Loading...</td></tr></tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- PANEL 6: FINANCIAL TCO & REPLACE VS REPAIR EXECUTIVE PACK -->
+        <div id="repPanelTcoExec" style="display:none;">
+          <div class="card border-0 mb-3">
+            <div class="card-header bg-white d-flex justify-content-between align-items-center">
+              <span class="fw-bold small">Department Financial TCO Rollup (Repairs + Toners + Cost-Per-Page)</span>
+              <button type="button" class="btn btn-xs btn-outline-secondary" onclick="window.exportAdminTableCsv('repDeptTcoBody', 'nexPrint-department-tco-report.xlsx', 'Department TCO Report')">Export Excel</button>
+            </div>
+            <div class="table-responsive">
+              <table class="table table-sm table-hover align-middle mb-0">
+                <thead class="table-light">
+                  <tr><th>Department</th><th>Printers</th><th>Lifetime Pages</th><th>Repair Cost (LKR)</th><th>Toner Cost (LKR)</th><th>Total TCO (LKR)</th><th>CPP (LKR/pg)</th><th>High-Drain Units</th></tr>
+                </thead>
+                <tbody id="repDeptTcoBody"><tr><td colspan="8" class="text-center py-3 text-muted">Loading...</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+          <div class="card border-0">
+            <div class="card-header bg-white d-flex justify-content-between align-items-center">
+              <span class="fw-bold small">Executive &ldquo;Replace vs Repair&rdquo; Decision Matrix</span>
+              <button type="button" class="btn btn-xs btn-outline-secondary" onclick="window.exportAdminTableCsv('repReplaceMatrixBody', 'nexPrint-replace-vs-repair-matrix.xlsx', 'Replace vs Repair Matrix')">Export Excel</button>
+            </div>
+            <div class="table-responsive">
+              <table class="table table-sm table-hover align-middle mb-0">
+                <thead class="table-light">
+                  <tr><th>Printer</th><th>Dept</th><th>Model</th><th>Pages</th><th>Repairs</th><th>Repair Cost</th><th>Toner Cost</th><th>Total TCO (LKR)</th><th>CPP</th><th>Health Score</th><th>Recommendation</th></tr>
+                </thead>
+                <tbody id="repReplaceMatrixBody"><tr><td colspan="11" class="text-center py-3 text-muted">Loading...</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- PANEL 7: SAP-STYLE MAINTENANCE & COUNTER REPORT BUILDER (SELECTION SCREEN + ALV GRID) -->
+        <div id="repPanelSapMaint" style="display:none;">
+          <div class="card border-0 mb-3">
+            <div class="card-body">
+              <div class="d-flex justify-content-between align-items-center pb-2 mb-3 border-bottom flex-wrap gap-2">
+                <div>
+                  <span class="badge bg-primary-subtle text-primary border border-primary-subtle font-monospace fw-bold">SAP-ALV</span>
+                  <strong class="ms-2 text-dark">Maintenance &amp; Counter Ad-Hoc Query Builder</strong>
+                  <span class="small text-secondary ms-2">Select data source, filter criteria, choose ALV columns, and Execute (F8).</span>
+                </div>
+                <div class="d-flex gap-2">
+                  <button type="button" class="btn btn-primary btn-sm fw-semibold" onclick="window.sapMaintExecute()">Execute (F8)</button>
+                  <button type="button" class="btn btn-secondary btn-sm" onclick="window.exportAdminTableCsv('sapMaintAlvBody', 'nexPrint-sap-maint-alv.xlsx', 'SAP Maintenance ALV Report')">Export Excel</button>
+                  <button type="button" class="btn btn-outline-secondary btn-sm" onclick="window.sapMaintClear()">Clear</button>
+                </div>
+              </div>
+
+              <div class="row g-2 mb-3">
+                <div class="col-12 col-md-3">
+                  <label for="sapMaintSource" class="form-label small fw-semibold mb-1">Data Source / Cube</label>
+                  <select id="sapMaintSource" class="form-select form-select-sm fw-semibold" onchange="window.sapMaintOnSourceChange()">
+                    <option value="MAINT_LOGS">Maintenance &amp; Repair Logs (Raw)</option>
+                    <option value="PRINTER_TCO">Printer Reliability, MTBF &amp; TCO</option>
+                    <option value="COUNTER_DELTA">Counter &amp; Billing Delta</option>
+                    <option value="TONER_YIELD">Toner Burn-Rate &amp; Yield</option>
+                    <option value="DEPT_TCO">Department Financial TCO</option>
+                    <option value="TECH_SCORECARD">Technician Scorecard</option>
+                  </select>
+                </div>
+                <div class="col-6 col-md-2">
+                  <label for="sapMaintFrom" class="form-label small fw-semibold mb-1">From Date</label>
+                  <input type="date" id="sapMaintFrom" class="form-control form-control-sm">
+                </div>
+                <div class="col-6 col-md-2">
+                  <label for="sapMaintTo" class="form-label small fw-semibold mb-1">To Date</label>
+                  <input type="date" id="sapMaintTo" class="form-control form-control-sm">
+                </div>
+                <div class="col-6 col-md-2">
+                  <label for="sapMaintDept" class="form-label small fw-semibold mb-1">Department</label>
+                  <input type="text" id="sapMaintDept" class="form-control form-control-sm" placeholder="All">
+                </div>
+                <div class="col-6 col-md-3">
+                  <label for="sapMaintPrinter" class="form-label small fw-semibold mb-1">Printer Code / Name</label>
+                  <input type="text" id="sapMaintPrinter" class="form-control form-control-sm" placeholder="All (e.g. MFP-01)">
+                </div>
+                <div class="col-6 col-md-3">
+                  <label for="sapMaintType" class="form-label small fw-semibold mb-1">Service Type</label>
+                  <select id="sapMaintType" class="form-select form-select-sm">
+                    <option value="">All Types</option>
+                    <option value="TONER_REPLACEMENT">Toner Replacement</option>
+                    <option value="REPAIR">Hardware Repair</option>
+                    <option value="DRUM_UNIT">Drum Unit</option>
+                    <option value="FUSER_UNIT">Fuser Unit</option>
+                    <option value="PREVENTIVE_SERVICE">Preventive Service</option>
+                  </select>
+                </div>
+                <div class="col-6 col-md-3">
+                  <label for="sapMaintStatus" class="form-label small fw-semibold mb-1">Ticket Status</label>
+                  <select id="sapMaintStatus" class="form-select form-select-sm">
+                    <option value="">All Statuses</option>
+                    <option value="COMPLETED">Completed</option>
+                    <option value="IN_PROGRESS">In Progress</option>
+                    <option value="PENDING">Pending</option>
+                  </select>
+                </div>
+                <div class="col-6 col-md-3">
+                  <label for="sapMaintMinCost" class="form-label small fw-semibold mb-1">Min Cost (LKR)</label>
+                  <input type="number" id="sapMaintMinCost" class="form-control form-control-sm" placeholder="0">
+                </div>
+                <div class="col-6 col-md-3">
+                  <label for="sapMaintKeyword" class="form-label small fw-semibold mb-1">Part / Tech / Notes Search</label>
+                  <input type="text" id="sapMaintKeyword" class="form-control form-control-sm" placeholder="Search keyword...">
+                </div>
+              </div>
+
+              <div class="pt-2 border-top">
+                <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-2">
+                  <strong class="small text-secondary">SAP ALV Output Columns:</strong>
+                  <div class="d-flex gap-2">
+                    <button type="button" class="btn btn-xs btn-outline-secondary" onclick="window.sapMaintToggleCols(true)">Select All</button>
+                    <button type="button" class="btn btn-xs btn-outline-secondary" onclick="window.sapMaintToggleCols(false)">Clear All</button>
+                  </div>
+                </div>
+                <div id="sapMaintColPicker" class="d-flex flex-wrap gap-3 small"></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="card border-0">
+            <div class="card-header bg-white d-flex justify-content-between align-items-center">
+              <span class="fw-bold small">ALV Grid Result <span id="sapMaintRowCount" class="badge bg-secondary ms-1">0 rows</span></span>
+              <span class="small text-muted">Click any column header to sort</span>
+            </div>
+            <div class="table-responsive">
+              <table class="table table-sm table-hover align-middle mb-0" id="sapMaintAlvTable">
+                <thead class="table-light" id="sapMaintAlvHead"></thead>
+                <tbody id="sapMaintAlvBody"><tr><td class="text-center py-4 text-muted">Select criteria and click <strong>Execute (F8)</strong> to run query.</td></tr></tbody>
+                <tfoot class="table-light fw-bold" id="sapMaintAlvFoot"></tfoot>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div> <!-- end #maintReportsSection -->
+    </div>
+
+    <!-- PRINTER PROFILE MODAL -->
+    <div class="modal fade" id="printerProfileModal" tabindex="-1" aria-hidden="true">
+      <div class="modal-dialog modal-xl modal-dialog-scrollable">
+        <div class="modal-content">
+          <div class="modal-header">
+            <div>
+              <h5 class="modal-title fw-bold mb-0" id="ppTitle">Printer Profile</h5>
+              <div class="small text-muted" id="ppSubtitle">Loading printer details...</div>
+            </div>
+            <div class="d-flex align-items-center">
+              <button type="button" id="ppBtnResetCounter" class="btn btn-outline-danger btn-sm me-2" onclick="window.resetPrinterCounter()">Reset Counter to 0</button>
+              <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+          </div>
+          <div class="modal-body">
+            <div class="row g-2 mb-3" id="ppMetaCards"></div>
+            <h6 class="fw-bold mb-2">Counters &amp; Usage Volume</h6>
+            <div class="row g-2 mb-3" id="ppCounterCards"></div>
+            <h6 class="fw-bold mb-2">Maintenance &amp; Repair Summary</h6>
+            <div class="row g-2 mb-3" id="ppMaintCards"></div>
+            <h6 class="fw-bold mb-2">Complete Repair &amp; Toner History</h6>
+            <div class="table-responsive">
+              <table class="table table-sm table-hover align-middle mb-0">
+                <thead class="table-light">
+                  <tr><th>Date</th><th>Type</th><th>Part / Toner</th><th>Odometer</th><th>Technician</th><th>Duration</th><th>Cost (LKR)</th><th>Status</th><th>Notes</th></tr>
+                </thead>
+                <tbody id="ppHistoryBody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
 
 <div id="page-audit" class="page-view" style="display:none;">
       <div class="section-header">

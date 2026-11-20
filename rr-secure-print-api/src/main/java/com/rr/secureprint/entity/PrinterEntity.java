@@ -71,6 +71,12 @@ public class PrinterEntity {
     @Column(name = "created_at")
     private Instant createdAt = Instant.now();
 
+    @Column(name = "counter_offset_pages")
+    private Long counterOffsetPages = 0L;
+
+    @Column(name = "counter_reset_at")
+    private Instant counterResetAt;
+
     public PrinterEntity() {}
 
     public PrinterEntity(String printerCode, String name, String ipAddress, int rawPort, String location, String model, boolean colorSupported, boolean duplexSupported) {
@@ -207,4 +213,10 @@ public class PrinterEntity {
 
     public Instant getCreatedAt() { return createdAt; }
     public void setCreatedAt(Instant createdAt) { this.createdAt = createdAt; }
+
+    public Long getCounterOffsetPages() { return counterOffsetPages != null ? counterOffsetPages : 0L; }
+    public void setCounterOffsetPages(Long counterOffsetPages) { this.counterOffsetPages = counterOffsetPages != null ? counterOffsetPages : 0L; }
+
+    public Instant getCounterResetAt() { return counterResetAt; }
+    public void setCounterResetAt(Instant counterResetAt) { this.counterResetAt = counterResetAt; }
 }
